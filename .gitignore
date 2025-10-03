@@ -29,6 +29,9 @@ knowledge/**
 # Explicitly allow the default folder in knowledge
 !knowledge/default/
 !knowledge/default/**
+# Explicitly allow the custom/main folder in knowledge
+!knowledge/custom/main/
+!knowledge/custom/main/**
 
 # Handle instruments directory
 instruments/**
