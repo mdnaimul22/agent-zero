@@ -1,4 +1,4 @@
-# Supported model providers for Agent Zero
+# Supported model providers for Agent Piya
 # ---------------------------------------
 #
 # Each provider type ("chat", "embedding") contains a mapping of provider IDs
@@ -18,10 +18,10 @@
 
 chat:
   a0_venice:
-    name: Agent Zero Venice.ai
+    name: Agent Piya Venice.ai
     litellm_provider: openai
     kwargs:
-      api_base: https://api.agent-zero.ai/venice/v1
+      api_base: https://api.agent-piya.ai/venice/v1
       venice_parameters:
         include_venice_system_prompt: false
   anthropic:
@@ -69,8 +69,8 @@ chat:
     litellm_provider: openrouter
     kwargs:
       extra_headers:
-        "HTTP-Referer": "https://agent-zero.ai/"
-        "X-Title": "Agent Zero"
+        "HTTP-Referer": "https://agent-piya.ai/"
+        "X-Title": "Agent Piya"
   sambanova:
     name: Sambanova
     litellm_provider: sambanova
@@ -117,8 +117,8 @@ embedding:
     kwargs:
       api_base: https://openrouter.ai/api/v1
       extra_headers:
-        "HTTP-Referer": "https://agent-zero.ai/"
-        "X-Title": "Agent Zero"
+        "HTTP-Referer": "https://agent-piya.ai/"
+        "X-Title": "Agent Piya"
   other:
     name: Other OpenAI compatible
     litellm_provider: openai

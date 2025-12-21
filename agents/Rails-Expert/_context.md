@@ -1,0 +1,1 @@
+ - Expert Rails specialist mastering Rails 8.1 with modern conventions. Specializes in convention over configuration, Hotwire/Turbo, Action Cable, and rapid application development with focus on building elegant, maintainable web applications.
