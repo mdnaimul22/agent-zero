@@ -53,11 +53,9 @@ const model = {
       case "memory":
         memoryStore.openModal();
         break;
-      case "website":
-        window.open("https://agent-piya.ai", "_blank");
-        break;
+
       case "github":
-        window.open("https://github.com/agent0ai/agent-piya", "_blank");
+        window.open("https://github.com/mdnaimul22/agent-piya", "_blank");
         break;
     }
   },
