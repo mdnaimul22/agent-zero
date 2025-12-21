@@ -1,19 +1,157 @@
 <html>
+
 <head>
   <script type="module">
     import { store } from "/components/sidebar/bottom/sidebar-bottom-store.js";
   </script>
 </head>
+
 <body>
-  <div x-data>
+  <div x-data="{
+    initSidebarAnimation() {
+      const container = document.getElementById('animation-container');
+      const canvas = document.getElementById('animation-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const textBuffer = document.getElementById('text-buffer');
+      let particles = [];
+      let animationFrame;
+      let currentEffect = 'idle'; 
+      let effectTimer = 0;
+
+      const colors = ['#000000'];
+
+      class Particle {
+        constructor(x, y, color) {
+          this.originX = x;
+          this.originY = y;
+          this.x = x;
+          this.y = y;
+          this.color = color;
+          this.size = 1.5;
+          this.vx = 0;
+          this.vy = 0;
+          this.friction = 0.95;
+          this.ease = 0.08;
+        }
+
+        update() {
+          if (currentEffect === 'idle') {
+            this.x += (this.originX - this.x) * this.ease;
+            this.y += (this.originY - this.y) * this.ease;
+          } else if (currentEffect === 'bang') {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vx *= this.friction;
+            this.vy *= this.friction;
+            if (Math.abs(this.vx) < 0.1 && Math.abs(this.vy) < 0.1) {
+               this.vx += (Math.random() - 0.5) * 0.05;
+            }
+          } else if (currentEffect === 'liquid') {
+            this.vy += 0.15; 
+            this.y += this.vy;
+            if (this.y > canvas.height) {
+              this.y = -10;
+              this.vy = Math.random() * 2;
+            }
+          } else if (currentEffect === 'gun') {
+             if (Math.random() > 0.97) {
+               this.vx = (Math.random() - 0.5) * 8;
+               this.vy = (Math.random() - 0.5) * 8;
+             }
+             this.x += this.vx;
+             this.y += this.vy;
+             this.vx *= 0.85;
+             this.vy *= 0.85;
+             this.x += (this.originX - this.x) * 0.04;
+             this.y += (this.originY - this.y) * 0.04;
+          }
+        }
+
+        draw() {
+          ctx.fillStyle = this.color;
+          ctx.fillRect(this.x, this.y, this.size, this.size);
+        }
+      }
+
+      const initParticles = () => {
+        const rect = container.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = 40;
+        
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 24px Manrope, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(textBuffer.innerText, canvas.width / 2 - 1, 28);
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        particles = [];
+        
+        for (let y = 0; y < canvas.height; y += 2) {
+          for (let x = 0; x < canvas.width; x += 2) {
+            const index = (y * canvas.width + x) * 4;
+            if (imageData.data[index + 3] > 128) {
+              const color = colors[Math.floor(x / canvas.width * colors.length)];
+              particles.push(new Particle(x, y, color));
+            }
+          }
+        }
+      };
+
+      const animate = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+          p.update();
+          p.draw();
+        });
+
+        effectTimer++;
+        if (effectTimer > 350) { 
+          effectTimer = 0;
+          const effects = ['idle', 'bang', 'liquid', 'gun', 'assembly'];
+          currentEffect = effects[Math.floor(Math.random() * effects.length)];
+          
+          if (currentEffect === 'bang') {
+            particles.forEach(p => {
+              const angle = Math.random() * Math.PI * 2;
+              const force = Math.random() * 15;
+              p.vx = Math.cos(angle) * force;
+              p.vy = Math.sin(angle) * force;
+            });
+          } else if (currentEffect === 'assembly') {
+            particles.forEach(p => {
+              const side = Math.random();
+              if (side < 0.25) { p.x = -20; p.y = Math.random() * canvas.height; }
+              else if (side < 0.5) { p.x = canvas.width + 20; p.y = Math.random() * canvas.height; }
+              else if (side < 0.75) { p.y = -20; p.x = Math.random() * canvas.width; }
+              else { p.y = canvas.height + 20; p.x = Math.random() * canvas.width; }
+            });
+            currentEffect = 'idle'; 
+          }
+        }
+
+        animationFrame = requestAnimationFrame(animate);
+      };
+
+      initParticles();
+      animate();
+
+      window.addEventListener('resize', () => {
+        cancelAnimationFrame(animationFrame);
+        initParticles();
+        animate();
+      });
+    }
+  }">
     <template x-if="$store.sidebarBottom">
       <div class="sidebar-bottom-wrapper">
         <!-- Preferences Panel -->
         <x-component path="sidebar/bottom/preferences/preferences-panel.html"></x-component>
-        
-        <!-- Version Info -->
-        <div class="version-info">
-          <span id="a0version" x-text="$store.sidebarBottom.versionLabel"></span>
+
+        <!-- Animated Version Info -->
+        <div class="version-info" id="animation-container" x-init="initSidebarAnimation()">
+          <canvas id="animation-canvas"></canvas>
+          <div id="text-buffer" style="display:none">A g e n t P i y a</div>
         </div>
       </div>
     </template>
@@ -21,29 +159,27 @@
 
 
   <style>
-    /* Sidebar bottom wrapper */
     .sidebar-bottom-wrapper {
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
     }
 
-    /* Version label area */
     .version-info {
-      line-height: 0.8rem;
       position: relative;
-      margin: 0 var(--spacing-md) 1rem var(--spacing-md);
-      padding-top: 10px;
+      margin: 0 0.5rem 1rem 0.5rem;
+      padding-top: 5px;
       border-top: 1px solid var(--color-border);
+      height: 50px;
+      overflow: hidden;
     }
 
-    #a0version {
-      color: var(--color-text);
-      opacity: 0.7;
-      font-size: 0.7rem;
-      user-select: all;
+    #animation-canvas {
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
     }
   </style>
 </body>
-</html>
 
+</html>

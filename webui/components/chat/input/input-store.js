@@ -4,10 +4,20 @@ import { store as fileBrowserStore } from "/components/modals/file-browser/file-
 
 const model = {
   paused: false,
+  musicPlaying: false,
+  musicUrl: "_NbY08pcXZM", // Default music ID
+  showMusicInput: false,
 
   init() {
     console.log("Input store initialized");
-    // Event listeners are now handled via Alpine directives in the component
+
+    // Initialize default music player
+    setTimeout(() => {
+      const iframe = document.getElementById("yt-music-player");
+      if (iframe && this.musicUrl) {
+        iframe.src = `https://www.youtube.com/embed/${this.musicUrl}?enablejsapi=1`;
+      }
+    }, 500);
   },
 
   async sendMessage() {
@@ -155,6 +165,50 @@ const model = {
       }
     }
     await fileBrowserStore.open(path);
+  },
+
+  toggleMusicInput() {
+    this.showMusicInput = !this.showMusicInput;
+    if (this.showMusicInput) {
+      setTimeout(() => {
+        const input = document.getElementById("music-url-input");
+        if (input) input.focus();
+      }, 100);
+    }
+  },
+
+  setMusicUrl() {
+    if (!this.musicUrl) return;
+
+    // Extract video ID from URL if possible
+    let videoId = this.musicUrl;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = this.musicUrl.match(regExp);
+    if (match && match[2].length === 11) {
+      videoId = match[2];
+    }
+
+    this.musicUrl = videoId;
+    this.musicPlaying = true;
+    this.showMusicInput = false;
+
+    // Send command to iframe
+    const iframe = document.getElementById("yt-music-player");
+    if (iframe) {
+      iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
+    }
+  },
+
+  toggleMusic() {
+    const iframe = document.getElementById("yt-music-player");
+    if (!iframe || !iframe.contentWindow) return;
+
+    this.musicPlaying = !this.musicPlaying;
+    const command = this.musicPlaying ? "playVideo" : "pauseVideo";
+    iframe.contentWindow.postMessage(
+      JSON.stringify({ event: "command", func: command, args: [] }),
+      "*"
+    );
   },
 };
 
