@@ -27,13 +27,15 @@ body {
 }
 
 .logo {
-    width: 80px;
-    height: 80px;
-    border-radius: 0.3125rem; /* Match the main page logo style */
-    margin-bottom: 1rem;
+    width: 150px;
+    height: 160px;
+    border-radius: 0.3125rem;
+    /* Match the main page logo style */
+    margin-bottom: 0.5rem;
 }
 
 h2 {
+    margin-top: 0;
     margin-bottom: 2rem;
 }
 
@@ -56,7 +58,8 @@ h2 {
     background-color: #131313;
     color: #d4d4d4;
     font-size: 1rem;
-    box-sizing: border-box; /* Added for consistent padding */
+    box-sizing: border-box;
+    /* Added for consistent padding */
 }
 
 button {
