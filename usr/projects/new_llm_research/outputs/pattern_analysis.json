@@ -1,0 +1,1105 @@
+{
+  "total_workflows": 280,
+  "macro_nodes": [
+    {
+      "pattern": [
+        "set_data",
+        "set_data"
+      ],
+      "frequency": 78,
+      "suggested_name": "SET__SET_",
+      "example_workflows": [
+        "dDAqkobn2pqgdl2N",
+        "0150_Enrich_FAQ_sections_on_your_website_pages_at_scale_with_AI",
+        "f9X48gqgIUwyseMM"
+      ]
+    },
+    {
+      "pattern": [
+        "http_request",
+        "http_request"
+      ],
+      "frequency": 77,
+      "suggested_name": "HTTP_HTTP",
+      "example_workflows": [
+        "VlCgU5K9SYQbdxTa",
+        "0031_Telegram_Bot_with_Supabase_memory_and_OpenAI_assistant_integration",
+        "0046_Create_dynamic_Twitter_profile_banner"
+      ]
+    },
+    {
+      "pattern": [
+        "http_request",
+        "set_data"
+      ],
+      "frequency": 60,
+      "suggested_name": "HTTP_SET_",
+      "example_workflows": [
+        "VlCgU5K9SYQbdxTa",
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "0049_OpenAI-powered_tweet_generator"
+      ]
+    },
+    {
+      "pattern": [
+        "condition",
+        "set_data"
+      ],
+      "frequency": 59,
+      "suggested_name": "COND_SET_",
+      "example_workflows": [
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "dYjQS1bJmVSAxNnj",
+        "0150_Enrich_FAQ_sections_on_your_website_pages_at_scale_with_AI"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "http_request"
+      ],
+      "frequency": 57,
+      "suggested_name": "SET__HTTP",
+      "example_workflows": [
+        "VlCgU5K9SYQbdxTa",
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "0044_Speed_Up_Social_Media_Banners_With_BannerBear.com"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "condition"
+      ],
+      "frequency": 37,
+      "suggested_name": "SET__COND",
+      "example_workflows": [
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "dYjQS1bJmVSAxNnj",
+        "0127_Actioning_Your_Meeting_Next_Steps_using_Transcripts_and_AI"
+      ]
+    },
+    {
+      "pattern": [
+        "condition",
+        "http_request"
+      ],
+      "frequency": 37,
+      "suggested_name": "COND_HTTP",
+      "example_workflows": [
+        "0031_Telegram_Bot_with_Supabase_memory_and_OpenAI_assistant_integration",
+        "0114_AI_Agent_To_Chat_With_Files_In_Supabase_Storage",
+        "0127_Actioning_Your_Meeting_Next_Steps_using_Transcripts_and_AI"
+      ]
+    },
+    {
+      "pattern": [
+        "http_request",
+        "condition"
+      ],
+      "frequency": 32,
+      "suggested_name": "HTTP_COND",
+      "example_workflows": [
+        "0031_Telegram_Bot_with_Supabase_memory_and_OpenAI_assistant_integration",
+        "0085_Daily_Podcast_Summary",
+        "1V1gcK6vyczRqdZC"
+      ]
+    },
+    {
+      "pattern": [
+        "code",
+        "http_request"
+      ],
+      "frequency": 27,
+      "suggested_name": "CODE_HTTP",
+      "example_workflows": [
+        "0049_OpenAI-powered_tweet_generator",
+        "0046_Create_dynamic_Twitter_profile_banner",
+        "WLSqXECfQF7rOj2A"
+      ]
+    },
+    {
+      "pattern": [
+        "telegram",
+        "telegram"
+      ],
+      "frequency": 25,
+      "suggested_name": "TELE_TELE",
+      "example_workflows": [
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "0022_Send_a_random_recipe_once_a_day_to_Telegram",
+        "ax8PJlp1UDb6EGFt"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "code"
+      ],
+      "frequency": 25,
+      "suggested_name": "SET__CODE",
+      "example_workflows": [
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "dDAqkobn2pqgdl2N",
+        "0086_AI_chat_with_any_data_source_(using_the_n8n_workflow_tool)"
+      ]
+    },
+    {
+      "pattern": [
+        "code",
+        "set_data"
+      ],
+      "frequency": 24,
+      "suggested_name": "CODE_SET_",
+      "example_workflows": [
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "dDAqkobn2pqgdl2N",
+        "QyMyf3zraY0wxXDf"
+      ]
+    },
+    {
+      "pattern": [
+        "merge",
+        "merge"
+      ],
+      "frequency": 24,
+      "suggested_name": "MERG_MERG",
+      "example_workflows": [
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "xM8Z5vZVNTNjCySL",
+        "dDAqkobn2pqgdl2N"
+      ]
+    },
+    {
+      "pattern": [
+        "condition",
+        "condition"
+      ],
+      "frequency": 23,
+      "suggested_name": "COND_COND",
+      "example_workflows": [
+        "QAqG571MBKCobo5l",
+        "0254_Enrich_Property_Inventory_Survey_with_Image_Recognition_and_AI_Agent",
+        "0111_AI-Powered_Candidate_Shortlisting_Automation_for_ERPNext"
+      ]
+    },
+    {
+      "pattern": [
+        "http_request",
+        "code"
+      ],
+      "frequency": 23,
+      "suggested_name": "HTTP_CODE",
+      "example_workflows": [
+        "wa2uEnSIowqSrHoY",
+        "0046_Create_dynamic_Twitter_profile_banner",
+        "WLSqXECfQF7rOj2A"
+      ]
+    },
+    {
+      "pattern": [
+        "lmchatopenai",
+        "lmchatopenai"
+      ],
+      "frequency": 23,
+      "suggested_name": "LMCH_LMCH",
+      "example_workflows": [
+        "dYjQS1bJmVSAxNnj",
+        "0114_AI_Agent_To_Chat_With_Files_In_Supabase_Storage",
+        "q8IFGLeOCGSfoWZu"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "loop"
+      ],
+      "frequency": 21,
+      "suggested_name": "SET__LOOP",
+      "example_workflows": [
+        "VlCgU5K9SYQbdxTa",
+        "dDAqkobn2pqgdl2N",
+        "0150_Enrich_FAQ_sections_on_your_website_pages_at_scale_with_AI"
+      ]
+    },
+    {
+      "pattern": [
+        "openai",
+        "openai"
+      ],
+      "frequency": 20,
+      "suggested_name": "OPEN_OPEN",
+      "example_workflows": [
+        "AjJ7O98qjw8XVirk",
+        "InzSAe2cnTJImvLm",
+        "0214_Text_automations_using_Apple_Shortcuts"
+      ]
+    },
+    {
+      "pattern": [
+        "http_request",
+        "http_request",
+        "http_request"
+      ],
+      "frequency": 18,
+      "suggested_name": "HTTP_HTTP_HTTP",
+      "example_workflows": [
+        "VlCgU5K9SYQbdxTa",
+        "0265_Customer_Insights_with_Qdrant,_Python_and_Information_Extractor",
+        "OvuZIXwt9mdU2JGK"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "set_data",
+        "set_data"
+      ],
+      "frequency": 18,
+      "suggested_name": "SET__SET__SET_",
+      "example_workflows": [
+        "dDAqkobn2pqgdl2N",
+        "dsKnCFwysROIA4MT",
+        "itzURpN5wbUNOXOw"
+      ]
+    },
+    {
+      "pattern": [
+        "http_request",
+        "loop"
+      ],
+      "frequency": 17,
+      "suggested_name": "HTTP_LOOP",
+      "example_workflows": [
+        "VlCgU5K9SYQbdxTa",
+        "0265_Customer_Insights_with_Qdrant,_Python_and_Information_Extractor",
+        "a58HZKwcOy7lmz56"
+      ]
+    },
+    {
+      "pattern": [
+        "manual_trigger",
+        "lmchatopenai"
+      ],
+      "frequency": 17,
+      "suggested_name": "MANU_LMCH",
+      "example_workflows": [
+        "0254_Enrich_Property_Inventory_Survey_with_Image_Recognition_and_AI_Agent",
+        "mjCQV12PbF6fw8hR",
+        "0127_Actioning_Your_Meeting_Next_Steps_using_Transcripts_and_AI"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "agent"
+      ],
+      "frequency": 17,
+      "suggested_name": "SET__AGEN",
+      "example_workflows": [
+        "0064_Notion_AI_Assistant_Generator",
+        "OuHrYOR3uWGmrhWQ",
+        "0127_Actioning_Your_Meeting_Next_Steps_using_Transcripts_and_AI"
+      ]
+    },
+    {
+      "pattern": [
+        "googlesheets",
+        "set_data"
+      ],
+      "frequency": 17,
+      "suggested_name": "GOOG_SET_",
+      "example_workflows": [
+        "0041_Social_Media_Analysis_and_Automated_Email_Generation",
+        "0265_Customer_Insights_with_Qdrant,_Python_and_Information_Extractor",
+        "t1P14FvfibKYCh3E"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "openai"
+      ],
+      "frequency": 16,
+      "suggested_name": "SET__OPEN",
+      "example_workflows": [
+        "0040_AI-Powered_Children_s_English_Storytelling_on_Telegram_with_OpenAI",
+        "IvgAFAUOSI3biT4L",
+        "mKGMYXJottl0PDtM"
+      ]
+    },
+    {
+      "pattern": [
+        "code",
+        "code"
+      ],
+      "frequency": 16,
+      "suggested_name": "CODE_CODE",
+      "example_workflows": [
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "dDAqkobn2pqgdl2N",
+        "Ask a human"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "http_request",
+        "set_data"
+      ],
+      "frequency": 15,
+      "suggested_name": "SET__HTTP_SET_",
+      "example_workflows": [
+        "G8jRDBvwsMkkMiLN",
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "0127_Actioning_Your_Meeting_Next_Steps_using_Transcripts_and_AI"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "condition",
+        "set_data"
+      ],
+      "frequency": 15,
+      "suggested_name": "SET__COND_SET_",
+      "example_workflows": [
+        "0246_Build_a_Financial_Documents_Assistant_using_Qdrant_and_Mistral.ai",
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "ZVUQL1bUQ8gBCZTl"
+      ]
+    },
+    {
+      "pattern": [
+        "http_request",
+        "set_data",
+        "http_request"
+      ],
+      "frequency": 15,
+      "suggested_name": "HTTP_SET__HTTP",
+      "example_workflows": [
+        "VlCgU5K9SYQbdxTa",
+        "G8jRDBvwsMkkMiLN",
+        "0044_Speed_Up_Social_Media_Banners_With_BannerBear.com"
+      ]
+    },
+    {
+      "pattern": [
+        "merge",
+        "chainllm"
+      ],
+      "frequency": 15,
+      "suggested_name": "MERG_CHAI",
+      "example_workflows": [
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "0185_Classify_lemlist_replies_using_OpenAI_and_automate_reply_handling",
+        "0186_Auto-label_incoming_Gmail_messages_with_AI_nodes"
+      ]
+    },
+    {
+      "pattern": [
+        "code",
+        "condition"
+      ],
+      "frequency": 15,
+      "suggested_name": "CODE_COND",
+      "example_workflows": [
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "Ask a human",
+        "0181_Send_a_ChatGPT_email_reply_and_save_responses_to_Google_Sheets"
+      ]
+    },
+    {
+      "pattern": [
+        "airtable",
+        "airtable"
+      ],
+      "frequency": 15,
+      "suggested_name": "AIRT_AIRT",
+      "example_workflows": [
+        "dDAqkobn2pqgdl2N",
+        "0022_Send_a_random_recipe_once_a_day_to_Telegram",
+        "eMxH0GjgfWEvBDic"
+      ]
+    },
+    {
+      "pattern": [
+        "loop",
+        "http_request"
+      ],
+      "frequency": 15,
+      "suggested_name": "LOOP_HTTP",
+      "example_workflows": [
+        "a58HZKwcOy7lmz56",
+        "5NAbfX550LJsfz6f",
+        "0018_AI_Agent_for_project_management_and_meetings_with_Airtable_and_Fireflies"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "googlesheets"
+      ],
+      "frequency": 15,
+      "suggested_name": "SET__GOOG",
+      "example_workflows": [
+        "0150_Enrich_FAQ_sections_on_your_website_pages_at_scale_with_AI",
+        "0265_Customer_Insights_with_Qdrant,_Python_and_Information_Extractor",
+        "ZVUQL1bUQ8gBCZTl"
+      ]
+    },
+    {
+      "pattern": [
+        "embeddingsopenai",
+        "lmchatopenai"
+      ],
+      "frequency": 15,
+      "suggested_name": "EMBE_LMCH",
+      "example_workflows": [
+        "dYjQS1bJmVSAxNnj",
+        "0265_Customer_Insights_with_Qdrant,_Python_and_Information_Extractor",
+        "OuHrYOR3uWGmrhWQ"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "http_request",
+        "http_request"
+      ],
+      "frequency": 14,
+      "suggested_name": "SET__HTTP_HTTP",
+      "example_workflows": [
+        "VlCgU5K9SYQbdxTa",
+        "0041_Social_Media_Analysis_and_Automated_Email_Generation",
+        "0265_Customer_Insights_with_Qdrant,_Python_and_Information_Extractor"
+      ]
+    },
+    {
+      "pattern": [
+        "lmchatopenai",
+        "manual_trigger"
+      ],
+      "frequency": 14,
+      "suggested_name": "LMCH_MANU",
+      "example_workflows": [
+        "FD0bHNaehP3LzCNN",
+        "nkPjDxMrrkKbgHaV",
+        "0125_AI_Powered_Web_Scraping_with_Jina,_Google_Sheets_and_OpenAI___the_EASY_way"
+      ]
+    },
+    {
+      "pattern": [
+        "openai",
+        "http_request"
+      ],
+      "frequency": 14,
+      "suggested_name": "OPEN_HTTP",
+      "example_workflows": [
+        "xM8Z5vZVNTNjCySL",
+        "Transform Image to Lego Style Using Line and Dall-E",
+        "0044_Speed_Up_Social_Media_Banners_With_BannerBear.com"
+      ]
+    },
+    {
+      "pattern": [
+        "lmchatopenai",
+        "chattrigger"
+      ],
+      "frequency": 14,
+      "suggested_name": "LMCH_CHAT",
+      "example_workflows": [
+        "rtsvydad1MOCryia",
+        "Ask a human",
+        "a58HZKwcOy7lmz56"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "aggregate"
+      ],
+      "frequency": 13,
+      "suggested_name": "SET__AGGR",
+      "example_workflows": [
+        "dYjQS1bJmVSAxNnj",
+        "0150_Enrich_FAQ_sections_on_your_website_pages_at_scale_with_AI",
+        "f9X48gqgIUwyseMM"
+      ]
+    },
+    {
+      "pattern": [
+        "loop",
+        "loop"
+      ],
+      "frequency": 13,
+      "suggested_name": "LOOP_LOOP",
+      "example_workflows": [
+        "dDAqkobn2pqgdl2N",
+        "0150_Enrich_FAQ_sections_on_your_website_pages_at_scale_with_AI",
+        "0243_Survey_Insights_with_Qdrant,_Python_and_Information_Extractor"
+      ]
+    },
+    {
+      "pattern": [
+        "loop",
+        "set_data"
+      ],
+      "frequency": 13,
+      "suggested_name": "LOOP_SET_",
+      "example_workflows": [
+        "dDAqkobn2pqgdl2N",
+        "0150_Enrich_FAQ_sections_on_your_website_pages_at_scale_with_AI",
+        "0110_⚡AI-Powered_YouTube_Video_Summarization_&_Analysis"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "set_data",
+        "condition"
+      ],
+      "frequency": 12,
+      "suggested_name": "SET__SET__COND",
+      "example_workflows": [
+        "0246_Build_a_Financial_Documents_Assistant_using_Qdrant_and_Mistral.ai",
+        "0064_Notion_AI_Assistant_Generator",
+        "0207_API_Schema_Extractor"
+      ]
+    },
+    {
+      "pattern": [
+        "http_request",
+        "openai"
+      ],
+      "frequency": 12,
+      "suggested_name": "HTTP_OPEN",
+      "example_workflows": [
+        "Transform Image to Lego Style Using Line and Dall-E",
+        "0108_Narrating_over_a_Video_using_Multimodal_AI",
+        "kZ3aL4r7xc96Q7lp"
+      ]
+    },
+    {
+      "pattern": [
+        "http_request",
+        "http_request",
+        "set_data"
+      ],
+      "frequency": 11,
+      "suggested_name": "HTTP_HTTP_SET_",
+      "example_workflows": [
+        "VlCgU5K9SYQbdxTa",
+        "G8jRDBvwsMkkMiLN",
+        "a58HZKwcOy7lmz56"
+      ]
+    },
+    {
+      "pattern": [
+        "lmchatopenai",
+        "set_data"
+      ],
+      "frequency": 11,
+      "suggested_name": "LMCH_SET_",
+      "example_workflows": [
+        "0265_Customer_Insights_with_Qdrant,_Python_and_Information_Extractor",
+        "mjCQV12PbF6fw8hR",
+        "PoiRk5w0xd1ysq4U"
+      ]
+    },
+    {
+      "pattern": [
+        "openai",
+        "telegram"
+      ],
+      "frequency": 11,
+      "suggested_name": "OPEN_TELE",
+      "example_workflows": [
+        "0040_AI-Powered_Children_s_English_Storytelling_on_Telegram_with_OpenAI",
+        "IvgAFAUOSI3biT4L",
+        "0039_Image_Creation_with_OpenAI_and_Telegram"
+      ]
+    },
+    {
+      "pattern": [
+        "set_data",
+        "telegram"
+      ],
+      "frequency": 11,
+      "suggested_name": "SET__TELE",
+      "example_workflows": [
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "0022_Send_a_random_recipe_once_a_day_to_Telegram",
+        "rtsvydad1MOCryia"
+      ]
+    },
+    {
+      "pattern": [
+        "telegram",
+        "set_data"
+      ],
+      "frequency": 11,
+      "suggested_name": "TELE_SET_",
+      "example_workflows": [
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "0022_Send_a_random_recipe_once_a_day_to_Telegram",
+        "IvgAFAUOSI3biT4L"
+      ]
+    },
+    {
+      "pattern": [
+        "extractfromfile",
+        "set_data"
+      ],
+      "frequency": 11,
+      "suggested_name": "EXTR_SET_",
+      "example_workflows": [
+        "0235_Extract_data_from_resume_and_create_PDF_with_Gotenberg",
+        "0127_Actioning_Your_Meeting_Next_Steps_using_Transcripts_and_AI",
+        "P307QnrxpA1ddsM5"
+      ]
+    }
+  ],
+  "transition_hotspots": {
+    "set_data": [
+      [
+        "set_data",
+        78
+      ],
+      [
+        "http_request",
+        57
+      ],
+      [
+        "condition",
+        37
+      ],
+      [
+        "code",
+        25
+      ],
+      [
+        "loop",
+        21
+      ]
+    ],
+    "http_request": [
+      [
+        "http_request",
+        77
+      ],
+      [
+        "set_data",
+        60
+      ],
+      [
+        "condition",
+        32
+      ],
+      [
+        "code",
+        23
+      ],
+      [
+        "loop",
+        17
+      ]
+    ],
+    "condition": [
+      [
+        "set_data",
+        59
+      ],
+      [
+        "http_request",
+        37
+      ],
+      [
+        "condition",
+        23
+      ],
+      [
+        "googlesheets",
+        10
+      ],
+      [
+        "openai",
+        8
+      ]
+    ],
+    "lmchatopenai": [
+      [
+        "lmchatopenai",
+        23
+      ],
+      [
+        "manual_trigger",
+        14
+      ],
+      [
+        "chattrigger",
+        14
+      ],
+      [
+        "set_data",
+        11
+      ],
+      [
+        "executeworkflowtrigger",
+        10
+      ]
+    ],
+    "code": [
+      [
+        "http_request",
+        27
+      ],
+      [
+        "set_data",
+        24
+      ],
+      [
+        "code",
+        16
+      ],
+      [
+        "condition",
+        15
+      ],
+      [
+        "googlesheets",
+        7
+      ]
+    ],
+    "loop": [
+      [
+        "http_request",
+        15
+      ],
+      [
+        "loop",
+        13
+      ],
+      [
+        "set_data",
+        13
+      ],
+      [
+        "chainllm",
+        7
+      ],
+      [
+        "merge",
+        6
+      ]
+    ],
+    "openai": [
+      [
+        "openai",
+        20
+      ],
+      [
+        "http_request",
+        14
+      ],
+      [
+        "telegram",
+        11
+      ],
+      [
+        "set_data",
+        8
+      ],
+      [
+        "condition",
+        7
+      ]
+    ],
+    "manual_trigger": [
+      [
+        "lmchatopenai",
+        17
+      ],
+      [
+        "http_request",
+        8
+      ],
+      [
+        "schedule",
+        6
+      ],
+      [
+        "outputparserstructured",
+        5
+      ],
+      [
+        "set_data",
+        5
+      ]
+    ],
+    "telegram": [
+      [
+        "telegram",
+        25
+      ],
+      [
+        "set_data",
+        11
+      ],
+      [
+        "condition",
+        10
+      ],
+      [
+        "http_request",
+        5
+      ],
+      [
+        "openai",
+        5
+      ]
+    ],
+    "googlesheets": [
+      [
+        "set_data",
+        17
+      ],
+      [
+        "googlesheets",
+        11
+      ],
+      [
+        "http_request",
+        7
+      ],
+      [
+        "loop",
+        7
+      ],
+      [
+        "code",
+        6
+      ]
+    ],
+    "merge": [
+      [
+        "merge",
+        24
+      ],
+      [
+        "chainllm",
+        15
+      ],
+      [
+        "agent",
+        9
+      ],
+      [
+        "set_data",
+        3
+      ],
+      [
+        "loop",
+        3
+      ]
+    ],
+    "airtable": [
+      [
+        "airtable",
+        15
+      ],
+      [
+        "http_request",
+        10
+      ],
+      [
+        "set_data",
+        7
+      ],
+      [
+        "code",
+        4
+      ],
+      [
+        "loop",
+        4
+      ]
+    ],
+    "googledrive": [
+      [
+        "googledrive",
+        8
+      ],
+      [
+        "loop",
+        6
+      ],
+      [
+        "http_request",
+        5
+      ],
+      [
+        "condition",
+        5
+      ],
+      [
+        "openai",
+        5
+      ]
+    ],
+    "respondtowebhook": [
+      [
+        "http_request",
+        9
+      ],
+      [
+        "respondtowebhook",
+        8
+      ],
+      [
+        "condition",
+        7
+      ],
+      [
+        "set_data",
+        6
+      ],
+      [
+        "agent",
+        4
+      ]
+    ],
+    "memorybufferwindow": [
+      [
+        "lmchatopenai",
+        9
+      ],
+      [
+        "chattrigger",
+        6
+      ],
+      [
+        "memorybufferwindow",
+        3
+      ],
+      [
+        "toolworkflow",
+        3
+      ],
+      [
+        "manual_trigger",
+        3
+      ]
+    ],
+    "no_op": [
+      [
+        "no_op",
+        6
+      ],
+      [
+        "http_request",
+        5
+      ],
+      [
+        "set_data",
+        4
+      ],
+      [
+        "loop",
+        4
+      ],
+      [
+        "condition",
+        4
+      ]
+    ],
+    "embeddingsopenai": [
+      [
+        "lmchatopenai",
+        15
+      ],
+      [
+        "embeddingsopenai",
+        6
+      ],
+      [
+        "textsplitterrecursivecharactertextsplitter",
+        5
+      ],
+      [
+        "http_request",
+        3
+      ],
+      [
+        "chattrigger",
+        3
+      ]
+    ],
+    "toolworkflow": [
+      [
+        "lmchatopenai",
+        8
+      ],
+      [
+        "toolworkflow",
+        7
+      ],
+      [
+        "executeworkflowtrigger",
+        5
+      ],
+      [
+        "manual_trigger",
+        4
+      ],
+      [
+        "chattrigger",
+        3
+      ]
+    ],
+    "webhook": [
+      [
+        "lmchatopenai",
+        10
+      ],
+      [
+        "respondtowebhook",
+        7
+      ],
+      [
+        "openai",
+        5
+      ],
+      [
+        "http_request",
+        3
+      ],
+      [
+        "no_op",
+        2
+      ]
+    ],
+    "chattrigger": [
+      [
+        "memorybufferwindow",
+        8
+      ],
+      [
+        "embeddingsopenai",
+        7
+      ],
+      [
+        "lmchatopenai",
+        5
+      ],
+      [
+        "set_data",
+        4
+      ],
+      [
+        "toolworkflow",
+        2
+      ]
+    ]
+  }
+}

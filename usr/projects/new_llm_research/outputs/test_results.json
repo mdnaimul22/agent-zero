@@ -1,0 +1,121 @@
+{
+  "tests_passed": 23,
+  "tests_failed": 0,
+  "details": [
+    {
+      "name": "GAT Model Import",
+      "passed": true,
+      "message": "All classes imported successfully"
+    },
+    {
+      "name": "GAT Model Creation",
+      "passed": true,
+      "message": "276,068 parameters"
+    },
+    {
+      "name": "GAT Forward Pass (Sequence)",
+      "passed": true,
+      "message": "Output shape: torch.Size([4, 100])"
+    },
+    {
+      "name": "Hybrid Model Creation",
+      "passed": true,
+      "message": "572,588 parameters"
+    },
+    {
+      "name": "Subgraph Miner Import",
+      "passed": true,
+      "message": "All classes imported successfully"
+    },
+    {
+      "name": "Subgraph Miner Initialization",
+      "passed": true,
+      "message": "max_size=6"
+    },
+    {
+      "name": "Pattern Mining",
+      "passed": true,
+      "message": "Found 155 patterns from 50 workflows"
+    },
+    {
+      "name": "Hierarchical MacroNode Building",
+      "passed": true,
+      "message": "Built 84 root MacroNodes"
+    },
+    {
+      "name": "Pattern Statistics",
+      "passed": true,
+      "message": "Max pattern size: 4, Total patterns: 155"
+    },
+    {
+      "name": "FastAPI App Import",
+      "passed": true,
+      "message": "App imported successfully"
+    },
+    {
+      "name": "Pydantic Schemas Import",
+      "passed": true,
+      "message": "All schemas imported"
+    },
+    {
+      "name": "Model State Loading",
+      "passed": true,
+      "message": "Loaded 20 transition types"
+    },
+    {
+      "name": "Prediction Function",
+      "passed": true,
+      "message": "Got 5 predictions for webhook\u2192set_data"
+    },
+    {
+      "name": "Health Endpoint",
+      "passed": true,
+      "message": "Status: healthy, Model loaded: True"
+    },
+    {
+      "name": "Predict Endpoint",
+      "passed": true,
+      "message": "Got 5 predictions"
+    },
+    {
+      "name": "Generate Endpoint",
+      "passed": true,
+      "message": "Generated 8 nodes"
+    },
+    {
+      "name": "Analyze Endpoint",
+      "passed": true,
+      "message": "Analyzed 3 nodes, optimization score: 1.00"
+    },
+    {
+      "name": "Training Module Import",
+      "passed": true,
+      "message": "All training components imported"
+    },
+    {
+      "name": "Vocabulary Loading",
+      "passed": true,
+      "message": "Loaded vocabulary with 150 node types"
+    },
+    {
+      "name": "GAT Model for Training",
+      "passed": true,
+      "message": "285,718 parameters"
+    },
+    {
+      "name": "Model Comparison",
+      "passed": true,
+      "message": "All architectures created successfully"
+    },
+    {
+      "name": "n8n Package Files",
+      "passed": true,
+      "message": "All 6 files present"
+    },
+    {
+      "name": "n8n package.json Validation",
+      "passed": true,
+      "message": "Package: n8n-nodes-nodeai@1.0.0"
+    }
+  ]
+}

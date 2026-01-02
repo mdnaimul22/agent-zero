@@ -1,0 +1,22 @@
+{
+  "data_dir": "workflows",
+  "output_dir": "outputs",
+  "cache_dir": "data",
+  "architecture": "lstm",
+  "embed_dim": 64,
+  "hidden_dim": 128,
+  "num_layers": 2,
+  "dropout": 0.2,
+  "window_size": 3,
+  "epochs": 50,
+  "batch_size": 64,
+  "learning_rate": 0.001,
+  "patience": 10,
+  "device": "auto",
+  "seed": 42,
+  "force_reprocess": false,
+  "vocab_size": 150,
+  "num_samples": 3453,
+  "best_epoch": 17,
+  "best_val_loss": 3.3390215237935386
+}

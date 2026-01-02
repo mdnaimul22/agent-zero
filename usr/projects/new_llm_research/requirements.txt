@@ -1,0 +1,17 @@
+# Node-Centric AI System Dependencies
+
+# Core
+torch>=2.0.0
+numpy>=1.24.0
+
+# Graph Neural Networks
+torch-geometric>=2.4.0
+networkx>=3.0
+
+# API Service
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+
+# Development
+tqdm>=4.65.0

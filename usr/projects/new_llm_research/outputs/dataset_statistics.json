@@ -1,0 +1,172 @@
+{
+  "total_workflows": 280,
+  "total_nodes": 4013,
+  "total_edges": 3888,
+  "avg_nodes_per_workflow": 14.332142857142857,
+  "avg_edges_per_workflow": 13.885714285714286,
+  "unique_node_types": 195,
+  "top_20_node_types": [
+    [
+      "set",
+      452
+    ],
+    [
+      "httprequest",
+      378
+    ],
+    [
+      "lmchatopenai",
+      192
+    ],
+    [
+      "code",
+      148
+    ],
+    [
+      "if",
+      143
+    ],
+    [
+      "openai",
+      123
+    ],
+    [
+      "agent",
+      109
+    ],
+    [
+      "manualtrigger",
+      97
+    ],
+    [
+      "merge",
+      95
+    ],
+    [
+      "splitout",
+      86
+    ],
+    [
+      "telegram",
+      84
+    ],
+    [
+      "googlesheets",
+      80
+    ],
+    [
+      "chainllm",
+      71
+    ],
+    [
+      "airtable",
+      67
+    ],
+    [
+      "memorybufferwindow",
+      60
+    ],
+    [
+      "respondtowebhook",
+      58
+    ],
+    [
+      "switch",
+      57
+    ],
+    [
+      "noop",
+      56
+    ],
+    [
+      "googledrive",
+      55
+    ],
+    [
+      "chattrigger",
+      53
+    ]
+  ],
+  "top_20_edge_types": [
+    [
+      "lmchatopenai → agent",
+      86
+    ],
+    [
+      "httprequest → httprequest",
+      75
+    ],
+    [
+      "set → httprequest",
+      69
+    ],
+    [
+      "memorybufferwindow → agent",
+      52
+    ],
+    [
+      "set → merge",
+      47
+    ],
+    [
+      "httprequest → set",
+      46
+    ],
+    [
+      "toolworkflow → agent",
+      42
+    ],
+    [
+      "lmchatopenai → chainllm",
+      41
+    ],
+    [
+      "set → set",
+      41
+    ],
+    [
+      "if → httprequest",
+      39
+    ],
+    [
+      "if → set",
+      36
+    ],
+    [
+      "manualtrigger → set",
+      34
+    ],
+    [
+      "set → code",
+      32
+    ],
+    [
+      "httprequest → code",
+      31
+    ],
+    [
+      "switch → set",
+      30
+    ],
+    [
+      "switch → httprequest",
+      26
+    ],
+    [
+      "set → splitout",
+      25
+    ],
+    [
+      "manualtrigger → httprequest",
+      25
+    ],
+    [
+      "chattrigger → agent",
+      23
+    ],
+    [
+      "set → agent",
+      23
+    ]
+  ]
+}

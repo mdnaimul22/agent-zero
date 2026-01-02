@@ -1,0 +1,43 @@
+{
+    "name": "n8n-nodes-nodeai",
+    "version": "1.0.0",
+    "description": "n8n Community Node for Node-AI Prediction Service - Get intelligent next-node suggestions in your workflow canvas",
+    "keywords": [
+        "n8n-community-node-package",
+        "ai",
+        "prediction",
+        "workflow",
+        "automation"
+    ],
+    "license": "MIT",
+    "author": {
+        "name": "Node-AI Project"
+    },
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc && gulp build:icons",
+        "dev": "tsc --watch",
+        "lint": "eslint nodes credentials --ext .ts",
+        "prepublishOnly": "npm run build"
+    },
+    "files": [
+        "dist"
+    ],
+    "n8n": {
+        "n8nNodesApiVersion": 1,
+        "credentials": [
+            "dist/credentials/NodeAiApi.credentials.js"
+        ],
+        "nodes": [
+            "dist/nodes/NodeAI/NodeAI.node.js"
+        ]
+    },
+    "devDependencies": {
+        "@types/node": "^18.0.0",
+        "n8n-workflow": "latest",
+        "typescript": "^5.0.0"
+    },
+    "peerDependencies": {
+        "n8n-workflow": "*"
+    }
+}

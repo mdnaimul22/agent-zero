@@ -5,6 +5,11 @@
 **/__pycache__/
 *.py[cod]
 **/.conda/
+**/node_modules/
+**/venv/
+**/.venv/
+**/.pytest_cache/
+**/.ipynb_checkpoints/
 
 #Ignore IDE files
 .cursor/
@@ -23,9 +28,12 @@ memory/**
 # Handle logs directory
 logs/*
 
-# Handle tmp and usr directory
+# Handle usr project folders
+# We want to keep the code but ignore large data/installations
+usr/projects/**/user_data/
+usr/projects/**/data/
 tmp/*
-usr/*
+
 
 # Handle knowledge directory
 knowledge/**
