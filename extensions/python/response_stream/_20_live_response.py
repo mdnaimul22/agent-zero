@@ -21,7 +21,14 @@ class LiveResponse(Extension):
             
         try:
             tool_name, tool_args = extract_tools.normalize_tool_request(parsed)
-            if tool_name != "response" or not tool_args.get("text"):
+            message = tool_args.get("text")
+            if not isinstance(message, str) or not message.strip():
+                message = tool_args.get("message")
+            if (
+                tool_name != "response"
+                or not isinstance(message, str)
+                or not message.strip()
+            ):
                 return  # not a response
 
             # create log message and store it in loop data temporary params
@@ -39,6 +46,6 @@ class LiveResponse(Extension):
 
             # update log message
             log_item = loop_data.params_temporary["log_item_response"]
-            log_item.update(content=tool_args["text"])
+            log_item.update(content=message)
         except Exception as e:
             pass
