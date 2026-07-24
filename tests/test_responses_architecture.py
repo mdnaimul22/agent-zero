@@ -1,4 +1,4 @@
-import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -42,28 +42,6 @@ class _AsyncEventStream:
 
     async def aclose(self):
         self.closed = True
-
-
-class _StallingAsyncEventStream:
-    def __init__(self, event: dict):
-        self.event = event
-        self.sent = False
-        self.closed = False
-        self._stalled = asyncio.Event()
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        if not self.sent:
-            self.sent = True
-            return self.event
-        await self._stalled.wait()
-        raise StopAsyncIteration
-
-    async def aclose(self):
-        self.closed = True
-        self._stalled.set()
 
 
 def test_llm_result_persists_only_durable_responses_metadata():
@@ -340,13 +318,58 @@ async def test_unified_turn_captures_response_id_without_stop_request(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_unified_turn_stops_responses_stream_after_callback_stop(monkeypatch):
-    message = (
-        '{"thoughts":["test"],"actions":['
-        '{"tool_name":"response","tool_args":{"text":"ok"}}]}'
-    )
-    stream = _StallingAsyncEventStream(
-        {"type": "response.output_text.delta", "delta": message}
+async def test_unified_turn_waits_for_completed_native_responses_calls(monkeypatch):
+    calls = [
+        {
+            "type": "function_call",
+            "id": "fc_1",
+            "call_id": "call_1",
+            "name": "lookup",
+            "arguments": '{"q":"a0"}',
+        },
+        {
+            "type": "function_call",
+            "id": "fc_2",
+            "call_id": "call_2",
+            "name": "summarize",
+            "arguments": '{"style":"short"}',
+        },
+    ]
+    stream = _AsyncEventStream(
+        [
+            {
+                "type": "response.output_item.added",
+                "output_index": 0,
+                "item": {**calls[0], "arguments": ""},
+            },
+            {
+                "type": "response.function_call_arguments.done",
+                "item_id": "fc_1",
+                "output_index": 0,
+                "name": "lookup",
+                "arguments": calls[0]["arguments"],
+            },
+            {
+                "type": "response.output_item.added",
+                "output_index": 1,
+                "item": {**calls[1], "arguments": ""},
+            },
+            {
+                "type": "response.function_call_arguments.done",
+                "item_id": "fc_2",
+                "output_index": 1,
+                "name": "summarize",
+                "arguments": calls[1]["arguments"],
+            },
+            {
+                "type": "response.completed",
+                "response": {
+                    "id": "resp_parallel",
+                    "output": calls,
+                    "usage": {"input_tokens": 10, "output_tokens": 5},
+                },
+            },
+        ]
     )
 
     async def fake_aresponses(*args, **kwargs):
@@ -367,16 +390,26 @@ async def test_unified_turn_stops_responses_stream_after_callback_stop(monkeypat
     async def response_callback(chunk: str, full: str):
         return full if extract_tools.extract_tool_request(full) else None
 
-    result = await asyncio.wait_for(
-        wrapper.unified_turn(
-            messages=[HumanMessage(content="hi")],
-            response_callback=response_callback,
-        ),
-        timeout=1,
+    result = await wrapper.unified_turn(
+        messages=[HumanMessage(content="hi")],
+        response_callback=response_callback,
     )
 
-    assert result.response == message
-    assert stream.closed is True
+    assert stream.index == 5
+    assert stream.closed is False
+    assert result.mode == "responses"
+    assert result.response_id == "resp_parallel"
+    assert result.usage == {"input_tokens": 10, "output_tokens": 5}
+    assert [call.name for call in result.function_calls] == ["lookup", "summarize"]
+    assert json.loads(result.response) == {
+        "tool_name": "parallel_tool_calls",
+        "tool_args": {
+            "calls": [
+                {"tool_name": "lookup", "tool_args": {"q": "a0"}},
+                {"tool_name": "summarize", "tool_args": {"style": "short"}},
+            ]
+        },
+    }
 
 
 def test_collect_response_ids_from_agent_state_and_history_metadata():
@@ -477,47 +510,81 @@ async def test_agent_executes_native_responses_function_call_and_records_output(
 
 
 @pytest.mark.asyncio
-async def test_agent_routes_only_complete_text_tool_requests() -> None:
+async def test_agent_routes_chat_retries_and_native_responses_text() -> None:
     agent = object.__new__(Agent)
     processed: list[str] = []
+    executed: list[dict] = []
 
     async def log_builtin_items(result):
         return None
 
     async def process_tools(message):
         processed.append(message)
-        return message
+        return None
+
+    async def execute_tool_request(**kwargs):
+        executed.append(kwargs)
+        return None
 
     agent._log_response_builtin_items = log_builtin_items
     agent.process_tools = process_tools
+    agent._execute_tool_request = execute_tool_request
 
     tool_request = '{"type":"function","name":"response","parameters":{"text":"ok"}}'
-    for message in (
+    chat_messages = (
         "Plain final answer.",
         '{"status":"planning"}',
         f"Example tool JSON: {tool_request}",
-    ):
+        f"∂\n{tool_request}",
+        (
+            '{"thoughts":["Done"],"headline":"Done","tool_args":'
+            '{"text":"ok","tool_name":"response"}'
+        ),
+    )
+    for message in chat_messages:
         assert await Agent.process_llm_result_tools(
             agent, LLMResult.from_chat(response=message)
-        ) == message
-    assert processed == []
+        ) is None
+    assert processed == list(chat_messages)
 
+    processed.clear()
+    responses_messages = (
+        "Plain final answer.",
+        '{"status":"planning"}',
+        f"Example tool JSON: {tool_request}",
+    )
+    for message in responses_messages:
+        assert await Agent.process_llm_result_tools(
+            agent, LLMResult(response=message)
+        ) is None
+    assert processed == []
+    assert executed == [
+        {
+            "tool_name": "response",
+            "tool_args": {"text": message},
+            "message": message,
+        }
+        for message in responses_messages
+    ]
+
+    processed.clear()
+    executed.clear()
     assert await Agent.process_llm_result_tools(
         agent, LLMResult.from_chat(response=tool_request)
-    ) == tool_request
+    ) is None
     assert processed == [tool_request]
 
     processed.clear()
     assert await Agent.process_llm_result_tools(
         agent, LLMResult(response="", reasoning=tool_request)
-    ) == tool_request
+    ) is None
     assert processed == [tool_request]
 
     processed.clear()
     assert await Agent.process_llm_result_tools(
         agent, LLMResult(response="", reasoning='{"status":"planning"}')
-    ) == ""
-    assert processed == []
+    ) is None
+    assert processed == [""]
 
 
 @pytest.mark.asyncio

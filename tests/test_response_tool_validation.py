@@ -24,6 +24,41 @@ async def test_response_tool_accepts_text_or_message(args) -> None:
 
 
 @pytest.mark.asyncio
+async def test_response_tool_uses_non_empty_legacy_message_fallback() -> None:
+    tool = ResponseTool(
+        None,
+        "response",
+        None,
+        {"text": "", "message": "legacy"},
+        "",
+        None,
+    )
+
+    response = await tool.execute()
+
+    assert response.message == "legacy"
+    assert response.break_loop is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "args",
+    [
+        {},
+        {"text": ""},
+        {"text": "   "},
+        {"text": None},
+        {"message": "\n\t"},
+    ],
+)
+async def test_response_tool_rejects_empty_arguments(args) -> None:
+    tool = ResponseTool(None, "response", None, args, "", None)
+
+    with pytest.raises(RepairableException, match="non-empty top-level"):
+        await tool.execute()
+
+
+@pytest.mark.asyncio
 async def test_response_tool_rejects_nested_response_args() -> None:
     tool = ResponseTool(
         None,
@@ -39,5 +74,5 @@ async def test_response_tool_rejects_nested_response_args() -> None:
         None,
     )
 
-    with pytest.raises(RepairableException, match="top-level text or message"):
+    with pytest.raises(RepairableException, match="non-empty top-level"):
         await tool.execute()

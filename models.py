@@ -738,7 +738,10 @@ class LiteLLMChatWrapper(SimpleChatModel):
                                         output["response_delta"]
                                     )
                                 )
-                            if stop_response is not None:
+                            if (
+                                stop_response is not None
+                                and not transport.policy.using_responses
+                            ):
                                 result.response = stop_response
                                 break
                 else:
@@ -761,7 +764,7 @@ class LiteLLMChatWrapper(SimpleChatModel):
                     provider_model_key=self.model_name,
                     capability=transport._capability_metadata(),
                 )
-                if result.output()["response_delta"]:
+                if result.output()["response_delta"] and not llm_result.function_calls:
                     llm_result.response = result.output()["response_delta"]
                 if result.output()["reasoning_delta"]:
                     llm_result.reasoning = result.output()["reasoning_delta"]

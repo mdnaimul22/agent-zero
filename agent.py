@@ -1119,10 +1119,18 @@ class Agent:
                 or extract_tools.is_misformatted_tool_request(llm_result.reasoning)
             ):
                 message = llm_result.reasoning
-        if extract_tools.extract_tool_request(message) is None:
-            if extract_tools.is_misformatted_tool_request(message):
-                return await self.process_tools(message)
-            return message
+        if (
+            llm_result.mode == "responses"
+            and isinstance(message, str)
+            and bool(message.strip())
+            and extract_tools.extract_tool_request(message) is None
+            and not extract_tools.is_misformatted_tool_request(message)
+        ):
+            return await self._execute_tool_request(
+                tool_name="response",
+                tool_args={"text": message},
+                message=message,
+            )
         return await self.process_tools(message)
 
     async def _execute_tool_request(

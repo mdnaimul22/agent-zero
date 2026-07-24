@@ -7,10 +7,10 @@ class ResponseTool(Tool):
     async def execute(self, **kwargs):
         for key in ("text", "message"):
             message = self.args.get(key)
-            if isinstance(message, str):
+            if isinstance(message, str) and message.strip():
                 return Response(message=message, break_loop=True)
         raise RepairableException(
-            "response tool requires a top-level text or message string argument"
+            "response tool requires a non-empty top-level text or message string argument"
         )
 
     async def before_execution(self, **kwargs):

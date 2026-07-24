@@ -5,7 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from helpers import files
+from agent import Agent, LoopData
+from helpers import extension, files, mcp_handler
+from helpers.llm_result import LLMResult
+from helpers.log import Log
 from plugins._goal.api.goal import Goal as GoalApi
 from plugins._goal.commands import goal_command
 from plugins._goal.tools import goal
@@ -180,3 +183,52 @@ async def test_active_goal_keeps_response_tool_running(context_id: str):
     response = await tool.execute()
     assert response.break_loop is True
     assert response.message == "Can you decide?"
+
+
+@pytest.mark.asyncio
+async def test_native_responses_text_uses_active_goal_response_override(
+    context_id: str,
+    monkeypatch,
+):
+    goal.create_goal(context_id, "Keep going")
+    recorded = []
+
+    async def no_op(*args, **kwargs):
+        return None
+
+    class NoMcpTools:
+        def get_tool(self, agent, tool_name):
+            return None
+
+    agent = object.__new__(Agent)
+    agent.context = SimpleNamespace(id=context_id, log=Log())
+    agent.loop_data = LoopData()
+    agent.data = {}
+    agent.handle_intervention = no_op
+    agent._log_response_builtin_items = no_op
+    agent.hist_add_tool_result = lambda *args, **kwargs: recorded.append((args, kwargs))
+
+    def get_tool(name, method, args, message, loop_data, **kwargs):
+        return ResponseTool(agent, name, method, args, message, loop_data)
+
+    agent.get_tool = get_tool
+    monkeypatch.setattr(extension, "call_extensions_async", no_op)
+    monkeypatch.setattr(mcp_handler.MCPConfig, "get_instance", lambda: NoMcpTools())
+
+    result = await Agent.process_llm_result_tools(
+        agent,
+        LLMResult(response="Checkpoint for the user."),
+    )
+
+    assert result is None
+    assert recorded[0][0][0] == "response"
+    assert recorded[0][0][1].startswith("Goal still active.")
+    assert recorded[0][1] == {}
+
+    goal.update_goal(context_id, status="complete")
+    result = await Agent.process_llm_result_tools(
+        agent,
+        LLMResult(response="Finished."),
+    )
+
+    assert result == "Finished."

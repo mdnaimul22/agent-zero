@@ -22,7 +22,8 @@
 - Update this file whenever tool arguments, output shape, `break_loop` behavior, intervention handling, prompt instructions, or side effects change.
 - `ResponseTool` is a `Tool`.
 - `ResponseTool` defines `execute(...)`.
-- `ResponseTool` requires a top-level string `text` or legacy `message` argument.
+- `ResponseTool` requires a non-empty top-level string `text` or legacy `message`
+  argument, preferring `text` and falling back to `message` when `text` is blank.
   Invalid arguments raise `RepairableException` so the agent can surface a correction
   warning and retry rather than crash.
 - Imported dependency areas include: `helpers.errors`, `helpers.tool`.

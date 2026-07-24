@@ -235,25 +235,22 @@ def test_provider_defaults_do_not_freeze_litellm_global_kwargs(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_unified_call_stops_after_canonical_root_snapshot(monkeypatch):
+async def test_unified_call_stops_chat_after_canonical_root_snapshot(monkeypatch):
     stream = _AsyncChunkStream(
         [
-            {"type": "response.created"},
-            _response_event('{"tool_name":"response","tool_args":{"text":"hello"}}'),
-            _response_event(" unreachable"),
+            _chunk('{"tool_name":"response","tool_args":{"text":"hello"}}'),
+            _chunk(" unreachable"),
         ]
     )
 
-    async def fake_aresponses(*args, **kwargs):
+    async def fake_acompletion(*args, **kwargs):
         assert kwargs["stream"] is True
-        assert kwargs["input"] == ""
-        assert kwargs["store"] is True
         return stream
 
     async def fake_rate_limiter(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(litellm_transport, "aresponses", fake_aresponses)
+    monkeypatch.setattr(litellm_transport, "acompletion", fake_acompletion)
     monkeypatch.setattr(models, "apply_rate_limiter", fake_rate_limiter)
     monkeypatch.setattr(
         models.settings,
@@ -265,6 +262,7 @@ async def test_unified_call_stops_after_canonical_root_snapshot(monkeypatch):
         model="test-model",
         provider="openai",
         model_config=None,
+        a0_api_mode="chat",
     )
 
     seen: list[tuple[str, str]] = []
@@ -280,7 +278,7 @@ async def test_unified_call_stops_after_canonical_root_snapshot(monkeypatch):
 
     assert response == '{"tool_name":"response","tool_args":{"text":"hello"}}'
     assert reasoning == ""
-    assert stream.index == 2
+    assert stream.index == 1
     assert stream.closed is True
     assert len(seen) == 1
     assert seen[0][1] == '{"tool_name":"response","tool_args":{"text":"hello"}}'
@@ -290,25 +288,22 @@ async def test_unified_call_stops_after_canonical_root_snapshot(monkeypatch):
 async def test_unified_call_does_not_stop_for_embedded_tool_json(monkeypatch):
     stream = _AsyncChunkStream(
         [
-            {"type": "response.created"},
-            _response_event('Preamble {"note":"not the tool"}.\n'),
-            _response_event(
+            _chunk('Preamble {"note":"not the tool"}.\n'),
+            _chunk(
                 '{"tool_name":"response","tool_args":{"text":"ok"}} trailing text'
             ),
-            _response_event(" unreachable"),
+            _chunk(" unreachable"),
         ]
     )
 
-    async def fake_aresponses(*args, **kwargs):
+    async def fake_acompletion(*args, **kwargs):
         assert kwargs["stream"] is True
-        assert kwargs["input"] == ""
-        assert kwargs["store"] is True
         return stream
 
     async def fake_rate_limiter(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(litellm_transport, "aresponses", fake_aresponses)
+    monkeypatch.setattr(litellm_transport, "acompletion", fake_acompletion)
     monkeypatch.setattr(models, "apply_rate_limiter", fake_rate_limiter)
     monkeypatch.setattr(
         models.settings,
@@ -320,6 +315,7 @@ async def test_unified_call_does_not_stop_for_embedded_tool_json(monkeypatch):
         model="test-model",
         provider="openai",
         model_config=None,
+        a0_api_mode="chat",
     )
 
     seen: list[tuple[str, str]] = []
@@ -338,7 +334,7 @@ async def test_unified_call_does_not_stop_for_embedded_tool_json(monkeypatch):
         '{"tool_name":"response","tool_args":{"text":"ok"}} trailing text unreachable'
     )
     assert reasoning == ""
-    assert stream.index == 4
+    assert stream.index == 3
     assert stream.closed is False
     assert len(seen) == 3
     assert seen[0][1] == 'Preamble {"note":"not the tool"}.\n'
