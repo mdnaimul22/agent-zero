@@ -45,6 +45,9 @@ async def _build_system_text(profile: str = "agent0") -> str:
 @pytest.mark.asyncio
 async def test_default_agent0_prompt_budget_and_guardrails():
     system_text = await _build_system_text()
+    communication_prompt = (
+        PROJECT_ROOT / "prompts" / "agent.system.main.communication.md"
+    ).read_text(encoding="utf-8")
 
     # The default prompt now intentionally includes the compact always-on tool
     # surface plus skill metadata. Keep the guardrail close to the observed
@@ -62,6 +65,8 @@ async def test_default_agent0_prompt_budget_and_guardrails():
     assert '"tool_name": "code_execution_tool"' in system_text
     assert '"tool_name": "memory_load"' in system_text
     assert "informative but tight" in system_text
+    assert "Your actual output starts with `{` and ends with `}`" in system_text
+    assert "~~~json" not in communication_prompt
     assert "# code_execution_remote tool" not in system_text
     assert "# text_editor_remote tool" not in system_text
     assert "### computer_use_remote" not in system_text
