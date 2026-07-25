@@ -174,3 +174,4 @@ def test_parallel_prompt_encourages_mixed_independent_batches() -> None:
     assert "even when they use different tools" in prompt
     assert "Do not split by tool type" in prompt
     assert "Never include `document_query`" in prompt
+    assert "Call `response` only as a top-level tool" in prompt
