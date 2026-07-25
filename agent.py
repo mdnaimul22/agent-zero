@@ -568,8 +568,10 @@ class Agent:
             "message_loop_prompts_after", self, loop_data=loop_data
         )
 
-        # concatenate system prompt
-        system_text = "\n\n".join(loop_data.system)
+        # concatenate system prompt and remove JSON fence markers from examples
+        system_text = files.remove_code_fences(
+            "\n\n".join(loop_data.system), language="json"
+        )
 
         # join protocol and extras
         protocol = self._build_context_message(

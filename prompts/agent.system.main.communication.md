@@ -18,6 +18,7 @@
 Fences in the examples below are documentation formatting only. Your actual output starts with `{` and ends with `}` — no fences, no language tag, no prose.
 
 ### Response example
+~~~json
 {
     "thoughts": [
         "instructions?",
@@ -32,5 +33,6 @@ Fences in the examples below are documentation formatting only. Your actual outp
         "arg2": "val2"
     }
 }
+~~~
 
 {{ include "agent.system.main.communication_additions.md" }}
