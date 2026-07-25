@@ -1140,6 +1140,84 @@ def test_computer_use_remote_start_session_reports_backend_features_and_windows_
     assert "host-computer-use-windows" in message
 
 
+def test_computer_use_remote_forwards_linux_window_scope_and_type_guard(monkeypatch):
+    module = _load_computer_use_remote_tool(monkeypatch)
+    tool = object.__new__(module.ComputerUseRemote)
+    window_id = "atspi-pid:57929:path:20.0"
+
+    tool.args = {
+        "action": "ax_snapshot",
+        "pid": 57929,
+        "window_id": window_id,
+        "max_depth": 4,
+        "max_nodes": 80,
+    }
+    snapshot = tool._build_payload(op_id="op-snapshot", context_id="ctx", action="ax_snapshot")
+    tool.args = {"action": "type", "window_id": window_id, "text": "hello", "submit": True}
+    typed = tool._build_payload(op_id="op-type", context_id="ctx", action="type")
+
+    assert snapshot["pid"] == 57929
+    assert snapshot["window_id"] == window_id
+    assert snapshot["max_depth"] == 4
+    assert snapshot["max_nodes"] == 80
+    assert typed["window_id"] == window_id
+    assert typed["text"] == "hello"
+    assert typed["submit"] is True
+
+
+def test_computer_use_remote_receipts_separate_injection_from_verified_result(monkeypatch):
+    module = _load_computer_use_remote_tool(monkeypatch)
+    tool = object.__new__(module.ComputerUseRemote)
+    window_id = "atspi-pid:57929:path:20.0"
+
+    verified = tool._extract_result(
+        "type",
+        {
+            "ok": True,
+            "result": {
+                "text": "hello",
+                "window_id": window_id,
+                "focus_verified": True,
+            },
+        },
+    )
+    unverified = tool._extract_result(
+        "type",
+        {"ok": True, "result": {"text": "hello"}},
+    )
+    focused = tool._extract_result(
+        "element_action",
+        {
+            "ok": True,
+            "result": {
+                "operation": "focus",
+                "target": {"element_index": 0, "role": "frame", "title": "Discord"},
+                "requested_dispatch": "foreground",
+                "actual_dispatch": "foreground",
+                "focus_verified": True,
+            },
+        },
+    )
+    scoped = tool._extract_result(
+        "ax_snapshot",
+        {
+            "ok": True,
+            "result": {
+                "app": {"name": "Discord"},
+                "tree": {"role": "frame", "title": "Discord"},
+                "node_count": 2,
+                "window_id": window_id,
+                "scoped": True,
+            },
+        },
+    )
+
+    assert f"verified active window_id={window_id}" in verified
+    assert "destination was not verified" in unverified
+    assert "focus_verified=true" in focused
+    assert f"scoped to window_id={window_id}" in scoped
+
+
 def test_computer_use_remote_capture_artifact_is_chat_scoped(monkeypatch, tmp_path: Path):
     module = _load_computer_use_remote_tool(monkeypatch)
 
