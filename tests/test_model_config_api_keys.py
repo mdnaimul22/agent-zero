@@ -308,6 +308,33 @@ def test_ollama_cloud_provider_config_requires_key_and_base_url():
     assert "api_key_mode" not in ollama_cloud
 
 
+def test_cerebras_provider_uses_chat_completions_and_live_model_catalog(monkeypatch):
+    import yaml
+
+    from plugins._model_config.helpers import model_config
+
+    monkeypatch.setattr(models, "get_api_key", lambda provider: "test-key")
+
+    provider_path = PROJECT_ROOT / "conf/model_providers.yaml"
+    provider_config = yaml.safe_load(provider_path.read_text(encoding="utf-8"))
+    cerebras = provider_config["chat"]["cerebras"]
+
+    assert cerebras["name"] == "Cerebras"
+    assert cerebras["litellm_provider"] == "cerebras"
+    assert cerebras["models_list"]["endpoint_url"] == "/models"
+    assert cerebras["kwargs"] == {
+        "a0_api_mode": "chat",
+        "api_base": "https://api.cerebras.ai/v1",
+    }
+    assert model_config.provider_requires_api_key("cerebras") is True
+
+    model = models.get_chat_model("cerebras", "gpt-oss-120b")
+    assert model.model_name == "cerebras/gpt-oss-120b"
+    assert model.kwargs["a0_api_mode"] == "chat"
+    assert model.kwargs["api_base"] == "https://api.cerebras.ai/v1"
+    assert model.kwargs["api_key"] == "test-key"
+
+
 def test_direct_venice_chat_provider_defaults_to_chat_completions(monkeypatch):
     import yaml
 
