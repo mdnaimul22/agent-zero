@@ -207,6 +207,30 @@ def test_prepare_responses_body_adds_codex_client_metadata(monkeypatch):
     assert body["include"] == ["output_text", "reasoning.encrypted_content"]
 
 
+@pytest.mark.parametrize(
+    ("request_reasoning", "expected"),
+    [
+        ({"reasoning_effort": "xhigh"}, {"effort": "xhigh"}),
+        (
+            {"reasoning": {"effort": "medium"}, "reasoning_effort": "xhigh"},
+            {"effort": "medium"},
+        ),
+    ],
+)
+def test_prepare_responses_body_normalizes_reasoning_effort(
+    monkeypatch, request_reasoning, expected
+):
+    monkeypatch.setattr(codex, "build_client_metadata", lambda: {})
+
+    body = codex.prepare_responses_body(
+        {"model": "gpt-5.5", "input": "hello", **request_reasoning},
+        force_stream=True,
+    )
+
+    assert body["reasoning"] == expected
+    assert "reasoning_effort" not in body
+
+
 def test_prepare_responses_body_sends_empty_continuation_input_as_list(monkeypatch):
     monkeypatch.setattr(codex, "build_client_metadata", lambda: {})
 

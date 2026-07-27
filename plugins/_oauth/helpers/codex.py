@@ -666,6 +666,9 @@ def fetch_models() -> list[str]:
 
 def prepare_responses_body(body: dict[str, Any], *, force_stream: bool) -> dict[str, Any]:
     normalized = dict(body)
+    reasoning_effort = normalized.pop("reasoning_effort", None)
+    if reasoning_effort is not None and "reasoning" not in normalized:
+        normalized["reasoning"] = {"effort": reasoning_effort}
     input_value = normalized.get("input")
     if isinstance(input_value, str):
         normalized["input"] = (
