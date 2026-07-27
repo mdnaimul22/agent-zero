@@ -822,6 +822,8 @@ class _BrowserRuntimeCore:
             launch_kwargs["channel"] = launch_config["channel"]
         else:
             launch_kwargs["executable_path"] = str(browser_binary)
+        if launch_config["proxy"]:
+            launch_kwargs["proxy"] = launch_config["proxy"]
         try:
             self.context = await self.playwright.chromium.launch_persistent_context(
                 **launch_kwargs

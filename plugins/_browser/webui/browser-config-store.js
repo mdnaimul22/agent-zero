@@ -37,6 +37,10 @@ function ensureConfig(config) {
   config.browser_tab_scope = normalizeChoice(config.browser_tab_scope, BROWSER_TAB_SCOPES, "per_context");
   config.max_open_tabs = normalizeInt(config.max_open_tabs, DEFAULT_MAX_OPEN_TABS, MIN_MAX_OPEN_TABS, HARD_MAX_OPEN_TABS);
   config.runtime_backend = normalizeRuntimeBackend(config.runtime_backend);
+  config.proxy_server = String(config.proxy_server || "").trim();
+  config.proxy_bypass = String(config.proxy_bypass || "").trim();
+  config.proxy_username = String(config.proxy_username || "");
+  config.proxy_password = String(config.proxy_password || "");
   config.host_browser_privacy_policy = normalizeChoice(
     config.host_browser_privacy_policy,
     HOST_PRIVACY_POLICIES,

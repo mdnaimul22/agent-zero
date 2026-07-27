@@ -164,6 +164,10 @@ def test_browser_config_normalizes_extension_paths(tmp_path):
         "host_browser_privacy_policy": "allow",
         "host_browser_profile_mode": "existing",
         "host_browser_selection": "",
+        "proxy_server": "",
+        "proxy_bypass": "",
+        "proxy_username": "",
+        "proxy_password": "",
         "model_preset": "",
     }
 
@@ -185,6 +189,24 @@ def test_browser_config_normalizes_host_backend_and_privacy_policy():
     assert config["runtime_backend"] == "host_required"
     assert config["host_browser_privacy_policy"] == "warn"
     assert config["host_browser_profile_mode"] == "agent"
+
+
+def test_browser_config_builds_authenticated_internal_proxy():
+    config = normalize_browser_config(
+        {
+            "proxy_server": "  socks5://proxy.example:1080  ",
+            "proxy_bypass": "  localhost, .example.com  ",
+            "proxy_username": "researcher",
+            "proxy_password": "secret",
+        }
+    )
+
+    assert build_browser_launch_config(config)["proxy"] == {
+        "server": "socks5://proxy.example:1080",
+        "bypass": "localhost, .example.com",
+        "username": "researcher",
+        "password": "secret",
+    }
 
 
 def test_browser_config_normalizes_host_browser_selection():
@@ -307,6 +329,7 @@ def test_browser_launch_config_uses_full_chromium_for_all_sessions(tmp_path):
     assert default_launch["browser_mode"] == "chromium"
     assert default_launch["channel"] is None
     assert default_launch["requires_full_browser"] is True
+    assert default_launch["proxy"] is None
     assert not any(arg.startswith("--load-extension=") for arg in default_launch["args"])
     assert "--headless=new" not in default_launch["args"]
 
@@ -1232,6 +1255,11 @@ def test_browser_extension_settings_stay_user_facing():
     assert "Maximum tabs per chat" in config_html
     assert 'x-model="$store.browserConfig.config.browser_tab_scope"' in config_html
     assert 'x-model.number="$store.browserConfig.config.max_open_tabs"' in config_html
+    assert 'x-model="$store.browserConfig.config.proxy_server"' in config_html
+    assert 'x-model="$store.browserConfig.config.proxy_bypass"' in config_html
+    assert 'x-model="$store.browserConfig.config.proxy_username"' in config_html
+    assert 'x-model="$store.browserConfig.config.proxy_password"' in config_html
+    assert 'type="password"' in config_html
     assert "normalizeMaxOpenTabs()" in config_html
     assert "BROWSER_TAB_SCOPES" in config_store
     assert "HARD_MAX_OPEN_TABS = 50" in config_store
@@ -2156,9 +2184,7 @@ def test_browser_runtime_context_close_event_clears_cached_state():
     assert core.last_interacted_browser_id is None
 
 
-def test_browser_save_plugin_config_restarts_runtimes_on_change(monkeypatch, tmp_path):
-    extension_dir = tmp_path / "extension"
-    extension_dir.mkdir()
+def test_browser_save_plugin_config_restarts_runtimes_on_change(monkeypatch):
     restarted = []
 
     monkeypatch.setattr(
@@ -2166,6 +2192,7 @@ def test_browser_save_plugin_config_restarts_runtimes_on_change(monkeypatch, tmp
         "_load_saved_browser_config",
         lambda project_name="", agent_profile="": {
             "extension_paths": [],
+            "proxy_server": "",
         },
     )
     monkeypatch.setattr(
@@ -2176,13 +2203,14 @@ def test_browser_save_plugin_config_restarts_runtimes_on_change(monkeypatch, tmp
 
     result = browser_hooks_module.save_plugin_config(
         {
-            "extension_paths": [str(extension_dir)],
+            "extension_paths": [],
+            "proxy_server": "http://proxy.example:3128",
         },
         project_name="",
         agent_profile="",
     )
 
-    assert result["extension_paths"] == [str(extension_dir)]
+    assert result["proxy_server"] == "http://proxy.example:3128"
     assert result["model_preset"] == ""
     assert restarted == [True]
 

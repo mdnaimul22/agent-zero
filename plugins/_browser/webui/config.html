@@ -51,6 +51,59 @@
 
           <label
             class="browser-config-field"
+            x-show="$store.browserConfig.config.runtime_backend === 'container'"
+          >
+            <span class="browser-config-field-label">Proxy server</span>
+            <input
+              type="text"
+              x-model="$store.browserConfig.config.proxy_server"
+              placeholder="http://proxy.example:3128 or socks5://proxy.example:1080"
+              autocomplete="off"
+            />
+            <span class="browser-config-field-help">Optional. Routes the internal browser through this HTTP or SOCKS proxy.</span>
+          </label>
+
+          <label
+            class="browser-config-field"
+            x-show="$store.browserConfig.config.runtime_backend === 'container'"
+          >
+            <span class="browser-config-field-label">Bypass proxy for</span>
+            <input
+              type="text"
+              x-model="$store.browserConfig.config.proxy_bypass"
+              placeholder="localhost, .example.com"
+              autocomplete="off"
+            />
+            <span class="browser-config-field-help">Optional comma-separated domains that should connect directly.</span>
+          </label>
+
+          <label
+            class="browser-config-field"
+            x-show="$store.browserConfig.config.runtime_backend === 'container'"
+          >
+            <span class="browser-config-field-label">Proxy username</span>
+            <input
+              type="text"
+              x-model="$store.browserConfig.config.proxy_username"
+              autocomplete="off"
+            />
+          </label>
+
+          <label
+            class="browser-config-field"
+            x-show="$store.browserConfig.config.runtime_backend === 'container'"
+          >
+            <span class="browser-config-field-label">Proxy password</span>
+            <input
+              type="password"
+              x-model="$store.browserConfig.config.proxy_password"
+              autocomplete="off"
+            />
+            <span class="browser-config-field-help">Saving proxy changes restarts active internal Browser sessions.</span>
+          </label>
+
+          <label
+            class="browser-config-field"
             x-show="$store.browserConfig.config.runtime_backend === 'host_required'"
           >
             <span class="browser-config-field-label">Host browser profile</span>
@@ -324,6 +377,7 @@
     }
 
     .browser-config-field input[type="text"],
+    .browser-config-field input[type="password"],
     .browser-config-field input[type="number"],
     .browser-config-field select {
       width: 100%;
