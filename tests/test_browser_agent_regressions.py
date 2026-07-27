@@ -1259,6 +1259,8 @@ def test_browser_extension_settings_stay_user_facing():
     assert 'x-model="$store.browserConfig.config.proxy_bypass"' in config_html
     assert 'x-model="$store.browserConfig.config.proxy_username"' in config_html
     assert 'x-model="$store.browserConfig.config.proxy_password"' in config_html
+    assert '<details\n            class="browser-config-proxy"' in config_html
+    assert "<summary>Proxy server</summary>" in config_html
     assert 'type="password"' in config_html
     assert "normalizeMaxOpenTabs()" in config_html
     assert "BROWSER_TAB_SCOPES" in config_store
