@@ -34,13 +34,9 @@ input {
 }
 
 .logo {
-    width: 80px;
-    height: 80px;
+    width: min(55vw, 12.5rem);
+    height: auto;
     border-radius: 0.3125rem; /* Match the main page logo style */
-    margin-bottom: 1rem;
-}
-
-h2 {
     margin-bottom: 2rem;
 }
 
