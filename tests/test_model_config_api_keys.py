@@ -90,16 +90,23 @@ def test_chat_model_configured_requires_identity_and_key(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_missing_api_key_banner_exposes_missing_providers(monkeypatch):
+async def test_missing_api_key_banner_exposes_only_effective_missing_providers(monkeypatch):
     from plugins._model_config.helpers import model_config
 
     fake = [{"model_type": "Chat Model", "provider": "openai"}]
     monkeypatch.setattr(model_config, "get_missing_api_key_providers", lambda: fake)
+    monkeypatch.setattr(
+        model_config,
+        "get_presets",
+        lambda: [{"name": "Efficiency", "chat": {"provider": "openrouter"}}],
+    )
+    monkeypatch.setattr(model_config, "has_provider_api_key", lambda *args, **kwargs: False)
 
     banners = []
     await missing_key_banner.MissingApiKeyCheck(agent=None).execute(
         banners=banners, frontend_context={}
     )
+    assert [banner["id"] for banner in banners] == ["missing-api-key"]
     row = next(b for b in banners if b.get("id") == "missing-api-key")
     assert row.get("missing_providers") == fake
     assert row["cta_text"] == "Start Onboarding"
@@ -515,9 +522,6 @@ def test_provider_key_modes_for_local_and_ollama_cloud():
     assert model_config.provider_requires_api_key("vllm") is False
     assert model_config.provider_requires_api_key("other") is False
     assert model_config.provider_requires_api_key("ollama_cloud") is True
-    assert "llama_cpp" in missing_key_banner.MissingApiKeyCheck.LOCAL_PROVIDERS
-    assert "omlx" in missing_key_banner.MissingApiKeyCheck.LOCAL_PROVIDERS
-    assert "vllm" in missing_key_banner.MissingApiKeyCheck.LOCAL_PROVIDERS
 
 
 def test_local_provider_defaults_are_docker_friendly():
