@@ -20,6 +20,10 @@
 - Chat tree expand/collapse controls use a parent-only leading slot and must not consume normal chat row text margin.
 - A restored selected parent chat with children auto-expands once during context hydration unless the user has already toggled it.
 - The Tasks list is reserved for scheduler-backed task contexts and must not be used for chat-bound parallel children.
+- Running parent and child chats share the chat-list working-bubble animation; keep it scoped away from task and connection-status indicators.
+- Chat and task lists reclaim the same part of the sidebar's left content inset so their project bubbles align, while their section headers retain the standard sidebar inset.
+- Chat-row action buttons consume layout width only while a pointer row is hovered or while that row is selected on a touch device.
+- Bottom version information shows its commit timestamp in UTC without a timezone suffix and remains on one line.
 - Avoid text or controls overflowing fixed sidebar widths.
 - Instance-level interface visibility preferences own independent mobile and desktop states for the chat-top controls and right canvas rail; mobile uses the shared 768px breakpoint.
 

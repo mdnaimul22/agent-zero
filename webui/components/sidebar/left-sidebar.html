@@ -108,6 +108,8 @@
       flex: 1 1 auto;
       /* Take all available space */
       max-height: 100%;
+      margin-inline-start: calc(0px - var(--spacing-sm));
+      width: calc(100% + var(--spacing-sm));
       overflow: hidden;
     }
 
@@ -122,8 +124,15 @@
       max-height: 40%;
       /* Limit to 40% of viewport height when expanded */
       margin-top: 0;
+      margin-inline-start: calc(0px - var(--spacing-sm));
+      width: calc(100% + var(--spacing-sm));
       padding-top: var(--spacing-md);
       overflow: hidden;
+    }
+
+    #chats-section .section-header-row,
+    #tasks-section .section-header {
+      margin-inline-start: var(--spacing-sm);
     }
 
     /* Flatten wrapper elements to maintain flex chain for inner scroll containers */

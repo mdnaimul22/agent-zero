@@ -44,6 +44,7 @@
 - Convert standard TeX delimiters before Markdown parsing without touching inline or fenced code. Keep thought-card math rendering local to the agent-message handler rather than adding math flags to generic process-step or key/value rendering.
 - Do not expose secrets in localStorage, console logs, URLs, or WebSocket payloads.
 - Full message snapshots that start at backend log `no` 0 must replace the current message DOM before rendering; incremental snapshots should keep patching existing messages.
+- Info log entries with `kvps.finished` complete the active process group and clear its running treatment.
 
 ## Work Guidance
 

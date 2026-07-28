@@ -1321,6 +1321,7 @@ export function drawMessageInfo({
 }) {
   const title = cleanStepTitle(heading || content);
   let displayKvps = { ...kvps };
+  delete displayKvps.finished;
   const contentText = String(content ?? "");
   const actionButtons = contentText.trim()
     ? [
@@ -1329,7 +1330,7 @@ export function drawMessageInfo({
       ].filter(Boolean)
     : [];
 
-  return drawProcessStep({
+  const result = drawProcessStep({
     id,
     title,
     code: "INF",
@@ -1340,6 +1341,9 @@ export function drawMessageInfo({
     actionButtons,
     log: arguments[0],
   });
+
+  if (kvps?.finished) completeLastProcessGroup();
+  return result;
 }
 
 /**
