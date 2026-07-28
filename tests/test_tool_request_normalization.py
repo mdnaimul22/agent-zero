@@ -131,6 +131,12 @@ def test_extract_tool_request_requires_a_complete_tool_message() -> None:
 
 def test_is_misformatted_tool_request_requires_agent_tool_envelope() -> None:
     request = '{"tool_name":"response","tool_args":{"text":"ok"}}'
+    concatenated = (
+        '{"thoughts":[],"headline":"Inspecting","tool_name":"code_execution_tool",'
+        '"tool_args":{"code":"pwd"}}'
+        '{"thoughts":[],"headline":"Answering","tool_name":"response",'
+        '"tool_args":{"text":"done"}}'
+    )
     malformed = (
         '{"thoughts":["Plan the work", "Run the tools", '
         '"headline":"Save results", "tool_name":"parallel", '
@@ -140,6 +146,8 @@ def test_is_misformatted_tool_request_requires_agent_tool_envelope() -> None:
 
     assert extract_tool_request(malformed) is None
     assert is_misformatted_tool_request(malformed) is True
+    assert extract_tool_request(concatenated) is None
+    assert is_misformatted_tool_request(concatenated) is True
     assert is_misformatted_tool_request(f"Intro\n```json\n{request}\n```") is True
     assert is_misformatted_tool_request('{"status":"planning"}') is False
     assert is_misformatted_tool_request(f"Example: {request}") is False

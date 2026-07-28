@@ -146,3 +146,16 @@ def test_responses_function_tools_add_empty_properties_to_mcp_schemas(
             },
         }
     ]
+
+
+def test_response_tool_native_contract_omits_wrapper_and_exposes_text():
+    prompt = (PROJECT_ROOT / "prompts" / "agent.system.tool.response.md").read_text(
+        encoding="utf-8"
+    )
+
+    description = responses_tools._description_from_prompt(prompt, fallback="response")
+    schema = responses_tools._schema_from_prompt(prompt)
+
+    assert '"tool_name"' not in description
+    assert "~~~" not in description
+    assert schema["properties"] == {"text": {"type": "string"}}
