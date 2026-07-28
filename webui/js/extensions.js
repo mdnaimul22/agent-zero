@@ -20,6 +20,19 @@ import * as cache from "./cache.js";
 
 const JS_CACHE_AREA = "frontend_extensions_js(extensions)(plugins)";
 const HTML_CACHE_AREA = "frontend_extensions_html(extensions)(plugins)";
+let alpineInitialized = false;
+const LOADING_SELECTOR = "x-component > .loading:empty, x-extension.loading";
+
+export let initialHtmlExtensionsLoaded = false;
+
+function checkInitialLoadComplete() {
+  if (initialHtmlExtensionsLoaded || !alpineInitialized || document.querySelector(LOADING_SELECTOR)) return;
+  globalThis.Alpine.nextTick(() => {
+    if (initialHtmlExtensionsLoaded || document.querySelector(LOADING_SELECTOR)) return;
+    initialHtmlExtensionsLoaded = true;
+    document.dispatchEvent(new Event("webui-extensions-loaded"));
+  });
+}
 
 export const API_EXTENSION_EXCLUDED_ENDPOINTS = new Set([
   "/api/load_webui_extensions",
@@ -159,6 +172,7 @@ export async function reloadHtmlExtensions(roots = [document.documentElement]) {
  * @returns {Promise<void>}
  */
 export async function importHtmlExtensions(extensionPoint, targetElement) {
+  targetElement.classList.add("loading");
   try {
     const cachedHtml = cache.get(HTML_CACHE_AREA, extensionPoint, null);
     if (cachedHtml != null) {
@@ -181,6 +195,9 @@ export async function importHtmlExtensions(extensionPoint, targetElement) {
   } catch (error) {
     console.error("Error importing HTML extensions:", error);
     return;
+  } finally {
+    targetElement.classList.remove("loading");
+    checkInitialLoadComplete();
   }
 }
 
@@ -210,11 +227,17 @@ const extensionObserverCallback = (mutations) => {
       }
     }
   }
+  checkInitialLoadComplete();
 };
 
 /** @type {MutationObserver} */
 const extensionObserver = new MutationObserver(extensionObserverCallback);
 extensionObserver.observe(document.body, { childList: true, subtree: true });
+
+document.addEventListener("alpine:initialized", () => {
+  alpineInitialized = true;
+  checkInitialLoadComplete();
+}, { once: true });
 
 // Do an initial scan for static x-extension tags
 // that already exist in the DOM (index.html), then rely on

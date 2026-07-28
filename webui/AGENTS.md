@@ -22,6 +22,8 @@
 - Use `/js/api.js` helpers so CSRF and auth behavior stays consistent.
 - Component tags use `<x-component path="...">`; paths are resolved under `webui/components/` when not already prefixed.
 - Frontend extension breakpoints use `<x-extension id="...">` and are loaded through `/js/extensions.js`.
+- `sw.js` owns same-origin HTML/CSS/JavaScript caching for files no larger than 40 KiB. The index fetches its versioned preload payload asynchronously from `/ui/asset-bundle`; the worker serves that payload immediately, persists it once per version, and removes obsolete version caches while component, extension, and Alpine loaders remain transport-agnostic. Media, images, fonts, manifests, and oversized text assets use normal browser HTTP caching.
+- The startup splash has inline critical styling in `index.html`, applies the persisted light/dark preference before first paint, and leaves only after the static page load, asynchronous bundle fetch, and initial component/extension tree report readiness. Initial stylesheets must remain non-render-blocking so they cannot delay the first splash paint.
 - Component HTML loaded by the shared loader may include `<title>`, module scripts, body content, and scoped styles; modal content uses the same loader path.
 - Do not bypass WebSocket origin/auth/CSRF assumptions from frontend code.
 - Avoid editing vendored files unless intentionally updating the vendor asset.

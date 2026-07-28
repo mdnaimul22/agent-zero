@@ -22,6 +22,7 @@
   - `async login_handler(self)`
   - `async logout_handler(self)`
   - `async serve_index(self)`
+  - `async serve_ui_asset_bundle(self)`
   - `async serve_builtin_plugin_asset(self, plugin_name, asset_path)`
   - `async serve_plugin_asset(self, plugin_name, asset_path)`
   - `async serve_extension_asset(self, asset_path)`
@@ -42,6 +43,7 @@
 
 - Important called helpers/classes observed in the source: `logging.getLogger.setLevel`, `Localization.get.apply_process_timezone`, `_positive_int_env`, `field`, `Flask`, `threading.RLock`, `socketio.AsyncServer`, `WsManager`, `set_shared_ws_manager`, `cls`, `server_runtime.refresh_runtime_settings`, `settings_helper.get_settings`, `settings_helper.set_runtime_settings_snapshot`, `self.ws_manager.set_server_restart_broadcast`, `UiRouteHandlers`, `self.webapp.add_url_rule`, `register_api_route`, `register_ws_namespace`, `files.read_file`, `render_template_string`, `session.pop`.
 - `serve_index()` bootstraps the normalized UI control visibility map alongside timezone and time-format preferences so controls render correctly before Settings is opened.
+- `serve_index()` returns the lightweight UI shell without waiting for bundle construction. The authenticated `serve_ui_asset_bundle()` endpoint builds the versioned payload asynchronously from the browser's perspective, supports gzip transfer and ETag revalidation, and keeps component, extension, and Alpine lifecycles unchanged.
 - Keep request/response, tool, or helper semantics documented here at the same time as source changes.
 
 ## Work Guidance

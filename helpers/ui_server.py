@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
 import asyncio
+import gzip
 import json
 import logging
 import os
@@ -32,6 +33,7 @@ from helpers.extension import extensible
 from helpers.files import get_abs_path
 from helpers.print_style import PrintStyle
 from helpers.server_startup import StartupMonitor
+from helpers.ui_bundler import get_ui_asset_bundle, serialize_ui_asset_bundle
 from helpers import settings as settings_helper
 from helpers.ws import register_ws_namespace, validate_ws_origin
 from helpers.ws_manager import WsManager, set_shared_ws_manager
@@ -152,6 +154,12 @@ class UiServerRuntime:
             "/",
             "serve_index",
             handlers.serve_index,
+            methods=["GET"],
+        )
+        self.webapp.add_url_rule(
+            "/ui/asset-bundle",
+            "serve_ui_asset_bundle",
+            handlers.serve_ui_asset_bundle,
             methods=["GET"],
         )
         self.webapp.add_url_rule(
@@ -283,6 +291,32 @@ class UiRouteHandlers:
             user_time_format_setting=user_time_format_setting,
             user_ui_control_visibility=user_ui_control_visibility,
         )
+
+    @requires_auth
+    async def serve_ui_asset_bundle(self):
+        try:
+            bundle = get_ui_asset_bundle(agent=None)
+            payload = serialize_ui_asset_bundle(bundle).encode("utf-8")
+            use_gzip = request.accept_encodings["gzip"] > 0
+            response = Response(
+                gzip.compress(payload) if use_gzip else payload,
+                content_type="application/json; charset=utf-8",
+            )
+            if use_gzip:
+                response.headers["Content-Encoding"] = "gzip"
+            response.headers["Vary"] = "Accept-Encoding"
+            response.set_etag(bundle["version"], weak=True)
+            response.cache_control.private = True
+            response.cache_control.no_cache = True
+            return response.make_conditional(request)
+        except Exception as error:
+            PrintStyle.warning(f"Unable to build WebUI asset bundle: {error}")
+            return Response(
+                '{"error":"WebUI asset bundle unavailable"}',
+                status=503,
+                content_type="application/json; charset=utf-8",
+                headers={"Cache-Control": "no-store"},
+            )
 
     @requires_auth
     async def serve_builtin_plugin_asset(self, plugin_name, asset_path):

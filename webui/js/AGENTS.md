@@ -37,6 +37,8 @@
 - `scrollModal(id)` scrolls inside the top modal's `.modal-scroll`.
 - Keep extension loader cache keys and extension point names stable for plugins.
 - HTML extension loading turns discovered HTML files into `<x-component>` tags; JavaScript extensions must export a default function.
+- `extensions.js` exposes `initialHtmlExtensionsLoaded` and emits `webui-extensions-loaded` once after Alpine and the initial recursive component/extension loading placeholders have cleared.
+- Transport-level preloading must remain outside `components.js`, `extensions.js`, and `initFw.js`; cache hits flow through their ordinary asynchronous requests.
 - `<x-component>` loading must process component `style`, `script`, and stylesheet-link assets only once, even when a component keeps its scoped `<style>` inside `<body>`.
 - Every `<x-component>` instance must await cached module-load promises before markup is appended so Alpine bindings only run after imported stores exist.
 - Frontend extension hooks such as `confirm_dialog_after_render` and `get_tool_message_handler` must preserve their mutable context contracts.
