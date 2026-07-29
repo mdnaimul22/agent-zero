@@ -11,6 +11,10 @@
   flex-shrink: 0;
 }
 
+.process-group.utility-only[hidden] {
+  display: none !important;
+}
+
 /* Embedded Process Group inside Response */
 .process-group.embedded {
   display: flex;
@@ -375,6 +379,25 @@
   gap: 2px;
   max-width: 100%;
   overflow: hidden;
+}
+
+.process-group-show-more {
+  align-self: flex-start;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-family: var(--font-family-main);
+  font-size: var(--font-size-xs);
+  padding: var(--spacing-xs) 0;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.process-group-show-more:hover,
+.process-group-show-more:focus-visible {
+  color: var(--color-text);
 }
 
 /* Individual Process Step */
@@ -874,5 +897,3 @@
 .process-step:not(.expanded) > .process-step-detail > .step-detail-actions {
   display: none;
 }
-
-

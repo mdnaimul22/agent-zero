@@ -10,7 +10,9 @@
 <body>
   <div x-data>
     <template x-if="$store.sidebar">
-      <div class="sidebar-shell">
+      <div class="sidebar-shell"
+        @click.window="$store.sidebar.rowMenuClick($event, $refs.rowActionsMenu)"
+        @keydown.escape.window="$store.sidebar.rowMenuClose()">
         <x-component path="sidebar/top-section/header-icons.html"></x-component>
         <div id="left-panel" class="panel" x-data :class="{'hidden': !$store.sidebar.isOpen}">
           <x-extension id="sidebar-start"></x-extension>
@@ -33,6 +35,11 @@
             <x-component path="sidebar/bottom/sidebar-bottom.html"></x-component>
           </div>
           <x-extension id="sidebar-end"></x-extension>
+        </div>
+        <div x-ref="rowActionsMenu" class="dropdown-menu sidebar-row-actions-menu" role="menu"
+          x-show="$store.sidebar.rowMenuOpenId" x-transition :style="$store.sidebar.rowMenuStyle"
+          style="display: none;" @click.stop>
+          <x-extension id="sidebar-row-actions-menu"></x-extension>
         </div>
       </div>
     </template>
@@ -97,6 +104,18 @@
       flex-shrink: 0;
       flex-grow: 0;
       /* Prevent bottom from growing */
+    }
+
+    .sidebar-row-actions-menu {
+      position: fixed;
+      z-index: 9999;
+      margin: 0;
+    }
+
+    .config-list li.sidebar-list-divider {
+      border-top: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+      margin-top: var(--spacing-xs);
+      padding-top: calc(0.28rem + var(--spacing-xs));
     }
 
     /* Chats section container inside sidebar */

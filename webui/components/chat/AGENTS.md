@@ -27,6 +27,7 @@
 - Model setup surfaces that change readiness must notify the gate with `model-setup-changed`, `model-configured`, or an existing modal/onboarding completion signal so the pending prompt can retry automatically.
 - The top-section project selector, clock, and connection indicator must respect the instance-level mobile/desktop visibility preferences.
 - While the selected context is running, an empty composer makes the primary button stop the active run; typed text still adds to the queue, and Enter with an empty composer still sends queued messages.
+- Chat navigation controls must cross virtual message-window boundaries; top and bottom target the full cached history rather than only the mounted DOM slice.
 
 ## Work Guidance
 

@@ -10,6 +10,7 @@ import {
   getConnectionStatus,
 } from "/index.js";
 import { store as notificationStore } from "/components/notifications/notification-store.js";
+import { store as sidebarStore } from "/components/sidebar/sidebar-store.js";
 import { store as tasksStore } from "/components/sidebar/tasks/tasks-store.js";
 import { store as syncStore } from "/components/sync/sync-store.js";
 import { store as chatInputStore } from "/components/chat/input/input-store.js";
@@ -80,11 +81,17 @@ const model = {
   },
 
   topLevelContexts() {
-    return this.contexts.filter((ctx) => !ctx?.parent_context_id);
+    return sidebarStore.sortRows(
+      "chat",
+      this.contexts.filter((ctx) => !ctx?.parent_context_id),
+    );
   },
 
   childContexts(parentId) {
-    return this.contexts.filter((ctx) => ctx?.parent_context_id === parentId);
+    return sidebarStore.sortRows(
+      "chat",
+      this.contexts.filter((ctx) => ctx?.parent_context_id === parentId),
+    );
   },
 
   hasChildren(parentId) {

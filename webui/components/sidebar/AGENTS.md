@@ -23,9 +23,13 @@
 - Running parent and child chats share the chat-list working-bubble animation; keep it scoped away from task and connection-status indicators.
 - Chat and task lists reclaim the same part of the sidebar's left content inset so their project bubbles align, while their section headers retain the standard sidebar inset.
 - Chat-row action buttons consume layout width only while a pointer row is hovered or while that row is selected on a touch device.
+- Built-in chat and task overflow menus follow the standard row actions; plugin controls remain direct row actions.
+- `sidebar-row-actions-menu` owns plugin-contributed row-menu actions; list-order plugins register stable sort and divider callbacks through the sidebar store instead of patching chat/task stores or injecting row DOM.
 - Bottom version information shows its commit timestamp in UTC without a timezone suffix and remains on one line.
 - Avoid text or controls overflowing fixed sidebar widths.
 - Instance-level interface visibility preferences own independent mobile and desktop states for the chat-top controls and right canvas rail; mobile uses the shared 768px breakpoint.
+- Process-detail preference changes must use the message renderer's async expansion hooks and honor an explicit chat-history render target so staged pages are ready before an atomic swap.
+- The utility-message preference controls both individual utility steps and utility-only process-group chrome so hidden utility runs cannot leave empty headers in the transcript.
 
 ## Work Guidance
 

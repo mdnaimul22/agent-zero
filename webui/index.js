@@ -25,7 +25,6 @@ let leftPanel,
   rightPanel,
   container,
   chatInput,
-  chatHistory,
   sendButton,
   inputSection,
   statusSection,
@@ -163,14 +162,8 @@ export async function sendMessage(options = {}) {
 }
 globalThis.sendMessage = sendMessage;
 
-function getChatHistoryEl() {
-  return document.getElementById("chat-history");
-}
-
 function forceScrollChatToBottom() {
-  const chatHistoryEl = getChatHistoryEl();
-  if (!chatHistoryEl) return;
-  chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+  return msgs.scrollMessageWindowToEdge("end");
 }
 globalThis.forceScrollChatToBottom = forceScrollChatToBottom;
 
@@ -357,8 +350,7 @@ export async function applySnapshot(snapshot, options = {}) {
   // so the mismatch is expected and should not trigger a second state_request/poll.
   if (lastLogGuid != snapshot.log_guid) {
     if (lastLogGuid) {
-      const chatHistoryEl = document.getElementById("chat-history");
-      if (chatHistoryEl) chatHistoryEl.innerHTML = "";
+      msgs.resetMessageRenderState();
       lastLogVersion = 0;
       lastLogGuid = snapshot.log_guid;
       if (typeof onLogGuidReset === "function") {
@@ -374,8 +366,7 @@ export async function applySnapshot(snapshot, options = {}) {
   if (lastLogVersion != snapshot.log_version) {
     updated = true;
     if (snapshot.logs?.[0]?.no === 0) {
-      const chatHistoryEl = document.getElementById("chat-history");
-      if (chatHistoryEl) chatHistoryEl.innerHTML = "";
+      msgs.resetMessageRenderState();
     }
     await setMessages(modelGateStore.mergeSyntheticMessages(snapshot.logs, context));
     afterMessagesUpdate(snapshot.logs);
@@ -579,8 +570,7 @@ export const setContext = function (id) {
   ttsService.stop();
 
   // Clear the chat history immediately to avoid showing stale content
-  const chatHistoryEl = document.getElementById("chat-history");
-  if (chatHistoryEl) chatHistoryEl.innerHTML = "";
+  msgs.resetMessageRenderState();
 
   // Update both selected states using stores
   chatsStore.setSelected(id);
@@ -618,7 +608,7 @@ export const deselectChat = function () {
   sessionStorage.removeItem("lastSelectedTask");
 
   // Clear the chat history
-  if (chatHistory) chatHistory.innerHTML = "";
+  msgs.resetMessageRenderState();
 };
 globalThis.deselectChat = deselectChat;
 
@@ -793,7 +783,6 @@ document.addEventListener("DOMContentLoaded", function () {
   rightPanel = document.getElementById("right-panel");
   container = document.querySelector(".container");
   chatInput = document.getElementById("chat-input");
-  chatHistory = document.getElementById("chat-history");
   sendButton = document.getElementById("send-button");
   inputSection = document.getElementById("input-section");
   statusSection = document.getElementById("status-section");

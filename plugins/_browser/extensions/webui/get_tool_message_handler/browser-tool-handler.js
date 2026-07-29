@@ -525,8 +525,8 @@ function drawBrowserTool({
           buildDetailPayload(args, { headerLabels }),
         ),
       ),
-      createActionButton("speak", "", () => ttsService.speak(contentText)),
       createActionButton("copy", "", () => copyToClipboard(contentText)),
+      createActionButton("speak", "", () => ttsService.speak(contentText)),
     );
   }
 

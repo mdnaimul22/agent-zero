@@ -209,6 +209,9 @@ const model = {
       "display",
       value ? undefined : "none"
     );
+    document.querySelectorAll(".process-group.utility-only").forEach((group) => {
+      group.hidden = !value;
+    });
   },
 
   _applyChatWidth(value) {
@@ -222,10 +225,16 @@ const model = {
     }
   },
 
+  applyCurrentDetailMode(chatHistory = undefined) {
+    return applyModeSteps(this._detailMode, this._showUtils, chatHistory);
+  },
+
   _applyDetailMode(value) {
     localStorage.setItem("detailMode", value);
     // Apply mode to all existing DOM elements
-    applyModeSteps(this._detailMode, this._showUtils);
+    void this.applyCurrentDetailMode().catch((error) => {
+      console.error("Failed to apply process detail mode", error);
+    });
   },
 };
 

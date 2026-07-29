@@ -8,6 +8,7 @@
 ## Ownership
 
 - Each CSS file owns a named surface or primitive family such as buttons, messages, modals, notifications, scheduler, settings, surfaces, tables, or toast.
+- `messages.css` owns shared chat-history paging indicators and lazy message-preview states in addition to message presentation.
 - Component-specific styles should usually stay inside the component HTML unless they are intentionally shared.
 - `modals.css` owns the shared stacked modal shell, backdrop, scroll area, footer slot, modal button classes, floating/no-backdrop modal behavior, and shared modal section primitives.
 - `surfaces.css` owns surface modal switchers, action rails, draggable header affordances, focus-button state, and right-canvas surface primitives.
@@ -27,6 +28,8 @@
 - `.modal-floating` must keep the full-screen shell pointer-transparent while `.modal-inner` remains pointer-active.
 - Use `.modal-no-backdrop` only for backdrop suppression without click-through floating behavior.
 - Shared modal layers must stay above the mobile right-canvas rail while confirmation dialogs remain above normal modals.
+- Shared message collapsing targets `.message-collapse-content`; user-message attachments must remain outside that target so expanding text never changes attachment visibility.
+- The virtualized chat history disables native scroll anchoring and replay fade-in motion; the message-window renderer owns anchor restoration during atomic page swaps.
 - Do not add decorative one-note palette changes that conflict with existing WebUI design.
 
 ## Work Guidance

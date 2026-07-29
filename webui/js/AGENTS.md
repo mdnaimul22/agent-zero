@@ -16,6 +16,8 @@
 - `surfaces.js` owns shared surface registration, right-canvas/modal mode routing, surface modal action rails, and reusable draggable/focus modal chrome.
 - `initFw.js` owns Alpine bootstrap and custom lifecycle directives such as `x-create`, `x-destroy`, and periodic `x-every-*` hooks.
 - `messages.js` owns native message/process-step rendering, safe Markdown and HTML conversion, and KaTeX delimiter handling.
+- `message-window.js` owns the bounded, tail-first raw-log window used by message rendering.
+- `scroller.js` owns bottom-following snapshots and cancellation of pending scroll effects.
 - Other modules own focused UI utilities such as modals, messages, safe markdown, shortcuts, TTS/STT, surfaces, and initialization.
 
 ## Local Contracts
@@ -46,6 +48,12 @@
 - Convert standard TeX delimiters before Markdown parsing without touching inline or fenced code. Keep thought-card math rendering local to the agent-message handler rather than adding math flags to generic process-step or key/value rendering.
 - Do not expose secrets in localStorage, console logs, URLs, or WebSocket payloads.
 - Full message snapshots that start at backend log `no` 0 must replace the current message DOM before rendering; incremental snapshots should keep patching existing messages.
+- Long histories stay cached as raw log data but render a contiguous tail-first DOM window. The initial base view contains one 60-entry page; after paging, the base window contains two aligned pages, retaining the adjacent page and discarding only the far page in either direction. Visible boundaries expand to whole logical process groups so a page never reconstructs a partial group; the unit classifier must include plugin-backed process steps such as `code_exe`, and oversized groups use their own 50-step incremental window. Paging must preserve a visible anchor and occur at the scroll boundary after user intent, using passive loading indicators rather than count-bearing controls. Live entries and late content growth follow the tail until the reader deliberately moves away; historical window rebuilds must cancel pending auto-scroll effects, render in an off-screen staging history, and atomically swap fully laid-out content into the live scroller before restoring its anchor.
+- Message-window cache identity must keep different log types distinct even when they share a backend ID; root-agent GEN and response records intentionally use the same ID and must both survive replay, while same-ID/same-type updates still replace their earlier cached version.
+- Utility records join a process render unit only when a substantive process step follows before the next standalone boundary. Utility-only runs must not wrap root responses in empty groups or reopen completed groups; their group chrome stays hidden unless utility messages are enabled.
+- `set_messages_after_loop` receives offscreen live updates as results with `result.virtualized === true` and `result.element === null`; extensions that only need `args` may still react, while DOM-mutating extensions must guard the element.
+- Context switches, log GUID resets, and full log snapshots must reset both message DOM and message-window cache state.
+- Long primary-agent responses start collapsed only during chat replay; long user-message text starts collapsed during both live sends and replay. Both use the shared collapsible-message behavior, but user attachments remain outside its clipped content target.
 - Info log entries with `kvps.finished` complete the active process group and clear its running treatment.
 
 ## Work Guidance

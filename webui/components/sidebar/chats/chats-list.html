@@ -23,8 +23,9 @@
 
 
         <ul class="config-list chats-config-list no-scrollbar" x-show="$store.chats.topLevelContexts().length > 0">
-          <template x-for="context in $store.chats.topLevelContexts()" :key="context.id">
-            <li class="chat-tree-item">
+          <template x-for="(context, contextIndex) in $store.chats.topLevelContexts()" :key="context.id">
+            <li class="chat-tree-item"
+              :class="{ 'sidebar-list-divider': $store.sidebar.hasRowDividerBefore('chat', context, contextIndex, $store.chats.topLevelContexts()) }">
               <div :class="{'chat-container': true, 'chat-has-children': $store.chats.hasChildren(context.id), 'chat-selected': context.id === $store.chats.selected}"
                 @click="$store.chats.selectChat(context.id)">
                 <button class="chat-expand-btn"
@@ -45,10 +46,16 @@
                 <button class="btn-icon-action chat-list-action-btn" title="Close chat" @click.stop="$confirmClick($event, () => $store.chats.killChat(context.id))">
                   <span class="material-symbols-outlined">close</span>
                 </button>
+                <button type="button" class="btn-icon-action chat-list-action-btn" title="More chat actions"
+                  aria-label="More chat actions" aria-haspopup="menu"
+                  :aria-expanded="($store.sidebar.rowMenuOpenId === `chat:${context.id}`).toString()"
+                  @click.stop="$store.sidebar.rowMenuToggle(`chat:${context.id}`, 'chat', $event.currentTarget)">
+                  <span class="material-symbols-outlined">more_vert</span>
+                </button>
               </div>
               <ul class="chat-child-list" x-show="$store.chats.isExpanded(context.id) && $store.chats.hasChildren(context.id)">
-                <template x-for="child in $store.chats.childContexts(context.id)" :key="child.id">
-                  <li>
+                <template x-for="(child, childIndex) in $store.chats.childContexts(context.id)" :key="child.id">
+                  <li :class="{ 'sidebar-list-divider': $store.sidebar.hasRowDividerBefore('chat', child, childIndex, $store.chats.childContexts(context.id)) }">
                     <div :class="{'chat-container': true, 'chat-child-container': true, 'chat-selected': child.id === $store.chats.selected}"
                       @click="$store.chats.selectChat(child.id)">
                       <div class="chat-child-indent"></div>
@@ -60,6 +67,12 @@
                       </div>
                       <button class="btn-icon-action chat-list-action-btn" title="Close chat" @click.stop="$confirmClick($event, () => $store.chats.killChat(child.id))">
                         <span class="material-symbols-outlined">close</span>
+                      </button>
+                      <button type="button" class="btn-icon-action chat-list-action-btn" title="More chat actions"
+                        aria-label="More chat actions" aria-haspopup="menu"
+                        :aria-expanded="($store.sidebar.rowMenuOpenId === `chat:${child.id}`).toString()"
+                        @click.stop="$store.sidebar.rowMenuToggle(`chat:${child.id}`, 'chat', $event.currentTarget)">
+                        <span class="material-symbols-outlined">more_vert</span>
                       </button>
                     </div>
                   </li>
@@ -107,6 +120,10 @@
       overflow: scroll;
       scroll-behavior: smooth;
       max-height: 100%;
+    }
+
+    .chats-config-list > .chat-tree-item {
+      padding-block: 0.14rem;
     }
 
     .chat-container {
