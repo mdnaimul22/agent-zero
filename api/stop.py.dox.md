@@ -6,7 +6,7 @@
 
 ## Ownership
 
-- `stop.py` resolves the requested in-memory context and cancels its current process.
+- `stop.py` resolves the requested in-memory context and exposes the shared `stop_context()` operation used by the endpoint and slash command.
 
 ## Runtime Contracts
 
@@ -15,6 +15,7 @@
 - Stopping cancels the context task through `AgentContext.kill_process()`, clears pause state, preserves chat history and queued messages, and does not start another run.
 - The endpoint clears active progress and logs a terminal `Agent process stopped.` info step so the WebUI closes the interrupted process group.
 - The response contains `message`, `context`, and a `stopped` boolean indicating whether the context was running when requested.
+- Other authenticated entry points should call `stop_context()` so cancellation, progress cleanup, and terminal logging remain identical to the Stop button.
 
 ## Work Guidance
 

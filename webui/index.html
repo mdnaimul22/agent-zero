@@ -1,102 +1,106 @@
 <!DOCTYPE html>
-<html lang="en" data-splash-theme="dark">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <title>Agent Zero</title>
 
-    <script>
-        try {
-            if (localStorage.getItem("darkMode") === "false") document.documentElement.dataset.splashTheme = "light"
-        } catch (_) {}
-        Promise.all([
-            new Promise((resolve) => addEventListener("load", resolve, { once: true })),
-            new Promise((resolve) => document.addEventListener("webui-bundle-loaded", resolve, { once: true })),
-            new Promise((resolve) => document.addEventListener("webui-extensions-loaded", resolve, { once: true })),
-        ]).then(() => {
-            const splash = document.getElementById("startup-splash")
-            if (!splash) return
-            splash.addEventListener("transitionend", () => splash.remove(), { once: true })
-            splash.classList.add("startup-splash-loaded")
-            document.documentElement.removeAttribute("data-splash-theme")
-        })
-    </script>
-    <style>
-        html { background: #131313; }
-        html[data-splash-theme="light"] { background: #fafafa; }
-        #startup-splash {
-            position: fixed; inset: 0; z-index: 2147483647;
-            display: grid; place-items: center;
+    <style id="startup-transition-critical">
+        #startup-transition {
+            position: fixed;
+            inset: 0;
+            z-index: 2147483647;
+            display: grid;
+            place-items: center;
+            margin: 0;
             background: #131313;
-            transition: opacity .32s ease, visibility 0s linear .32s;
+            color: #fff;
+            opacity: 1;
+            transition: opacity 240ms ease;
         }
-        html[data-splash-theme="light"] #startup-splash { background: #fafafa; }
-        #startup-splash img {
-            width: clamp(12rem, 34vw, 23rem); max-width: 72vw; height: auto;
-            opacity: 0; filter: brightness(0) invert(1);
-            animation: startup-logo-in .55s ease-out .05s forwards;
+        #startup-transition[data-theme="light"],
+        body.light-mode #startup-transition { background: #fafafa; color: #000; }
+        #startup-transition > svg {
+            width: clamp(12rem, 34vw, 23rem);
+            max-width: 72vw;
+            height: auto;
+            opacity: 1;
+            animation: none;
         }
-        html[data-splash-theme="light"] #startup-splash img { filter: brightness(0); }
-        #startup-splash.startup-splash-loaded {
-            opacity: 0; visibility: hidden; pointer-events: none;
+        #startup-transition > p {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
         }
-        @keyframes startup-logo-in { to { opacity: 1; } }
+        #startup-transition.startup-transition-leaving {
+            opacity: 0;
+            pointer-events: none;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #startup-transition { transition: none; }
+        }
     </style>
-    <link rel="preload" href="/public/a0-fullDark.svg" as="image" type="image/svg+xml">
 
     <script>
-        (async () => {
-            let bundle
-            try {
-                const response = await fetch("/ui/asset-bundle", { credentials: "same-origin" })
-                if (!response.ok) throw new Error(`Bundle request failed: ${response.status}`)
-                bundle = await response.json()
-            } catch (error) {
-                console.warn("WebUI asset bundle unavailable.", error)
-                return
-            } finally {
-                document.dispatchEvent(new Event("webui-bundle-loaded"))
+        if (location.pathname === "/safe") {
+            const safeUrl = new URL(location.href)
+            safeUrl.searchParams.delete("__direct")
+            history.replaceState(null, "", `${safeUrl.pathname}${safeUrl.search}${safeUrl.hash}`)
+            if ("serviceWorker" in navigator) {
+                navigator.serviceWorker.getRegistrations()
+                    .then((registrations) => Promise.allSettled(
+                        registrations.map((registration) => registration.unregister()),
+                    ))
+                    .catch((error) => console.warn("Unable to disable service workers.", error))
             }
-
-            if (!("serviceWorker" in navigator) || !bundle?.version || !bundle.files) return
-            try {
-                const sentWorkers = new WeakSet()
-                const sendBundle = (worker) => {
-                    if (!worker || sentWorkers.has(worker)) return
-                    sentWorkers.add(worker)
-                    worker.postMessage({ type: "preload-ui-bundle", bundle })
-                }
-
-                sendBundle(navigator.serviceWorker.controller)
-                const onControllerChange = () => {
-                    sendBundle(navigator.serviceWorker.controller)
-                    navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange)
-                }
-                navigator.serviceWorker.addEventListener("controllerchange", onControllerChange)
-
-                const registrations = await navigator.serviceWorker.getRegistrations()
-                await Promise.all(
-                    registrations
-                        .filter((registration) => new URL(registration.scope).pathname === "/js/")
-                        .map((registration) => registration.unregister()),
-                )
-                const registration = await navigator.serviceWorker.register(
-                    `/sw.js?version=${encodeURIComponent(bundle.version)}`,
-                    { scope: "/", updateViaCache: "none" },
-                )
-                sendBundle(registration.installing)
-                sendBundle(registration.waiting)
-                sendBundle(registration.active)
-                sendBundle((await navigator.serviceWorker.ready).active)
-            } catch (error) {
-                console.warn("WebUI asset cache unavailable.", error)
-            }
-        })()
+        }
     </script>
 
     <link rel="icon" type="image/svg+xml" href="public/favicon.svg">
+    <link rel="preload" href="/vendor/google/google-icons.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="vendor/google/google-icons.css">
+    <script>
+        (() => {
+            const root = document.documentElement
+            let applicationReady = false
+            let revealStarted = false
+
+            const revealApplication = (force = false) => {
+                if (revealStarted || (!force && !applicationReady)) return
+                const overlay = document.getElementById("startup-transition")
+                if (!overlay) return
+                revealStarted = true
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    const removeOverlay = () => overlay.remove()
+                    overlay.classList.add("startup-transition-leaving")
+                    overlay.addEventListener("transitionend", removeOverlay, { once: true })
+                    setTimeout(removeOverlay, 600)
+                }))
+            }
+
+            document.addEventListener("webui-extensions-loaded", () => {
+                applicationReady = true
+                revealApplication()
+            }, { once: true })
+
+            const fontLoad = document.fonts?.load
+                ? document.fonts.load('24px "Material Symbols Outlined"')
+                : Promise.resolve([])
+            fontLoad.then((faces) => {
+                if (faces.length > 0) root.classList.add("material-icons-ready")
+            }).catch((error) => {
+                console.warn("Material Symbols font unavailable.", error)
+            })
+
+            setTimeout(() => revealApplication(true), 8000)
+        })()
+    </script>
+    <link rel="preload" as="style" href="/vendor/fonts/fonts.css" onload="this.onload=null;this.rel='stylesheet'">
     <link rel="preload" as="style" href="index.css" onload="this.onload=null;this.rel='stylesheet'">
+    <link rel="preload" as="style" href="css/loading-indicators.css" onload="this.onload=null;this.rel='stylesheet'">
     <link rel="preload" as="style" href="css/messages.css" onload="this.onload=null;this.rel='stylesheet'">
     <link rel="preload" as="style" href="components/messages/action-buttons/simple-action-buttons.css" onload="this.onload=null;this.rel='stylesheet'">
     <link rel="preload" as="style" href="components/messages/process-group/process-group.css" onload="this.onload=null;this.rel='stylesheet'">
@@ -127,7 +131,6 @@
     <script defer src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
 
     <!-- Then load Alpine.js -->
-    <!-- <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script> -->
     <script defer src="vendor/ace-min/ace.js"></script>
     <script defer src="vendor/qrcode.min.js"></script>
     <script type="module" src="js/initFw.js"></script>
@@ -139,9 +142,6 @@
     <!-- KaTeX javascript -->
     <script defer src="vendor/katex/katex.min.js" crossorigin="anonymous"></script>
     <script defer src="vendor/katex/katex.auto-render.min.js" crossorigin="anonymous"></script>
-
-    <!-- Google Icons -->
-    <link rel="preload" as="style" href="vendor/google/google-icons.css" onload="this.onload=null;this.rel='stylesheet'">
 
     <!-- Link the PWA manifest file -->
     <link rel="manifest" href="js/manifest.json">
@@ -159,6 +159,7 @@
             timezone: "{{user_timezone_setting}}",
             timeFormat: "{{user_time_format_setting}}",
             uiControlVisibility: {{user_ui_control_visibility}},
+            webuiExtensions: {{webui_extension_manifest}},
         };
     </script>
     <!-- Plugin head injections (scripts, stylesheets) -->
@@ -167,11 +168,10 @@
 
 <body class="dark-mode device-pointer" x-data>
     <script>
-        if (document.documentElement.dataset.splashTheme === "light") document.body.classList.replace("dark-mode", "light-mode")
+        try {
+            if (localStorage.getItem("darkMode") === "false") document.body.classList.replace("dark-mode", "light-mode")
+        } catch (_) {}
     </script>
-    <div id="startup-splash" aria-hidden="true">
-        <img src="/public/a0-fullDark.svg" alt="">
-    </div>
     <div class="container">
         <!-- Sidebar Overlay -->
         <div id="sidebar-overlay" x-data>
@@ -183,7 +183,8 @@
         <x-component path="sidebar/left-sidebar.html"></x-component>
 
         <!-- Right Panel (Message History and Input Section) -->
-        <div id="right-panel" class="panel" >
+        <div id="right-panel" class="panel"
+             :class="{ 'chat-active': $store.welcomeStore && !$store.welcomeStore.isVisible }">
 
             <!-- top section with time, status etc. -->
             <x-component path="chat/top-section/chat-top.html"></x-component>
@@ -199,6 +200,14 @@
             <!-- Message History (actual messages) -->
             <div id="chat-area-wrapper" x-data x-show="!$store.welcomeStore || !$store.welcomeStore.isVisible">
               <div id="chat-history"></div>
+
+              <div id="chat-loading-splash"
+                   class="message-window-loader is-loading chat-loading-splash"
+                   role="status"
+                   aria-live="polite"
+                   hidden>
+                <span class="loading-indicator-label">Loading chat</span>
+              </div>
 
               <!-- Chat Navigation Buttons (floating over chat area) -->
               <div id="chat-nav-buttons" aria-label="Chat navigation" x-cloak>

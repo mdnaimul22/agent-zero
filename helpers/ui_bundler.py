@@ -15,12 +15,12 @@ if TYPE_CHECKING:
 
 
 _CACHE_AREA = "ui_asset_bundle(extensions)(plugins)"
-_CACHE_KEY = "webui"
+_CACHE_KEY_PREFIX = "webui"
 _LOCAL_ORIGIN = "https://agent-zero.local"
-_BUNDLE_POLICY_VERSION = "text-assets-v1-40k"
+_BUNDLE_POLICY_VERSION = "text-startup-v4-512k"
 _BUNDLE_SUFFIXES = {".css", ".htm", ".html", ".js", ".mjs", ".xhtml"}
-_HTML_SUFFIXES = {".htm", ".html", ".xhtml"}
-_MAX_BUNDLE_FILE_BYTES = 40 * 1024
+_WEBUI_EXTENSION_ENTRY_SUFFIXES = {".htm", ".html", ".js", ".mjs", ".xhtml"}
+_MAX_BUNDLE_FILE_BYTES = 512 * 1024
 
 _CSS_REFERENCE_RES = (
     re.compile(r"url\(\s*(?:[\"'])?([^\"')\s]+)", re.IGNORECASE),
@@ -90,58 +90,71 @@ class _AssetRoot:
         )
 
 
-def get_ui_asset_bundle(agent: "Agent | None" = None) -> dict:
-    """Build a versioned URL-to-content bundle for the site-wide browser cache."""
-    roots, extension_roots, plugin_webui_roots = _get_asset_roots(agent)
-    signature = _asset_signature(roots)
-    cached = cache.get(_CACHE_AREA, _CACHE_KEY)
-    if cached is not None and cached.get("signature") == signature:
+def get_ui_asset_bundle(
+    entry_urls: Iterable[str],
+    agent: "Agent | None" = None,
+) -> dict:
+    """Build a versioned recursive text-asset bundle from the supplied entries."""
+    entries = list(dict.fromkeys(entry_urls))
+    cache_key = _cache_key(entries)
+    cached = cache.get(_CACHE_AREA, cache_key)
+    if cached is not None:
         return cached["bundle"]
 
+    roots, extension_roots = _get_asset_roots(agent)
+
+    # WebUI extension paths are injected into the rendered application document
+    # at runtime, so they cannot be discovered from the supplied source alone.
+    # Include those actual extension entry files, then let the same recursive
+    # scan discover their component, stylesheet, and module dependencies.
+    # Unrelated files stay lazy and use the service worker's ordinary
+    # fetch-and-cache fallback.
+    for root in extension_roots:
+        for path in _iter_root_files(
+            root.path,
+            suffixes=_WEBUI_EXTENSION_ENTRY_SUFFIXES,
+        ):
+            url = _url_for_path(path, roots)
+            if url:
+                entries.append(url)
+
+    signature = _bundle_signature(roots, entries)
+    result = _build_asset_bundle(entries, roots, signature)
+    cache.add(
+        _CACHE_AREA,
+        cache_key,
+        {"signature": signature, "bundle": result},
+    )
+    return result
+
+
+def _cache_key(entry_urls: Iterable[str]) -> str:
+    digest = hashlib.sha256()
+    for entry_url in sorted(set(entry_urls)):
+        digest.update(entry_url.encode("utf-8"))
+        digest.update(b"\0")
+    return f"{_CACHE_KEY_PREFIX}:{digest.hexdigest()[:20]}"
+
+
+def _build_asset_bundle(
+    entry_urls: Iterable[str],
+    roots: list[_AssetRoot],
+    signature: str,
+) -> dict:
     pending: list[str] = []
     queued: set[str] = set()
     entries: dict[str, list[str]] = {}
-    raw_entries: dict[str, bytes] = {}
 
     def enqueue(url: str) -> None:
         normalized = _normalize_url(url)
         suffix = Path(unquote(urlsplit(normalized).path)).suffix.lower() if normalized else ""
-        if (
-            normalized
-            and suffix in _BUNDLE_SUFFIXES
-            and normalized not in queued
-            and urlsplit(normalized).path != "/sw.js"
-        ):
-            queued.add(normalized)
-            pending.append(normalized)
+        if normalized and suffix in _BUNDLE_SUFFIXES:
+            if normalized not in queued:
+                queued.add(normalized)
+                pending.append(normalized)
 
-    index_path = Path(files.get_abs_path("webui/index.html"))
-    if index_path.is_file():
-        index_text = index_path.read_text(encoding="utf-8")
-        for reference in _extract_references(index_text, "/", ".html"):
-            enqueue(reference)
-
-    component_root = Path(files.get_abs_path("webui/components")).resolve()
-    for path in _iter_root_files(component_root, suffixes=_HTML_SUFFIXES):
-        url = _url_for_path(path, roots)
-        if url:
-            enqueue(url)
-
-    for root in extension_roots:
-        for path in _iter_root_files(root.path, suffixes=_BUNDLE_SUFFIXES):
-            url = _url_for_path(path, roots)
-            if url:
-                enqueue(url)
-
-    for root in plugin_webui_roots:
-        for path in _iter_root_files(
-            root.path,
-            suffixes=_HTML_SUFFIXES,
-            recursive=False,
-        ):
-            url = _url_for_path(path, roots)
-            if url:
-                enqueue(url)
+    for entry_url in entry_urls:
+        enqueue(entry_url)
 
     while pending:
         url = pending.pop()
@@ -158,29 +171,13 @@ def get_ui_asset_bundle(agent: "Agent | None" = None) -> dict:
             continue
         if len(content) <= _MAX_BUNDLE_FILE_BYTES:
             entries[url] = [_content_type(path), "text", text]
-            raw_entries[url] = content
         for reference in _extract_references(text, url, path.suffix.lower()):
             enqueue(reference)
 
-    digest = hashlib.sha256()
-    digest.update(signature.encode("ascii"))
-    digest.update(b"\0")
-    for url in sorted(raw_entries):
-        digest.update(url.encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(raw_entries[url])
-        digest.update(b"\0")
-
-    result = {
-        "version": digest.hexdigest()[:20],
+    return {
+        "version": signature[:20],
         "files": {url: entries[url] for url in sorted(entries)},
     }
-    cache.add(
-        _CACHE_AREA,
-        _CACHE_KEY,
-        {"signature": signature, "bundle": result},
-    )
-    return result
 
 
 def serialize_ui_asset_bundle(bundle: dict) -> str:
@@ -194,7 +191,7 @@ def serialize_ui_asset_bundle(bundle: dict) -> str:
 
 def _get_asset_roots(
     agent: "Agent | None",
-) -> tuple[list[_AssetRoot], list[_AssetRoot], list[_AssetRoot]]:
+) -> tuple[list[_AssetRoot], list[_AssetRoot]]:
     from helpers import plugins, subagents
 
     webui_root = _AssetRoot(Path(files.get_abs_path("webui")), "/")
@@ -219,7 +216,7 @@ def _get_asset_roots(
     plugin_webui_roots = list(dict.fromkeys(plugin_webui_roots))
     roots = list(dict.fromkeys([*extension_roots, *plugin_webui_roots, webui_root]))
     roots.sort(key=lambda root: len(root.url_prefix), reverse=True)
-    return roots, extension_roots, plugin_webui_roots
+    return roots, extension_roots
 
 
 def _iter_root_files(
@@ -241,10 +238,13 @@ def _iter_root_files(
         yield resolved
 
 
-def _asset_signature(roots: list[_AssetRoot]) -> str:
+def _bundle_signature(roots: list[_AssetRoot], entry_urls: Iterable[str]) -> str:
     digest = hashlib.sha256()
     digest.update(_BUNDLE_POLICY_VERSION.encode("ascii"))
     digest.update(b"\0")
+    for entry_url in sorted(set(entry_urls)):
+        digest.update(entry_url.encode("utf-8"))
+        digest.update(b"\0")
     for root in roots:
         digest.update(root.url_prefix.encode("utf-8"))
         digest.update(b"\0")

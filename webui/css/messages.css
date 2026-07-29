@@ -1,6 +1,6 @@
 /* Chat History */
 #chat-history {
-  background-color: var(--color-chat-background);
+  background-color: transparent;
   position: relative;
   display: -webkit-flex;
   display: flex;
@@ -35,72 +35,36 @@
   pointer-events: none;
 }
 
-.message-window-loader-bubble {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.28rem;
-  padding: 0.55rem 0.75rem;
-  border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-panel) 92%, transparent);
-  box-shadow: 0 0.2rem 0.7rem rgba(0, 0, 0, 0.14);
-  opacity: 0.58;
-  transition: opacity var(--transition-speed) ease;
-}
-
-.message-window-loader.is-loading .message-window-loader-bubble {
-  opacity: 1;
-}
-
-.message-window-loader-bubble > span {
-  width: 0.34rem;
-  height: 0.34rem;
-  border-radius: 50%;
-  background: var(--color-text-muted);
-  opacity: 0.55;
-}
-
-.message-window-loader.is-loading .message-window-loader-bubble > span {
-  animation: message-window-loader-dot 1.05s ease-in-out infinite;
-}
-
-.message-window-loader-bubble > span:nth-child(2) {
-  animation-delay: 0.14s;
-}
-
-.message-window-loader-bubble > span:nth-child(3) {
-  animation-delay: 0.28s;
-}
-
-.message-window-loader-label {
+.chat-loading-splash {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+  inset: 0;
+  z-index: 110;
+  align-items: center;
+  margin: 0;
+  min-height: 0;
+  background: var(--color-chat-background);
 }
 
-@keyframes message-window-loader-dot {
-  0%,
-  60%,
-  100% {
-    opacity: 0.35;
-    transform: translateY(0);
+.chat-loading-splash[hidden] {
+  display: none;
+}
+
+.chat-loading-splash:not([hidden]) {
+  animation: chat-loading-splash-fade-in 180ms ease-out both;
+}
+
+@keyframes chat-loading-splash-fade-in {
+  from {
+    opacity: 0;
   }
-  30% {
+  to {
     opacity: 1;
-    transform: translateY(-0.2rem);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .message-window-loader-bubble > span {
+  .chat-loading-splash:not([hidden]) {
     animation: none;
-    opacity: 0.7;
   }
 }
 
@@ -347,7 +311,6 @@
 
 .message-util {
   background-color: transparent;
-  display: none;
 }
 
 .message-warning {

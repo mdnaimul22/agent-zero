@@ -17,6 +17,7 @@
 - `initFw.js` owns Alpine bootstrap and custom lifecycle directives such as `x-create`, `x-destroy`, and periodic `x-every-*` hooks.
 - `messages.js` owns native message/process-step rendering, safe Markdown and HTML conversion, and KaTeX delimiter handling.
 - `message-window.js` owns the bounded, tail-first raw-log window used by message rendering.
+- `loading-indicators.js` owns reusable DOM factories for shared loading visuals.
 - `scroller.js` owns bottom-following snapshots and cancellation of pending scroll effects.
 - Other modules own focused UI utilities such as modals, messages, safe markdown, shortcuts, TTS/STT, surfaces, and initialization.
 
@@ -38,6 +39,7 @@
 - Click-outside close requires both `mousedown` and `mouseup` on the outer `.modal` container.
 - `scrollModal(id)` scrolls inside the top modal's `.modal-scroll`.
 - Keep extension loader cache keys and extension point names stable for plugins.
+- The rendered index supplies a complete `runtimeInfo.webuiExtensions` manifest; `extensions.js` must resolve HTML and JavaScript extension paths from it without per-extension-point startup API calls, while retaining `/api/load_webui_extensions` as a compatibility fallback when the manifest is unavailable.
 - HTML extension loading turns discovered HTML files into `<x-component>` tags; JavaScript extensions must export a default function.
 - `extensions.js` exposes `initialHtmlExtensionsLoaded` and emits `webui-extensions-loaded` once after Alpine and the initial recursive component/extension loading placeholders have cleared.
 - Transport-level preloading must remain outside `components.js`, `extensions.js`, and `initFw.js`; cache hits flow through their ordinary asynchronous requests.
@@ -50,9 +52,10 @@
 - Full message snapshots that start at backend log `no` 0 must replace the current message DOM before rendering; incremental snapshots should keep patching existing messages.
 - Long histories stay cached as raw log data but render a contiguous tail-first DOM window. The initial base view contains one 60-entry page; after paging, the base window contains two aligned pages, retaining the adjacent page and discarding only the far page in either direction. Visible boundaries expand to whole logical process groups so a page never reconstructs a partial group; the unit classifier must include plugin-backed process steps such as `code_exe`, and oversized groups use their own 50-step incremental window. Paging must preserve a visible anchor and occur at the scroll boundary after user intent, using passive loading indicators rather than count-bearing controls. Live entries and late content growth follow the tail until the reader deliberately moves away; historical window rebuilds must cancel pending auto-scroll effects, render in an off-screen staging history, and atomically swap fully laid-out content into the live scroller before restoring its anchor.
 - Message-window cache identity must keep different log types distinct even when they share a backend ID; root-agent GEN and response records intentionally use the same ID and must both survive replay, while same-ID/same-type updates still replace their earlier cached version.
-- Utility records join a process render unit only when a substantive process step follows before the next standalone boundary. Utility-only runs must not wrap root responses in empty groups or reopen completed groups; their group chrome stays hidden unless utility messages are enabled.
+- Utility records join a process render unit only when a substantive process step follows before the next standalone boundary. Group visibility must use that full-log classification rather than infer utility-only state from partially mounted DOM children. Standalone utility-only runs must not wrap root responses or reopen completed groups, and their group chrome stays hidden unless utility messages are enabled.
 - `set_messages_after_loop` receives offscreen live updates as results with `result.virtualized === true` and `result.element === null`; extensions that only need `args` may still react, while DOM-mutating extensions must guard the element.
 - Context switches, log GUID resets, and full log snapshots must reset both message DOM and message-window cache state.
+- Context switches clear stale history immediately but defer the chat loading splash for 300 ms so fast loads do not flash; slower loads fade it in and dismiss it only after the matching context snapshot finishes rendering. Stale snapshots and timers must not affect a newer switch's splash.
 - Long primary-agent responses start collapsed only during chat replay; long user-message text starts collapsed during both live sends and replay. Both use the shared collapsible-message behavior, but user attachments remain outside its clipped content target.
 - Info log entries with `kvps.finished` complete the active process group and clear its running treatment.
 

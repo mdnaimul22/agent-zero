@@ -267,6 +267,49 @@ def test_models_command_always_opens_modal():
     }
 
 
+def test_stop_command_uses_the_composer_stop_operation(monkeypatch):
+    class Log:
+        def __init__(self):
+            self.progress = []
+            self.entries = []
+
+        def set_progress(self, value, *, active):
+            self.progress.append((value, active))
+
+        def log(self, **kwargs):
+            self.entries.append(kwargs)
+
+    context = SimpleNamespace(
+        id="stop-command-context",
+        paused=True,
+        log=Log(),
+        is_running=lambda: True,
+        kill_process=lambda: setattr(context, "killed", True),
+        killed=False,
+    )
+    monkeypatch.setattr(connector_commands, "_context", lambda _context_id: context)
+
+    result = connector_commands.run(
+        {
+            "invocation": {"command_name": "stop", "raw_arguments": ""},
+            "context": {"context_id": context.id},
+        }
+    )
+
+    assert context.killed is True
+    assert context.paused is False
+    assert context.log.progress == [("", False)]
+    assert context.log.entries == [
+        {"type": "info", "content": "Agent process stopped.", "finished": True}
+    ]
+    assert result == {
+        "text": "",
+        "effects": [
+            {"type": "toast", "message": "Agent process stopped.", "level": "success"}
+        ],
+    }
+
+
 @pytest.mark.parametrize(("argument", "enabled"), [("on", True), ("off", False)])
 def test_computer_use_command_guides_launcher_or_cli(
     argument: str,

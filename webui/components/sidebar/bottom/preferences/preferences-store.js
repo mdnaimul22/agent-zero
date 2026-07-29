@@ -1,5 +1,4 @@
 import { createStore } from "/js/AlpineStore.js";
-import * as css from "/js/css.js";
 import { ttsService } from "/js/tts-service.js";
 import { applyModeSteps } from "/components/messages/process-group/process-group-dom.js";
 
@@ -204,14 +203,10 @@ const model = {
 
   _applyShowUtils(value) {
     localStorage.setItem("showUtils", value);
-    css.toggleCssProperty(
-      ".process-step.message-util",
-      "display",
-      value ? undefined : "none"
+    document.documentElement.classList.toggle(
+      "show-utility-messages",
+      Boolean(value),
     );
-    document.querySelectorAll(".process-group.utility-only").forEach((group) => {
-      group.hidden = !value;
-    });
   },
 
   _applyChatWidth(value) {

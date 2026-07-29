@@ -11,8 +11,12 @@
   flex-shrink: 0;
 }
 
-.process-group.utility-only[hidden] {
+.process-group.utility-only {
   display: none !important;
+}
+
+.show-utility-messages .process-group.utility-only {
+  display: flex !important;
 }
 
 /* Embedded Process Group inside Response */
@@ -408,6 +412,14 @@
   transition: background-color 0.15s ease;
   max-width: 100%;
   overflow: hidden;
+}
+
+.process-step.message-util {
+  display: none;
+}
+
+.show-utility-messages .process-step.message-util {
+  display: flex;
 }
 
 /* Utility/Info/Hint steps have subtle background tint */

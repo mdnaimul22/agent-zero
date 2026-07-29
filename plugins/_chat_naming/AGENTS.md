@@ -11,6 +11,7 @@
 - `api/chat_name.py` owns modal reads, generation, and manual saves.
 - `webui/` and `extensions/webui/sidebar-row-actions-menu/` own the standard rename modal and row-menu action.
 - `prompts/` owns the Utility Model naming instructions.
+- `commands/` owns the plugin-contributed `/rename <new name|auto>` slash command.
 
 ## Local Contracts
 
@@ -21,6 +22,7 @@
 - Generated names are concise and normalized before persistence.
 - Renaming a parallel child updates both its context name and sidebar label.
 - Manual task renames update both scheduler metadata and the task context name.
+- `/rename auto` uses the same generation and persistence helpers as the rename modal; any other non-empty argument is saved as the custom chat name.
 
 ## Work Guidance
 

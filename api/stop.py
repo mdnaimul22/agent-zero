@@ -2,6 +2,23 @@ from agent import AgentContext
 from helpers.api import ApiHandler, Request, Response
 
 
+def stop_context(context: AgentContext) -> dict:
+    was_running = context.is_running()
+
+    context.kill_process()
+    context.paused = False
+    context.log.set_progress("", active=False)
+
+    message = "Agent process stopped."
+    context.log.log(type="info", content=message, finished=True)
+
+    return {
+        "message": message,
+        "context": context.id,
+        "stopped": was_running,
+    }
+
+
 class Stop(ApiHandler):
     async def process(self, input: dict, request: Request) -> dict | Response:
         ctxid = input.get("context", "")
@@ -19,17 +36,4 @@ class Stop(ApiHandler):
                 status=404,
                 mimetype="application/json",
             )
-        was_running = context.is_running()
-
-        context.kill_process()
-        context.paused = False
-        context.log.set_progress("", active=False)
-
-        msg = "Agent process stopped."
-        context.log.log(type="info", content=msg, finished=True)
-
-        return {
-            "message": msg,
-            "context": context.id,
-            "stopped": was_running,
-        }
+        return stop_context(context)

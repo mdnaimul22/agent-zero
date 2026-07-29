@@ -253,9 +253,12 @@ def test_process_groups_are_atomic_and_page_steps_in_fifties():
     assert 'button.className = "process-group-show-more"' in messages
     assert "current + PROCESS_GROUP_STEP_PAGE_SIZE" in messages
     assert "group.dataset.fullStartTimestamp" in messages
-    assert "isUtilityOnlyProcessGroup(group)" in messages
+    assert 'else if (log.type === "util")' in messages
+    assert 'group?.classList.contains("utility-only")' in messages
     assert "allowCompletedGroup: false" in messages
-    assert ".process-group.utility-only[hidden]" in group_css
+    assert ".process-group.utility-only {" in group_css
+    assert ".show-utility-messages .process-group.utility-only" in group_css
+    assert ".process-group.utility-only[hidden]" not in group_css
     assert ".process-group-show-more" in group_css
 
 

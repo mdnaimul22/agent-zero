@@ -40,43 +40,99 @@ def test_classic_startup_scripts_are_deferred() -> None:
     assert blocking_scripts == []
 
 
-def test_ui_asset_bundle_fetch_precedes_frontend_assets() -> None:
+def test_splash_prepares_worker_before_replacing_document_in_place() -> None:
+    splash_html = (PROJECT_ROOT / "webui" / "splash.html").read_text(
+        encoding="utf-8"
+    )
     index_html = (PROJECT_ROOT / "webui" / "index.html").read_text(encoding="utf-8")
     ui_server = (PROJECT_ROOT / "helpers" / "ui_server.py").read_text(encoding="utf-8")
 
-    bundle_index = index_html.index('fetch("/ui/asset-bundle"')
-    assert bundle_index < index_html.index('<link rel="preload" as="style" href="index.css"')
-    assert bundle_index < index_html.index('<script type="module" src="index.js"></script>')
+    assert 'fetch("/ui/asset-bundle"' in splash_html
+    assert 'const APP_DOCUMENT_PATH = "/ui/index"' in splash_html
+    assert "const appDocumentPromise = fetch(APP_DOCUMENT_PATH" in splash_html
+    assert 'navigator.serviceWorker.register(expectedUrl' in splash_html
+    assert "await sendBundle(worker, bundle, true)" in splash_html
+    assert 'const overlay = document.getElementById("startup-transition")' in splash_html
+    assert 'overlay.dataset.theme = "light"' in splash_html
+    assert "(bodyTag) => bodyTag + overlay.outerHTML" in splash_html
+    assert "document.open()" in splash_html
+    assert "document.write(appWithTransition)" in splash_html
+    assert "document.close()" in splash_html
+    assert "location.replace" not in splash_html
+    assert 'const APP_PATH = "/index.html"' not in splash_html
+    assert 'fetch("/ui/asset-bundle"' not in index_html
     assert 'id="ui-asset-bundle"' not in index_html
+    assert '"/index.html"' in ui_server
+    assert '"/ui/index"' in ui_server
+    assert '"/safe"' in ui_server
+    assert "handlers.serve_splash" in ui_server
+    assert "handlers.serve_safe" in ui_server
+    assert "handlers.serve_index" in ui_server
     assert '"/ui/asset-bundle"' in ui_server
     assert "handlers.serve_ui_asset_bundle" in ui_server
+    assert '"/ui/asset-graph"' not in ui_server
+    assert "handlers.serve_ui_asset_graph" not in ui_server
+    assert "GZipMiddleware(" in ui_server
+    assert "minimum_size=GZIP_MINIMUM_RESPONSE_BYTES" in ui_server
+    assert "compresslevel=GZIP_COMPRESSION_LEVEL" in ui_server
     assert 'response.headers["Content-Encoding"] = "gzip"' in ui_server
-    assert 'response.set_etag(bundle["version"], weak=True)' in ui_server
+    assert 'request.if_none_match.contains_weak(version)' in ui_server
+    assert 'response.set_etag(version, weak=True)' in ui_server
 
 
-def test_initial_styles_load_without_blocking_splash_paint() -> None:
+def test_safe_mode_disables_workers_before_rendering_index_directly() -> None:
+    safe_html = (PROJECT_ROOT / "webui" / "safe.html").read_text(encoding="utf-8")
+    index_html = (PROJECT_ROOT / "webui" / "index.html").read_text(encoding="utf-8")
+    ui_server = (PROJECT_ROOT / "helpers" / "ui_server.py").read_text(encoding="utf-8")
+
+    assert "navigator.serviceWorker.getRegistrations()" in safe_html
+    assert "registration.unregister()" in safe_html
+    assert 'const DIRECT_PARAMETER = "__direct"' in safe_html
+    assert "location.replace(target.href)" in safe_html
+    assert 'fetch("/ui/asset-bundle"' not in safe_html
+    assert "navigator.serviceWorker.register" not in safe_html
+    assert ' src="' not in safe_html
+    assert ' href="/' not in safe_html
+    assert 'request.args.get("__direct") == "1"' in ui_server
+    assert "return await self.serve_index()" in ui_server
+    assert 'files.read_file("webui/safe.html")' in ui_server
+    assert 'safeUrl.searchParams.delete("__direct")' in index_html
+    assert "navigator.serviceWorker.getRegistrations()" in index_html
+    assert "registration.unregister()" in index_html
+    assert "navigator.serviceWorker.register" not in index_html
+
+
+def test_only_the_icon_guard_stylesheet_blocks_application_paint() -> None:
     index_html = (PROJECT_ROOT / "webui" / "index.html").read_text(encoding="utf-8")
 
-    assert '<link rel="stylesheet"' not in index_html
-    assert index_html.count('rel="preload" as="style"') == 18
-    assert index_html.count("onload=\"this.onload=null;this.rel='stylesheet'\"") == 18
-    assert 'new Promise((resolve) => addEventListener("load", resolve' in index_html
-    assert 'document.addEventListener("webui-bundle-loaded"' in index_html
+    assert index_html.count('<link rel="stylesheet"') == 1
+    assert '<link rel="stylesheet" href="vendor/google/google-icons.css">' in index_html
+    assert index_html.count('rel="preload" as="style"') == 19
+    assert index_html.count("onload=\"this.onload=null;this.rel='stylesheet'\"") == 19
+    assert 'id="startup-splash"' not in index_html
+    assert 'document.addEventListener("webui-bundle-loaded"' not in index_html
 
 
-def test_startup_splash_is_inline_and_waits_for_extension_readiness() -> None:
+def test_startup_splash_is_handed_to_the_index_and_fades_when_ready() -> None:
+    splash_html = (PROJECT_ROOT / "webui" / "splash.html").read_text(
+        encoding="utf-8"
+    )
     index_html = (PROJECT_ROOT / "webui" / "index.html").read_text(encoding="utf-8")
     extensions_js = (PROJECT_ROOT / "webui" / "js" / "extensions.js").read_text(
         encoding="utf-8"
     )
 
-    assert index_html.index("#startup-splash") < index_html.index('fetch("/ui/asset-bundle"')
-    assert index_html.index('id="startup-splash"') < index_html.index('<div class="container">')
-    assert 'data-splash-theme="dark"' in index_html
-    assert 'localStorage.getItem("darkMode") === "false"' in index_html
-    assert 'src="/public/a0-fullDark.svg"' in index_html
-    assert "width: clamp(12rem, 34vw, 23rem)" in index_html
+    assert 'id="startup-splash"' not in index_html
+    assert 'data-splash-theme="dark"' not in index_html
+    assert '<main id="startup-transition"' not in index_html
+    assert 'id="startup-transition-critical"' in index_html
     assert 'document.addEventListener("webui-extensions-loaded"' in index_html
+    assert 'overlay.classList.add("startup-transition-leaving")' in index_html
+    assert 'document.fonts.load(\'24px "Material Symbols Outlined"\')' in index_html
+    assert 'localStorage.getItem("darkMode") === "false"' in index_html
+    assert "webuiExtensions: {{webui_extension_manifest}}" in index_html
+    assert 'manifestExtensionPaths("html", extensionPoint)' in extensions_js
+    assert 'manifestExtensionPaths("js", extensionPoint)' in extensions_js
     assert 'export let initialHtmlExtensionsLoaded = false' in extensions_js
     assert 'const LOADING_SELECTOR = "x-component > .loading:empty, x-extension.loading"' in extensions_js
     assert 'targetElement.classList.add("loading")' in extensions_js
@@ -85,3 +141,18 @@ def test_startup_splash_is_inline_and_waits_for_extension_readiness() -> None:
     assert "globalThis.Alpine.nextTick" in extensions_js
     assert "pendingHtmlImports" not in extensions_js
     assert "data-extension-loaded" not in extensions_js
+    assert '<svg xmlns="http://www.w3.org/2000/svg"' in splash_html
+    assert '<main id="startup-transition"' in splash_html
+    assert 'localStorage.getItem("darkMode") === "false"' in splash_html
+    assert ' src="' not in splash_html
+    assert ' href="/' not in splash_html
+
+
+def test_generic_loading_indicator_has_a_shared_default_delay() -> None:
+    modals_css = (PROJECT_ROOT / "webui" / "css" / "modals.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert "--loading-delay: 500ms" in modals_css
+    assert "fadeIn 500ms ease-out var(--loading-delay) forwards" in modals_css
+    assert "fadeIn 0s linear var(--loading-delay) forwards" in modals_css

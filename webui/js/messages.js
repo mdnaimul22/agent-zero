@@ -25,6 +25,7 @@ import {
 import { callJsExtensions } from "/js/extensions.js";
 import { addBlankTargetsToLinks } from "/js/html-links.js";
 import { sanitizeHtml } from "/js/safe-markdown.js";
+import { createThreeBubbleLoader } from "/js/loading-indicators.js";
 
 // Delay before collapsing previous steps when a new step is added
 const STEP_COLLAPSE_DELAY = {
@@ -1014,6 +1015,9 @@ function setMessageWindowIndicatorLoading(history, direction, loading) {
   if (!indicator) return;
 
   indicator.classList.toggle("is-loading", loading);
+  indicator
+    .querySelector(":scope > .three-bubble-loader")
+    ?.classList.toggle("is-active", loading);
   if (loading) {
     const label = direction === "older" ? "earlier" : "newer";
     indicator.setAttribute("role", "status");
@@ -1042,12 +1046,11 @@ function createMessageWindowIndicator(direction) {
   } else {
     indicator.setAttribute("aria-hidden", "true");
   }
-  indicator.innerHTML = `
-    <span class="message-window-loader-bubble" aria-hidden="true">
-      <span></span><span></span><span></span>
-    </span>
-    <span class="message-window-loader-label">Loading ${label} messages</span>
-  `;
+  indicator.appendChild(createThreeBubbleLoader({ active: isLoading }));
+  const statusLabel = document.createElement("span");
+  statusLabel.className = "loading-indicator-label";
+  statusLabel.textContent = `Loading ${label} messages`;
+  indicator.appendChild(statusLabel);
   return indicator;
 }
 
@@ -1223,19 +1226,6 @@ function getLastProcessGroup(allowCompleted = true) {
   return group;
 }
 
-function isUtilityOnlyProcessGroup(group) {
-  const steps = group?.querySelectorAll?.(".process-step") || [];
-  return steps.length > 0 &&
-    !group.querySelector(".process-step:not(.message-util)");
-}
-
-function updateUtilityOnlyProcessGroup(group) {
-  if (!group) return;
-  const utilityOnly = isUtilityOnlyProcessGroup(group);
-  group.classList.toggle("utility-only", utilityOnly);
-  group.hidden = utilityOnly && !preferencesStore.showUtils;
-}
-
 function getOrCreateProcessGroup(id, allowCompleted = true, renderInfo = null) {
   const groupIdentity = renderInfo?.id || id;
   // first try direct match by ID
@@ -1297,13 +1287,24 @@ export function drawProcessStep({
   const stepId = `process-step-${id}`;
   let step = getChatHistoryElementById(stepId);
 
+  const renderInfo = log[PROCESS_GROUP_RENDER_INFO];
   const group =
     getStepProcessGroup(step) ||
     getOrCreateProcessGroup(
       id,
       allowCompletedGroup,
-      log[PROCESS_GROUP_RENDER_INFO],
+      renderInfo,
     );
+  if (renderInfo) {
+    // A later process step can promote a previously standalone live utility
+    // into a substantive unit when the full cache is reclassified.
+    group.classList.remove("utility-only");
+  } else if (log.type === "util") {
+    // Standalone utilities are not part of a substantive render unit. Mark
+    // them directly from the full-log classifier instead of inferring group
+    // visibility from whichever child steps happen to be mounted so far.
+    group.classList.add("utility-only");
+  }
   const stepsContainer = group.querySelector(".process-steps");
 
   const isNewStep = !step;
@@ -1472,7 +1473,6 @@ export function drawProcessStep({
 
   // update the process grop header by this step
   updateProcessGroupHeader(group);
-  updateUtilityOnlyProcessGroup(group);
 
   // remove shine from previous steps and add to this one if new and not completed
   if (isNewStep && !isGroupComplete) {
@@ -1956,10 +1956,9 @@ export function drawMessageResponse({
   // get last process group or create new container (if first message)
 
   let group = getLastProcessGroup();
-  if (isUtilityOnlyProcessGroup(group)) {
+  if (group?.classList.contains("utility-only")) {
     group.setAttribute("data-group-complete", "true");
     updateProcessGroupHeader(group);
-    updateUtilityOnlyProcessGroup(group);
     group = null;
   }
   let container = getChatHistoryElementById(`message-${id}`); // first check for already existing message

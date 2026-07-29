@@ -43,6 +43,15 @@ export function clearCache() {
   cache.clear(HTML_CACHE_AREA);
 }
 
+function manifestExtensionPaths(assetType, extensionPoint) {
+  const manifest = globalThis.runtimeInfo?.webuiExtensions;
+  if (!manifest || typeof manifest !== "object") return null;
+  const extensionsByPoint = manifest[assetType];
+  if (!extensionsByPoint || typeof extensionsByPoint !== "object") return null;
+  const extensions = extensionsByPoint[extensionPoint];
+  return Array.isArray(extensions) ? extensions : [];
+}
+
 /**
  * Call all JS extensions for a given extension point.
  *
@@ -72,14 +81,20 @@ export async function loadJsExtensions(extensionPoint) {
     const cached = cache.get(JS_CACHE_AREA, extensionPoint, null);
     if (cached != null) return cached;
 
-    /** @type {LoadWebuiExtensionsResponse} */
-    const response = await api.callJsonApi(`/api/load_webui_extensions`, {
-      extension_point: extensionPoint,
-      filters: ["*.js", "*.mjs"],
-    });
+    const manifestExtensions = manifestExtensionPaths("js", extensionPoint);
+    /** @type {WebuiExtension[]} */
+    let extensionPaths = manifestExtensions;
+    if (extensionPaths == null) {
+      /** @type {LoadWebuiExtensionsResponse} */
+      const response = await api.callJsonApi(`/api/load_webui_extensions`, {
+        extension_point: extensionPoint,
+        filters: ["*.js", "*.mjs"],
+      });
+      extensionPaths = response.extensions;
+    }
     /** @type {JsExtensionImport[]} */
     const imports = await Promise.all(
-      response.extensions.map(async (path) => ({
+      extensionPaths.map(async (path) => ({
         path,
         module: await import(normalizePath(path))
       }))
@@ -180,13 +195,19 @@ export async function importHtmlExtensions(extensionPoint, targetElement) {
       return;
     }
 
-    /** @type {LoadWebuiExtensionsResponse} */
-    const response = await api.callJsonApi(`/api/load_webui_extensions`, {
-      extension_point: extensionPoint,
-      filters: ["*.html", "*.htm", "*.xhtml"],
-    });
+    const manifestExtensions = manifestExtensionPaths("html", extensionPoint);
+    /** @type {WebuiExtension[]} */
+    let extensionPaths = manifestExtensions;
+    if (extensionPaths == null) {
+      /** @type {LoadWebuiExtensionsResponse} */
+      const response = await api.callJsonApi(`/api/load_webui_extensions`, {
+        extension_point: extensionPoint,
+        filters: ["*.html", "*.htm", "*.xhtml"],
+      });
+      extensionPaths = response.extensions;
+    }
     let combinedHTML = "";
-    for (const extension of response.extensions) {
+    for (const extension of extensionPaths) {
       const path = normalizePath(extension);
       combinedHTML += `<x-component path="${path}"></x-component>`;
     }

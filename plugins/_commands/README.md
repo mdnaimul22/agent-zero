@@ -18,6 +18,7 @@ Commands are managed from the plugin modal and can be inserted directly from the
 - Prefix and postfix command resolution for WebUI and remote/AI-sent messages
 - Scope-aware command resolution across project and global scopes
 - Built-in A0 CLI connector command pack for common session, queue, model, project, browser, and connector status commands
+- `/stop` control that uses the same hard-stop operation as the WebUI composer button
 - Slash picker in the chat composer with keyboard navigation and create-on-empty flow
 
 ## Command File Model

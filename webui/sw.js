@@ -1,11 +1,13 @@
 const CACHE_PREFIX = "agent-zero-ui-assets-";
 const SCRIPT_VERSION = new URL(self.location.href).searchParams.get("version") || "runtime";
-const MAX_CACHEABLE_FILE_BYTES = 40 * 1024;
+const MAX_RUNTIME_CACHEABLE_TRANSFER_BYTES = 256 * 1024;
 const CACHEABLE_FILE_PATTERN = /\.(?:css|html?|xhtml|m?js)$/i;
 
 let activeCacheName = cacheName(SCRIPT_VERSION);
+let activeAssetVersion = SCRIPT_VERSION;
 let activeBundleEntries = new Map();
 let cachePopulation = { name: "", promise: Promise.resolve() };
+let persistedBundleRestore = null;
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -23,10 +25,16 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data?.type !== "preload-ui-bundle") return;
   const bundle = event.data.bundle;
-  if (!bundle?.version || !bundle.files || typeof bundle.files !== "object") return;
+  const replyPort = event.ports?.[0];
+  if (!bundle?.version || !bundle.files || typeof bundle.files !== "object") {
+    replyPort?.postMessage({ ok: false, error: "invalid-bundle" });
+    return;
+  }
 
-  activeCacheName = cacheName(bundle.version);
+  activeAssetVersion = bundle.version;
+  activeCacheName = cacheName(activeAssetVersion);
   activeBundleEntries = bundleEntries(bundle.files);
+  persistedBundleRestore = null;
 
   if (cachePopulation.name !== activeCacheName) {
     const targetCacheName = activeCacheName;
@@ -39,38 +47,51 @@ self.addEventListener("message", (event) => {
     cachePopulation = { name: targetCacheName, promise };
   }
 
-  event.waitUntil(cachePopulation.promise);
+  // The in-memory map is immediately usable by fetch events. Persist it in the
+  // background while the message lifetime keeps this worker alive, so the app
+  // does not wait for hundreds of Cache Storage writes before it can render.
+  replyPort?.postMessage({ ok: true, version: activeAssetVersion });
+  event.waitUntil(cachePopulation.promise.catch(() => undefined));
 });
 
 self.addEventListener("fetch", (event) => {
   if (!isCacheableRequest(event.request)) return;
+  event.respondWith(
+    respondToCacheableRequest(event.request).catch(() => fetch(event.request)),
+  );
+});
 
-  const bundledEntry = activeBundleEntries.get(event.request.url);
-  if (bundledEntry) {
-    event.respondWith(Promise.resolve(responseFromEntry(bundledEntry)));
-    return;
+async function respondToCacheableRequest(request) {
+  let bundledEntry = activeBundleEntries.get(request.url);
+  if (!bundledEntry && activeBundleEntries.size === 0) {
+    await restorePersistedBundle();
+    bundledEntry = activeBundleEntries.get(request.url);
+  }
+  if (bundledEntry) return responseFromEntry(bundledEntry);
+
+  let cache;
+  try {
+    cache = await caches.open(activeCacheName);
+    const cached = await cache.match(request);
+    if (cached) return cached;
+  } catch (_error) {
+    return fetch(request);
   }
 
-  let cacheWrite = Promise.resolve();
-  const response = (async () => {
-    const cache = await caches.open(activeCacheName);
-    const cached = await cache.match(event.request);
-    if (cached) return cached;
+  return fetchBackendAsset(request, cache);
+}
 
-    const networkResponse = await fetch(event.request);
-    if (isCacheableResponse(networkResponse)) {
-      cacheWrite = cacheRuntimeResponse(
-        cache,
-        event.request,
-        networkResponse.clone(),
-      );
+async function fetchBackendAsset(request, cache) {
+  const networkResponse = await fetch(request);
+  if (isCacheableResponse(networkResponse)) {
+    try {
+      await cacheRuntimeResponse(cache, request, networkResponse.clone());
+    } catch (_error) {
+      // A cache failure must never hide a successful backend response.
     }
-    return networkResponse;
-  })();
-
-  event.respondWith(response);
-  event.waitUntil(response.then(() => cacheWrite).catch(() => undefined));
-});
+  }
+  return networkResponse;
+}
 
 function cacheName(version) {
   const safeVersion = String(version).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
@@ -81,19 +102,40 @@ async function preloadBundle(bundle, targetCacheName) {
   await cleanupCaches(targetCacheName);
   const cache = await caches.open(targetCacheName);
   const marker = cacheMarkerRequest(targetCacheName);
-  if (await cache.match(marker)) return;
+  const payloadRequest = cacheBundleRequest(targetCacheName);
+  if ((await cache.match(marker)) && (await cache.match(payloadRequest))) return;
 
-  await Promise.all(
-    Object.entries(bundle.files).map(async ([url, entry]) => {
-      const response = responseFromEntry(entry);
-      if (!response) return;
-      const request = new Request(new URL(url, self.location.origin), {
-        credentials: "same-origin",
-      });
-      await cache.put(request, response);
+  await cache.put(
+    payloadRequest,
+    new Response(JSON.stringify(bundle), {
+      headers: { "Content-Type": "application/json; charset=utf-8" },
     }),
   );
   await cache.put(marker, new Response(bundle.version));
+}
+
+async function restorePersistedBundle() {
+  if (activeBundleEntries.size > 0) return;
+  if (!persistedBundleRestore) {
+    const expectedVersion = activeAssetVersion;
+    const expectedCacheName = activeCacheName;
+    persistedBundleRestore = (async () => {
+      const cache = await caches.open(expectedCacheName);
+      const response = await cache.match(cacheBundleRequest(expectedCacheName));
+      if (!response) return;
+      const bundle = await response.json();
+      if (
+        bundle?.version !== expectedVersion ||
+        expectedVersion !== activeAssetVersion ||
+        !bundle.files ||
+        typeof bundle.files !== "object"
+      ) {
+        return;
+      }
+      activeBundleEntries = bundleEntries(bundle.files);
+    })().catch(() => undefined);
+  }
+  await persistedBundleRestore;
 }
 
 async function cleanupCaches(targetCacheName) {
@@ -146,6 +188,15 @@ function cacheMarkerRequest(targetCacheName) {
   );
 }
 
+function cacheBundleRequest(targetCacheName) {
+  return new Request(
+    new URL(
+      `/.agent-zero-cache/${encodeURIComponent(targetCacheName)}/bundle`,
+      self.location.origin,
+    ),
+  );
+}
+
 function isCacheableRequest(request) {
   if (request.method !== "GET" || request.headers.has("range")) return false;
   const url = new URL(request.url);
@@ -173,10 +224,10 @@ async function cacheRuntimeResponse(cache, request, response) {
   const contentLength = response.headers.get("content-length");
   if (contentLength !== null) {
     const size = Number(contentLength);
-    if (!Number.isFinite(size) || size > MAX_CACHEABLE_FILE_BYTES) return;
+    if (!Number.isFinite(size) || size > MAX_RUNTIME_CACHEABLE_TRANSFER_BYTES) return;
   } else {
     const body = await response.clone().arrayBuffer();
-    if (body.byteLength > MAX_CACHEABLE_FILE_BYTES) return;
+    if (body.byteLength > MAX_RUNTIME_CACHEABLE_TRANSFER_BYTES) return;
   }
   await cache.put(request, response);
 }

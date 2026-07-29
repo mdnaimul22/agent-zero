@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from agent import AgentContextType
+from plugins._chat_naming.commands import rename_command
 from plugins._chat_naming.extensions.python.monologue_start import _60_rename_chat as rename_chat
 from plugins._chat_naming.helpers import naming
 
@@ -241,6 +242,63 @@ async def test_manual_api_generates_and_saves_with_target_chat_agent(monkeypatch
     assert generated == {"ok": True, "name": "Generated Chat"}
     assert renamed == {"ok": True, "name": "Manual Chat"}
     assert saved == [(agent, "Manual Chat")]
+
+
+async def test_rename_command_saves_a_custom_name(monkeypatch):
+    agent = _Agent([_Message({"user_message": "Plan a launch"}, sequence=1)])
+    saved = []
+    monkeypatch.setattr(
+        rename_command.naming,
+        "save_context_name",
+        lambda target_agent, name: saved.append((target_agent, name)) or name,
+    )
+
+    result = await rename_command.run(
+        {
+            "invocation": {"raw_arguments": "New Chat Name"},
+            "context": {"agent": agent},
+        }
+    )
+
+    assert saved == [(agent, "New Chat Name")]
+    assert result == {
+        "text": "",
+        "effects": [
+            {
+                "type": "toast",
+                "message": 'Chat renamed to "New Chat Name".',
+                "level": "success",
+            }
+        ],
+    }
+
+
+async def test_rename_auto_generates_and_saves_a_name(monkeypatch):
+    agent = _Agent([_Message({"user_message": "Plan a launch"}, sequence=1)])
+    generated = []
+    saved = []
+
+    async def generate(target_agent):
+        generated.append(target_agent)
+        return "Launch Plan"
+
+    monkeypatch.setattr(rename_command.naming, "generate_name", generate)
+    monkeypatch.setattr(
+        rename_command.naming,
+        "save_context_name",
+        lambda target_agent, name: saved.append((target_agent, name)) or name,
+    )
+
+    result = await rename_command.run(
+        {
+            "invocation": {"raw_arguments": "auto"},
+            "context": {"agent": agent},
+        }
+    )
+
+    assert generated == [agent]
+    assert saved == [(agent, "Launch Plan")]
+    assert result["effects"][0]["message"] == 'Chat renamed to "Launch Plan".'
 
 
 async def test_manual_task_rename_updates_scheduler_and_context(monkeypatch):
