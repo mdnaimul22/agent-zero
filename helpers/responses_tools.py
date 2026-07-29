@@ -157,7 +157,7 @@ def _description_from_prompt(prompt: str, *, fallback: str) -> str:
     in_fence = False
     for raw_line in (prompt or "").splitlines():
         line = raw_line.strip()
-        if line.startswith("```"):
+        if line.startswith(("```", "~~~")):
             in_fence = not in_fence
             continue
         if in_fence or not line:

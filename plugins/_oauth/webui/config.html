@@ -124,6 +124,43 @@
                       </label>
                     </div>
 
+                    <div class="oauth-response-defaults" x-show="card.provider_id === 'codex_oauth'">
+                      <div class="oauth-response-defaults-head">
+                        <strong>Codex response defaults</strong>
+                        <span>Applied when an individual model request does not override them.</span>
+                      </div>
+                      <label class="oauth-provider-input">
+                        <span>Reasoning effort</span>
+                        <select x-model="$store.oauthConfig.codex().reasoning_effort" name="codex_reasoning_effort">
+                          <option value="default">Model default</option>
+                          <option value="minimal">Minimal</option>
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                          <option value="xhigh">Extra high</option>
+                        </select>
+                      </label>
+                      <label class="oauth-provider-input">
+                        <span>Reasoning summary</span>
+                        <select x-model="$store.oauthConfig.codex().reasoning_summary" name="codex_reasoning_summary">
+                          <option value="auto">Auto</option>
+                          <option value="concise">Concise</option>
+                          <option value="detailed">Detailed</option>
+                          <option value="off">Off</option>
+                        </select>
+                      </label>
+                      <label class="oauth-provider-input">
+                        <span>Answer verbosity</span>
+                        <select x-model="$store.oauthConfig.codex().text_verbosity" name="codex_text_verbosity">
+                          <option value="default">Model default</option>
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                        </select>
+                      </label>
+                      <p class="oauth-provider-note">Effort controls reasoning depth, summaries appear while the agent works, and verbosity shapes the final answer.</p>
+                    </div>
+
                     <div class="oauth-device" x-show="$store.oauthConfig.providerDevice(card.provider_id)?.user_code">
                       <span>Enter this code</span>
                       <strong x-text="$store.oauthConfig.providerDevice(card.provider_id)?.user_code"></strong>
@@ -588,6 +625,35 @@
       gap: 8px;
     }
 
+    .oauth-response-defaults {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid color-mix(in srgb, var(--color-border) 74%, transparent);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--color-panel) 82%, transparent);
+    }
+
+    .oauth-response-defaults-head,
+    .oauth-response-defaults .oauth-provider-note {
+      grid-column: 1 / -1;
+    }
+
+    .oauth-response-defaults-head {
+      display: grid;
+      gap: 2px;
+    }
+
+    .oauth-response-defaults-head strong {
+      font-size: 0.84rem;
+    }
+
+    .oauth-response-defaults-head span {
+      color: var(--color-text-secondary);
+      font-size: 0.76rem;
+    }
+
     .oauth-manual-callback {
       grid-template-columns: minmax(0, 1fr) auto auto;
       align-items: center;
@@ -611,6 +677,7 @@
     }
 
     .oauth-provider-input input,
+    .oauth-provider-input select,
     .oauth-manual-callback input {
       width: 100%;
       min-width: 0;
@@ -1162,6 +1229,7 @@
 
     @media (max-width: 720px) {
       .oauth-device,
+      .oauth-response-defaults,
       .oauth-provider-row-detail,
       .oauth-provider-usage,
       .oauth-status-row,
