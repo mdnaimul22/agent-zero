@@ -1054,6 +1054,28 @@ def test_responses_request_normalizes_function_tool_parameter_shapes():
         },
         {"type": "web_search"},
     ]
+    assert request["tool_choice"] == "required"
+    assert request["parallel_tool_calls"] is False
+
+
+def test_responses_request_preserves_explicit_a0_tool_controls():
+    request = litellm_transport.ResponsesTransport.from_chat(
+        [],
+        {
+            "a0_responses_function_tools": [
+                {
+                    "type": "function",
+                    "name": "native_noop",
+                    "parameters": {"type": "object"},
+                }
+            ],
+            "tool_choice": "auto",
+            "parallel_tool_calls": True,
+        },
+    )
+
+    assert request["tool_choice"] == "auto"
+    assert request["parallel_tool_calls"] is True
 
 
 def test_chat_completions_kwargs_omit_empty_tools():
