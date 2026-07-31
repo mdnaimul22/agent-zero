@@ -356,7 +356,7 @@ def test_direct_venice_chat_provider_defaults_to_chat_completions(monkeypatch):
     assert venice["kwargs"]["venice_parameters"] == {
         "include_venice_system_prompt": False
     }
-    assert "a0_api_mode" not in provider_config["chat"]["a0_venice"]["kwargs"]
+    assert provider_config["chat"]["a0_venice"]["kwargs"]["a0_api_mode"] == "chat"
     assert "a0_api_mode" not in provider_config["embedding"]["venice"]["kwargs"]
 
     model = models.get_chat_model("venice", "llama-3.3-70b")
@@ -483,6 +483,57 @@ def test_local_chat_providers_default_to_chat_completions():
 
     for provider in local_embedding_providers:
         assert "a0_api_mode" not in provider_config["embedding"][provider]["kwargs"]
+
+
+def test_provider_api_mode_defaults_use_intended_transport():
+    import yaml
+
+    provider_config = yaml.safe_load(
+        (PROJECT_ROOT / "conf" / "model_providers.yaml").read_text(encoding="utf-8")
+    )
+    oauth_provider_config = yaml.safe_load(
+        (
+            PROJECT_ROOT
+            / "plugins"
+            / "_oauth"
+            / "conf"
+            / "model_providers.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+    chat_providers = (
+        "anthropic",
+        "cometapi",
+        "deepseek",
+        "google",
+        "groq",
+        "huggingface",
+        "mistral",
+        "moonshot",
+        "nebius",
+        "nvidia_nim",
+        "bedrock",
+        "openrouter",
+        "sambanova",
+        "xai",
+        "zai",
+        "zai_coding",
+    )
+    responses_providers = ("azure", "github_copilot", "openai")
+
+    for provider in chat_providers:
+        assert provider_config["chat"][provider]["kwargs"]["a0_api_mode"] == "chat"
+
+    for provider in responses_providers:
+        assert "a0_api_mode" not in provider_config["chat"][provider].get("kwargs", {})
+
+    assert (
+        oauth_provider_config["chat"]["gemini_api_oauth"]["kwargs"]["a0_api_mode"]
+        == "chat"
+    )
+
+    for provider in ("codex_oauth", "github_copilot_oauth", "xai_grok_oauth"):
+        assert "a0_api_mode" not in oauth_provider_config["chat"][provider]["kwargs"]
 
 
 def test_missing_api_key_banner_does_not_include_auto_modal_metadata(monkeypatch):
