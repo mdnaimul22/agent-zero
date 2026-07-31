@@ -107,6 +107,7 @@ def test_only_the_icon_guard_stylesheet_blocks_application_paint() -> None:
 
     assert index_html.count('<link rel="stylesheet"') == 1
     assert '<link rel="stylesheet" href="vendor/google/google-icons.css">' in index_html
+    assert '<script type="module" src="/js/icons.js"></script>' in index_html
     assert index_html.count('rel="preload" as="style"') == 19
     assert index_html.count("onload=\"this.onload=null;this.rel='stylesheet'\"") == 19
     assert 'id="startup-splash"' not in index_html
@@ -129,6 +130,10 @@ def test_startup_splash_is_handed_to_the_index_and_fades_when_ready() -> None:
     assert 'document.addEventListener("webui-extensions-loaded"' in index_html
     assert 'overlay.classList.add("startup-transition-leaving")' in index_html
     assert 'document.fonts.load(\'24px "Material Symbols Outlined"\')' in index_html
+    assert (
+        'document.addEventListener("DOMContentLoaded", loadMaterialIcons, { once: true })'
+        in index_html
+    )
     assert 'localStorage.getItem("darkMode") === "false"' in index_html
     assert "webuiExtensions: {{webui_extension_manifest}}" in index_html
     assert 'manifestExtensionPaths("html", extensionPoint)' in extensions_js

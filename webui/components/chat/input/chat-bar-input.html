@@ -17,7 +17,7 @@
         @keydown.escape.window="$store.chatInput.closeChatMoreMenu()">
         <button type="button" class="chat-more-trigger" @click.stop="$store.chatInput.toggleChatMoreMenu()"
           :aria-expanded="$store.chatInput.chatMoreMenuOpen.toString()" aria-label="More actions">
-          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          <x-icon aria-hidden="true" name="add"></x-icon>
         </button>
         <div class="chat-more-panel" x-show="$store.chatInput.chatMoreMenuOpen" x-transition style="display: none;">
           <x-component path="chat/input/bottom-actions.html"></x-component>
@@ -39,7 +39,7 @@
           :class="{ 'progress-active': $store.chatInput.progressActive }" aria-hidden="true" style="display: none;">
         </div>
         <button id="expand-button" @click="$store.fullScreenInputModal.openModal()" aria-label="Expand input">
-          <span class="material-symbols-outlined" aria-hidden="true">fullscreen</span>
+          <x-icon aria-hidden="true" name="fullscreen"></x-icon>
         </button>
       </div>
 
@@ -48,7 +48,7 @@
         <button class="chat-button" id="send-button" @click="$store.chatInput.activateSendButton()"
           :class="$store.chatInput.sendButtonClass" :title="$store.chatInput.sendButtonTitle"
           :aria-label="$store.chatInput.sendButtonTitle">
-          <span class="material-symbols-outlined" x-text="$store.chatInput.sendButtonIcon"></span>
+          <x-icon :name="$store.chatInput.sendButtonIcon"></x-icon>
         </button>
       </div>
     </div>

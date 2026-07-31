@@ -142,6 +142,9 @@ def test_material_icon_font_is_preloaded_and_layout_stable() -> None:
     assert "height: 1em !important" in icon_css
     assert "overflow: hidden !important" in icon_css
     assert "html:not(.material-icons-ready)" in icon_css
+    assert "x-icon," in icon_css
+    assert ".material-symbols-outlined," in icon_css
+    assert ".material-icons-outlined" in icon_css
     preload = (
         '<link rel="preload" href="/vendor/google/google-icons.woff2" '
         'as="font" type="font/woff2" crossorigin>'

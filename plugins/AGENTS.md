@@ -35,6 +35,7 @@
 - Frontend plugin HTML extensions live under `extensions/webui/<point>/`, include a root Alpine scope, and use `x-move-*` directives when targeting static breakpoints.
 - Frontend plugin JS extensions live under `extensions/webui/<point>/` and export a default function.
 - Plugin UI must use the A0 notification system for errors, warnings, success, and info instead of inline success/error boxes.
+- Bundled plugin WebUI must author Material Symbols as empty `<x-icon name="lowercase_snake_case"></x-icon>` elements and use `:name` for Alpine-driven icon names. Legacy `.material-symbols-outlined` and `.material-icons-outlined` spans remain runtime-compatible for community plugins, but bundled plugins must not introduce new ligature-text spans.
 - Banners and discovery cards are provided through Python `banners` extensions by appending dictionaries with unique `id`, `type`, `priority`, and display fields to the `banners` list.
 - Alert banner types are `info`, `warning`, and `error`; discovery card types are `hero` and `feature`.
 - Banner/card fields may include `title`, `html`, `description`, `thumbnail`, `icon`, `cta_text`, `cta_action`, and `dismissible` depending on type.

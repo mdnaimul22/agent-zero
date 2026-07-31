@@ -45,7 +45,7 @@
             class="browser-config-note browser-config-success"
             x-show="$store.browserConfig.config.runtime_backend !== 'host_required'"
           >
-            <span class="material-symbols-outlined">deployed_code</span>
+            <x-icon name="deployed_code"></x-icon>
             <span>Internal Docker browser selected. Host-browser CLI settings are ignored for Browser tool runs.</span>
           </div>
 
@@ -153,7 +153,7 @@
             class="browser-config-note"
             x-show="$store.browserConfig.config.runtime_backend === 'host_required' && $store.browserConfig.config.host_browser_profile_mode !== 'agent'"
           >
-            <span class="material-symbols-outlined">info</span>
+            <x-icon name="info"></x-icon>
             <span>
               For an already-open browser, Chrome, Edge, Brave, Vivaldi, and Chromium use chrome://inspect/#remote-debugging; Opera uses opera://inspect/#remote-debugging. Enable "Allow remote debugging for this browser instance", then restart or reconnect A0 CLI if the browser does not appear. If needed, launch the browser with --remote-debugging-port=9222 and --user-data-dir=&lt;profile-dir&gt;, then use localhost:9222 or the full ws://.../devtools/browser/... endpoint here or in A0_HOST_BROWSER_REMOTE_DEBUGGING_ENDPOINTS.
             </span>
@@ -163,7 +163,7 @@
             class="browser-config-warning"
             x-show="$store.browserConfig.config.runtime_backend === 'host_required' && $store.browserConfig.config.host_browser_profile_mode !== 'agent'"
           >
-            <span class="material-symbols-outlined">warning</span>
+            <x-icon name="warning"></x-icon>
             <span>
               Existing profile lets the agent interact with the browser instance you authorize,
               including signed-in sites, cookies, tabs, downloads, and page content.
@@ -184,7 +184,7 @@
           </label>
 
           <div class="browser-config-note">
-            <span class="material-symbols-outlined" :class="{ spinning: $store.browserConfig.hostBrowserStatusLoading }" x-text="$store.browserConfig.hostBrowserStatusLoading ? 'progress_activity' : 'captive_portal'"></span>
+            <x-icon :class="{ spinning: $store.browserConfig.hostBrowserStatusLoading }" :name="$store.browserConfig.hostBrowserStatusLoading ? 'progress_activity' : 'captive_portal'"></x-icon>
             <span x-text="$store.browserConfig.browserRuntimeStatusLabel()"></span>
           </div>
         </div>
@@ -269,7 +269,7 @@
           </div>
 
           <div class="browser-config-warning">
-            <span class="material-symbols-outlined">warning</span>
+            <x-icon name="warning"></x-icon>
             <span>
               Extensions run inside the Docker browser sandbox, but malicious or buggy extensions can
               still damage that environment. Keep only the extensions you trust enabled.
@@ -279,7 +279,7 @@
           <div class="browser-config-extension-list">
             <div class="browser-config-subtitle">
               <span>Installed extensions</span>
-              <span class="material-symbols-outlined spinning" x-show="$store.browserConfig.extensionsLoading">progress_activity</span>
+              <x-icon class="spinning" x-show="$store.browserConfig.extensionsLoading" name="progress_activity"></x-icon>
             </div>
             <template x-if="!$store.browserConfig.extensionsLoading && !$store.browserConfig.extensionsList.length">
               <div class="browser-config-empty">No installed extensions found.</div>
@@ -308,21 +308,20 @@
                     :aria-label="'Delete ' + (extension.name || 'extension')"
                     @click.stop="$store.browserConfig.deleteExtension(extension)"
                   >
-                    <span
-                      class="material-symbols-outlined"
+                    <x-icon
                       :class="{ spinning: $store.browserConfig.extensionDeleteLoadingPath === extension.path }"
-                      x-text="$store.browserConfig.extensionDeleteLoadingPath === extension.path ? 'progress_activity' : 'delete'"
-                    ></span>
+                      :name="$store.browserConfig.extensionDeleteLoadingPath === extension.path ? 'progress_activity' : 'delete'"
+                    ></x-icon>
                   </button>
                 </span>
               </div>
             </template>
             <div class="browser-config-note browser-config-success" x-show="$store.browserConfig.extensionsMessage">
-              <span class="material-symbols-outlined">check_circle</span>
+              <x-icon name="check_circle"></x-icon>
               <span x-text="$store.browserConfig.extensionsMessage"></span>
             </div>
             <div class="browser-config-note" x-show="$store.browserConfig.extensionsError">
-              <span class="material-symbols-outlined">error</span>
+              <x-icon name="error"></x-icon>
               <span x-text="$store.browserConfig.extensionsError"></span>
             </div>
           </div>

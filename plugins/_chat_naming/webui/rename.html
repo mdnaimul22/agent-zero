@@ -27,14 +27,14 @@
           @click="$store.chatNaming.generate()"
           :disabled="$store.chatNaming.loading || $store.chatNaming.generating
             || $store.chatNaming.saving">
-          <span class="material-symbols-outlined"
-            x-text="$store.chatNaming.generating ? 'progress_activity' : 'auto_awesome'"></span>
+          <x-icon
+            :name="$store.chatNaming.generating ? 'progress_activity' : 'auto_awesome'"></x-icon>
           <span x-text="$store.chatNaming.generating ? 'Generating...' : 'Generate'"></span>
         </button>
         <button type="button" class="btn"
           @click="$store.chatNaming.openSettings()"
           :disabled="$store.chatNaming.loading || $store.chatNaming.saving">
-          <span class="material-symbols-outlined">settings</span>
+          <x-icon name="settings"></x-icon>
           <span>Settings</span>
         </button>
       </div>

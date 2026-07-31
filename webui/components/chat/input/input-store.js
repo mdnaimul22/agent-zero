@@ -37,8 +37,8 @@ function convertIconMarkersToHtml(value) {
     html += escapeHTML(text.slice(lastIndex, offset));
     const tooltip = unescapeIconTooltip(tooltipBlock) || iconName;
     html += (
-      `<span class="icon material-symbols-outlined chat-input-progress-icon" ` +
-      `title="${escapeHTML(tooltip)}">${escapeHTML(iconName)}</span>`
+      `<x-icon class="icon chat-input-progress-icon" ` +
+      `title="${escapeHTML(tooltip)}" name="${escapeHTML(iconName)}"></x-icon>`
     );
     lastIndex = offset + match.length;
     return match;

@@ -17,6 +17,7 @@ PROCESS_GROUP_DOM_JS = (
     / "process-group"
     / "process-group-dom.js"
 )
+MESSAGE_COLLAPSE_JS = PROJECT_ROOT / "webui" / "js" / "message-collapse.js"
 
 
 def test_message_window_keeps_tail_and_pages_bidirectionally():
@@ -223,6 +224,9 @@ def test_user_messages_share_collapse_behavior_without_clipping_attachments():
 
     assert 'contentSelector = ":scope > .message-body"' in messages
     assert 'collapseContent?.classList.add("message-collapse-content")' in messages
+    assert 'refreshCollapsibleMessageOverflow(history)' in messages
+    assert 'refreshCollapsibleMessageOverflow(entry.target)' in messages
+    assert 'measureMessageCollapseOverflow(collapseContent' in messages
     assert '":scope > .message-text",\n  );' in messages
     assert "attachmentsContainer.classList.add(\"attachments-container\")" in messages
     assert ".message.message-collapsible .message-collapse-content" in message_css
@@ -230,6 +234,69 @@ def test_user_messages_share_collapse_behavior_without_clipping_attachments():
     assert ".attachments-container.message-collapse-content" not in message_css
     assert ".message-user .step-action-buttons .expand-btn" in action_button_css
     assert "order: 1" in action_button_css
+
+
+def test_message_collapse_ignores_hidden_replay_geometry_and_real_short_text():
+    if not shutil.which("node"):
+        pytest.skip("Node.js is required to execute the collapse regression.")
+
+    source = MESSAGE_COLLAPSE_JS.read_bytes()
+    module_url = "data:text/javascript;base64," + base64.b64encode(source).decode(
+        "ascii"
+    )
+    script = f"""
+import {{ measureMessageCollapseOverflow }} from {module_url!r};
+
+function assert(condition, message) {{
+  if (!condition) throw new Error(message);
+}}
+
+let historyWidth = 0;
+const history = {{
+  get clientWidth() {{ return historyWidth || 24; }},
+}};
+const content = {{
+  isConnected: true,
+  clientWidth: 210,
+  clientHeight: 34,
+  scrollHeight: 280,
+  getBoundingClientRect: () => ({{ width: 210 }}),
+  closest: (selector) => selector === "#chat-history" ? history : null,
+}};
+globalThis.getComputedStyle = (element) => ({{
+  fontSize: "16px",
+  paddingLeft: element === history ? "12px" : "0px",
+  paddingRight: element === history ? "12px" : "0px",
+}});
+
+assert(
+  measureMessageCollapseOverflow(content) === null,
+  "zero-width replay staging must not mark short text as overflowing",
+);
+
+historyWidth = 800;
+content.scrollHeight = 34;
+assert(
+  measureMessageCollapseOverflow(content) === false,
+  "a laid-out one-line message must not expose Show More",
+);
+
+content.clientHeight = 240;
+content.scrollHeight = 420;
+assert(
+  measureMessageCollapseOverflow(content) === true,
+  "a body taller than the collapsed preview must expose Show More",
+);
+assert(
+  measureMessageCollapseOverflow(content, {{ expanded: true }}) === true,
+  "expanded long bodies must retain their Show Less control",
+);
+"""
+    subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        check=True,
+        text=True,
+    )
 
 
 def test_process_groups_are_atomic_and_page_steps_in_fifties():
@@ -260,6 +327,12 @@ def test_process_groups_are_atomic_and_page_steps_in_fifties():
     assert ".show-utility-messages .process-group.utility-only" in group_css
     assert ".process-group.utility-only[hidden]" not in group_css
     assert ".process-group-show-more" in group_css
+    show_more_css = group_css.split(".process-group-show-more {", 1)[1].split(
+        "}", 1
+    )[0]
+    assert "text-decoration: none" in show_more_css
+    assert "opacity: 0.7" in show_more_css
+    assert "text-decoration: underline" not in show_more_css
 
 
 def test_detail_preferences_await_materialization_and_select_current_step():

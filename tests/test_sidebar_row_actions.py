@@ -11,7 +11,7 @@ def test_chat_rows_have_hover_scoped_overflow_actions() -> None:
 
     assert html.count('aria-label="More chat actions"') == 2
     assert 'class="btn-icon-action chat-list-action-btn"' in html
-    assert "<span class=\"material-symbols-outlined\">more_vert</span>" in html
+    assert '<x-icon name="more_vert"></x-icon>' in html
     assert html.count("$store.sidebar.rowMenuToggle(") == 2
 
 

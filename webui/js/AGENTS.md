@@ -15,7 +15,9 @@
 - `modals.js` owns the stacked modal shell, `openModal`, `closeModal`, `scrollModal`, footer relocation, backdrop, and modal z-index behavior.
 - `surfaces.js` owns shared surface registration, right-canvas/modal mode routing, surface modal action rails, and reusable draggable/focus modal chrome.
 - `initFw.js` owns Alpine bootstrap and custom lifecycle directives such as `x-create`, `x-destroy`, and periodic `x-every-*` hooks.
+- `icons.js` owns `<x-icon>`, icon-name validation, the name property/attribute bridge, and helpers that read or update both the first-party custom element and legacy plugin ligature spans.
 - `messages.js` owns native message/process-step rendering, safe Markdown and HTML conversion, and KaTeX delimiter handling.
+- `message-collapse.js` owns the layout-safe overflow measurement shared by collapsible user messages and responses.
 - `message-window.js` owns the bounded, tail-first raw-log window used by message rendering.
 - `loading-indicators.js` owns reusable DOM factories for shared loading visuals.
 - `scroller.js` owns bottom-following snapshots and cancellation of pending scroll effects.
@@ -24,6 +26,7 @@
 ## Local Contracts
 
 - Use ES modules and browser-compatible JavaScript.
+- Create dynamic Material Symbols with `document.createElement("x-icon")` and assign `.name`; generated HTML uses an empty `<x-icon name="..."></x-icon>`. Shared helpers that can receive third-party plugin DOM must continue accepting legacy `.material-symbols-outlined` and `.material-icons-outlined` spans.
 - Route JSON and fetch calls through `api.js` unless a caller has a specific nonstandard transport contract.
 - `callJsonApi()` is for JSON request/response flows and must preserve CSRF/auth behavior.
 - `fetchApi()` must continue adding CSRF headers, retrying 403 CSRF refresh paths, and redirecting to `/login` when required.
@@ -57,6 +60,7 @@
 - Context switches, log GUID resets, and full log snapshots must reset both message DOM and message-window cache state.
 - Context switches clear stale history immediately but defer the chat loading splash for 300 ms so fast loads do not flash; slower loads fade it in and dismiss it only after the matching context snapshot finishes rendering. Stale snapshots and timers must not affect a newer switch's splash.
 - Long primary-agent responses start collapsed only during chat replay; long user-message text starts collapsed during both live sends and replay. Both use the shared collapsible-message behavior, but user attachments remain outside its clipped content target.
+- Collapse controls must appear only after a measurable message body exceeds the 15em preview. Treat hidden or zero-width chat geometry as indeterminate, remeasure replayed messages after their staging-to-live swap, and remeasure observed groups when their layout changes.
 - Info log entries with `kvps.finished` complete the active process group and clear its running treatment.
 
 ## Work Guidance

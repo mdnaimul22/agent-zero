@@ -45,7 +45,7 @@
                     aria-label="Navigate up"
                     title="Navigate up"
                   >
-                    <span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span>
+                    <x-icon aria-hidden="true" name="arrow_upward"></x-icon>
                     <span class="nav-button-label">Up</span>
                   </button>
                   <div class="path-input-shell" :class="{ 'has-error': $store.fileBrowser.pathError }">
@@ -67,7 +67,7 @@
                       :disabled="$store.fileBrowser.isPathSubmitting || $store.fileBrowser.isLoading"
                       aria-label="Go to directory"
                     >
-                      <span class="material-symbols-outlined">arrow_forward</span>
+                      <x-icon name="arrow_forward"></x-icon>
                     </button>
                   </div>
                 </form>
@@ -77,7 +77,7 @@
               </div>
               <div class="file-browser-toolbar">
                 <div class="file-search-shell">
-                  <span class="material-symbols-outlined file-search-icon" aria-hidden="true">search</span>
+                  <x-icon class="file-search-icon" aria-hidden="true" name="search"></x-icon>
                   <input
                     type="search"
                     class="file-search-input"
@@ -94,7 +94,7 @@
                     aria-label="Clear search"
                     title="Clear search"
                   >
-                    <span class="material-symbols-outlined">close</span>
+                    <x-icon name="close"></x-icon>
                   </button>
                 </div>
 
@@ -107,7 +107,7 @@
                     aria-label="New file"
                     title="New file"
                   >
-                    <span class="material-symbols-outlined" aria-hidden="true">note_add</span>
+                    <x-icon aria-hidden="true" name="note_add"></x-icon>
                   </button>
                   <button
                     type="button"
@@ -117,7 +117,7 @@
                     aria-label="New folder"
                     title="New folder"
                   >
-                    <span class="material-symbols-outlined" aria-hidden="true">create_new_folder</span>
+                    <x-icon aria-hidden="true" name="create_new_folder"></x-icon>
                   </button>
                 </div>
               </div>
@@ -125,7 +125,7 @@
               <div class="data-status-bar data-status-bar-standalone file-status-bar">
                 <div class="status-info">
                   <span class="status-item">
-                    <span class="material-symbols-outlined">folder</span>
+                    <x-icon name="folder"></x-icon>
                     Total: <strong x-text="$store.fileBrowser.browser.entries.length"></strong>
                   </span>
                   <span class="status-separator">•</span>
@@ -154,7 +154,7 @@
                     :disabled="$store.fileBrowser.isBulkBusy"
                     title="Copy Selected Paths"
                   >
-                    <span class="material-symbols-outlined">content_copy</span>
+                    <x-icon name="content_copy"></x-icon>
                     Copy Paths
                   </button>
 
@@ -165,7 +165,7 @@
                     :disabled="$store.fileBrowser.isBulkBusy"
                     title="Download Selected Items"
                   >
-                    <span class="material-symbols-outlined">folder_zip</span>
+                    <x-icon name="folder_zip"></x-icon>
                     Download ZIP
                   </button>
 
@@ -176,7 +176,7 @@
                     :disabled="$store.fileBrowser.isBulkBusy"
                     title="Delete Selected Items"
                   >
-                    <span class="material-symbols-outlined">delete</span>
+                    <x-icon name="delete"></x-icon>
                     Delete
                   </button>
 
@@ -187,7 +187,7 @@
                     :disabled="$store.fileBrowser.isBulkBusy"
                     title="Clear Selection"
                   >
-                    <span class="material-symbols-outlined">close</span>
+                    <x-icon name="close"></x-icon>
                     Clear
                   </button>
                 </div>
@@ -240,7 +240,7 @@
                           :title="$store.fileBrowser.surfaceActionTitle(file)"
                           aria-label="Open in Editor"
                         >
-                          <span class="material-symbols-outlined" aria-hidden="true" x-text="$store.fileBrowser.surfaceActionIcon(file)"></span>
+                          <x-icon aria-hidden="true" :name="$store.fileBrowser.surfaceActionIcon(file)"></x-icon>
                         </button>
 
                         <!-- Secondary single-item actions (Rename/...) are grouped under a dropdown -->
@@ -257,7 +257,7 @@
                             aria-label="More actions"
                             title="More actions"
                           >
-                            <span class="material-symbols-outlined">more_vert</span>
+                            <x-icon name="more_vert"></x-icon>
                           </button>
 
                           <template x-teleport="body">
@@ -276,7 +276,7 @@
                                 @click="$store.fileBrowser.openInSurface(file)"
                                 :title="$store.fileBrowser.surfaceActionTitle(file)"
                               >
-                                <span class="material-symbols-outlined" x-text="$store.fileBrowser.surfaceActionIcon(file)"></span>
+                                <x-icon :name="$store.fileBrowser.surfaceActionIcon(file)"></x-icon>
                                 <span x-text="$store.fileBrowser.surfaceActionLabel(file)"></span>
                               </button>
 
@@ -286,7 +286,7 @@
                                 x-show="!file.is_dir && file.size <= 1048576 && !$store.fileBrowser.canOpenInSurface(file)"
                                 @click="$store.fileBrowser.openFileEditor(file)"
                               >
-                                <span class="material-symbols-outlined">file_open</span>
+                                <x-icon name="file_open"></x-icon>
                                 <span>Edit</span>
                               </button>
 
@@ -296,7 +296,7 @@
                                 x-show="file.is_dir"
                                 @click="$store.fileBrowser.downloadFile(file)"
                               >
-                                <span class="material-symbols-outlined">folder_zip</span>
+                                <x-icon name="folder_zip"></x-icon>
                                 <span>Download ZIP</span>
                               </button>
 
@@ -306,7 +306,7 @@
                                 x-show="!file.is_dir && $store.fileBrowser.isArchive(file.name)"
                                 @click="$store.fileBrowser.extractArchive(file)"
                               >
-                                <span class="material-symbols-outlined">unarchive</span>
+                                <x-icon name="unarchive"></x-icon>
                                 <span>Extract</span>
                               </button>
 
@@ -315,17 +315,17 @@
                                 class="dropdown-item"
                                 @click="$store.fileBrowser.openRenameModal(file)"
                               >
-                                <span class="material-symbols-outlined">drive_file_rename_outline</span>
+                                <x-icon name="drive_file_rename_outline"></x-icon>
                                 <span>Rename</span>
                               </button>
                             </div>
                           </template>
                         </div>
                         <button class="btn-icon-action" x-show="!file.is_dir" @click.stop="$store.fileBrowser.downloadFile(file)" title="Download file">
-                          <span class="material-symbols-outlined">download</span>
+                          <x-icon name="download"></x-icon>
                         </button>
                         <button class="btn-icon-action danger" @click.stop="$confirmClick($event, () => $store.fileBrowser.deleteFile(file))" title="Delete item">
-                          <span class="material-symbols-outlined">delete</span>
+                          <x-icon name="delete"></x-icon>
                         </button>
                       </div>
                     </div>
@@ -340,7 +340,7 @@
                   <div class="no-files">
                     <div>No matching files found</div>
                     <button class="btn btn-cancel btn-clear-search" @click="$store.fileBrowser.clearSearch()">
-                      <span class="material-symbols-outlined">close</span>
+                      <x-icon name="close"></x-icon>
                       Clear
                     </button>
                   </div>
@@ -358,7 +358,7 @@
         <div class="file-browser-picker-actions" x-show="$store.fileBrowser.isPickerMode()" style="display: none;">
           <template x-if="$store.fileBrowser.isSaveAsPicker()">
             <div class="picker-filename-field">
-              <span class="material-symbols-outlined" aria-hidden="true">article</span>
+              <x-icon aria-hidden="true" name="article"></x-icon>
               <input
                 type="text"
                 class="picker-filename-input"

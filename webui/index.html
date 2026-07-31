@@ -62,6 +62,7 @@
     <link rel="icon" type="image/svg+xml" href="public/favicon.svg">
     <link rel="preload" href="/vendor/google/google-icons.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="vendor/google/google-icons.css">
+    <script type="module" src="/js/icons.js"></script>
     <script>
         (() => {
             const root = document.documentElement
@@ -86,14 +87,25 @@
                 revealApplication()
             }, { once: true })
 
-            const fontLoad = document.fonts?.load
-                ? document.fonts.load('24px "Material Symbols Outlined"')
-                : Promise.resolve([])
-            fontLoad.then((faces) => {
-                if (faces.length > 0) root.classList.add("material-icons-ready")
-            }).catch((error) => {
-                console.warn("Material Symbols font unavailable.", error)
-            })
+            const loadMaterialIcons = () => {
+                const fontLoad = document.fonts?.load
+                    ? document.fonts.load('24px "Material Symbols Outlined"')
+                    : Promise.resolve([])
+                fontLoad.then((faces) => {
+                    if (faces.length > 0) root.classList.add("material-icons-ready")
+                }).catch((error) => {
+                    console.warn("Material Symbols font unavailable.", error)
+                })
+            }
+
+            // Firefox can resolve FontFaceSet.load() with no matching faces when
+            // it runs while the splash is replacing the document. Wait until
+            // the replacement document is parsed and its font set is stable.
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", loadMaterialIcons, { once: true })
+            } else {
+                loadMaterialIcons()
+            }
 
             setTimeout(() => revealApplication(true), 8000)
         })()
@@ -212,16 +224,16 @@
               <!-- Chat Navigation Buttons (floating over chat area) -->
               <div id="chat-nav-buttons" aria-label="Chat navigation" x-cloak>
                 <button class="btn-icon-action" title="Scroll to top" @click="$store.chatNavigation.scrollToTop()">
-                  <span class="material-symbols-outlined">vertical_align_top</span>
+                  <x-icon name="vertical_align_top"></x-icon>
                 </button>
                 <button class="btn-icon-action" title="Previous user message" @click="$store.chatNavigation.scrollToPrevUserMessage()">
-                  <span class="material-symbols-outlined">keyboard_arrow_up</span>
+                  <x-icon name="keyboard_arrow_up"></x-icon>
                 </button>
                 <button class="btn-icon-action" title="Next user message" @click="$store.chatNavigation.scrollToNextUserMessage()">
-                  <span class="material-symbols-outlined">keyboard_arrow_down</span>
+                  <x-icon name="keyboard_arrow_down"></x-icon>
                 </button>
                 <button class="btn-icon-action" title="Scroll to bottom" @click="$store.chatNavigation.scrollToBottom()">
-                  <span class="material-symbols-outlined">vertical_align_bottom</span>
+                  <x-icon name="vertical_align_bottom"></x-icon>
                 </button>
               </div>
             </div>

@@ -15,7 +15,7 @@
           <h3 class="section-header">Chats</h3>
           <!-- New Chat Button -->
           <button id="newChat" class="btn-icon-action chat-list-action-btn" @click="$store.chats.newChat()" aria-label="New Chat" title="New Chat" data-bs-placement="top" data-bs-trigger="hover">
-            <span class="material-symbols-outlined">chat_add_on</span>
+            <x-icon name="chat_add_on"></x-icon>
           </button>
           <x-extension id="chats-header-controls"></x-extension>
         </div>
@@ -34,8 +34,8 @@
                         :aria-expanded="$store.chats.isExpanded(context.id)"
                         :aria-label="$store.chats.isExpanded(context.id) ? 'Collapse chat children' : 'Expand chat children'"
                         @click.stop="$store.chats.toggleChildren(context.id)">
-                  <span class="material-symbols-outlined"
-                    x-text="$store.chats.isExpanded(context.id) ? 'keyboard_arrow_up' : 'keyboard_arrow_down'"></span>
+                  <x-icon
+                    :name="$store.chats.isExpanded(context.id) ? 'keyboard_arrow_up' : 'keyboard_arrow_down'"></x-icon>
                 </button>
                 <div class="chat-list-button">
                   <span :class="{'project-color-ball': true, 'heartbeat': context.running}"
@@ -44,13 +44,13 @@
                     x-text="$store.chats.displayName(context)"></span>
                 </div>
                 <button class="btn-icon-action chat-list-action-btn" title="Close chat" @click.stop="$confirmClick($event, () => $store.chats.killChat(context.id))">
-                  <span class="material-symbols-outlined">close</span>
+                  <x-icon name="close"></x-icon>
                 </button>
                 <button type="button" class="btn-icon-action chat-list-action-btn" title="More chat actions"
                   aria-label="More chat actions" aria-haspopup="menu"
                   :aria-expanded="($store.sidebar.rowMenuOpenId === `chat:${context.id}`).toString()"
                   @click.stop="$store.sidebar.rowMenuToggle(`chat:${context.id}`, 'chat', $event.currentTarget)">
-                  <span class="material-symbols-outlined">more_vert</span>
+                  <x-icon name="more_vert"></x-icon>
                 </button>
               </div>
               <ul class="chat-child-list" x-show="$store.chats.isExpanded(context.id) && $store.chats.hasChildren(context.id)">
@@ -66,13 +66,13 @@
                           x-text="$store.chats.displayName(child)"></span>
                       </div>
                       <button class="btn-icon-action chat-list-action-btn" title="Close chat" @click.stop="$confirmClick($event, () => $store.chats.killChat(child.id))">
-                        <span class="material-symbols-outlined">close</span>
+                        <x-icon name="close"></x-icon>
                       </button>
                       <button type="button" class="btn-icon-action chat-list-action-btn" title="More chat actions"
                         aria-label="More chat actions" aria-haspopup="menu"
                         :aria-expanded="($store.sidebar.rowMenuOpenId === `chat:${child.id}`).toString()"
                         @click.stop="$store.sidebar.rowMenuToggle(`chat:${child.id}`, 'chat', $event.currentTarget)">
-                        <span class="material-symbols-outlined">more_vert</span>
+                        <x-icon name="more_vert"></x-icon>
                       </button>
                     </div>
                   </li>

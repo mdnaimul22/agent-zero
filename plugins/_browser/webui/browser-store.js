@@ -2866,7 +2866,7 @@ const model = {
     newAction.className = "browser-header-actions surface-modal-new-action";
     newAction.innerHTML = `
       <button type="button" class="browser-header-new-button surface-modal-new-button" title="New Browser" aria-label="New Browser">
-        <span class="material-symbols-outlined" aria-hidden="true">add</span>
+        <x-icon aria-hidden="true" name="add"></x-icon>
         <span>New</span>
       </button>
     `;
@@ -2886,12 +2886,12 @@ const model = {
     const focusButton = globalThis.document.createElement("button");
     focusButton.type = "button";
     focusButton.className = "surface-button browser-modal-focus-button";
-    focusButton.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">fullscreen</span>';
+    focusButton.innerHTML = '<x-icon aria-hidden="true" name="fullscreen"></x-icon>';
     const updateFocusButton = (active) => {
       const label = active ? "Restore size" : "Focus mode";
       focusButton.setAttribute("aria-label", label);
       focusButton.setAttribute("title", label);
-      focusButton.querySelector(".material-symbols-outlined").textContent = active ? "fullscreen_exit" : "fullscreen";
+      focusButton.querySelector("x-icon").name = active ? "fullscreen_exit" : "fullscreen";
     };
     const setFocusMode = (enabled) => {
       if (enabled) {

@@ -26,6 +26,7 @@ import { callJsExtensions } from "/js/extensions.js";
 import { addBlankTargetsToLinks } from "/js/html-links.js";
 import { sanitizeHtml } from "/js/safe-markdown.js";
 import { createThreeBubbleLoader } from "/js/loading-indicators.js";
+import { measureMessageCollapseOverflow } from "./message-collapse.js";
 
 // Delay before collapsing previous steps when a new step is added
 const STEP_COLLAPSE_DELAY = {
@@ -333,6 +334,7 @@ async function renderMessageWindow({
       }
 
       await nextAnimationFrame();
+      refreshCollapsibleMessageOverflow(history);
       if (anchor) {
         anchorRestored = restoreMessageWindowAnchor(history, anchor) ||
           anchorRestored;
@@ -888,7 +890,12 @@ function messageWindowNow() {
 function refreshMessageWindowResizeObserver(history) {
   if (!history || typeof ResizeObserver === "undefined") return;
   if (!_messageWindowResizeObserver) {
-    _messageWindowResizeObserver = new ResizeObserver(() => {
+    _messageWindowResizeObserver = new ResizeObserver((entries) => {
+      entries.forEach((entry) =>
+        refreshCollapsibleMessageOverflow(entry.target),
+      );
+
+      const liveHistory = getChatHistoryEl();
       if (
         _messageWindowSuppressScrollEvents ||
         _messageWindowRenderPromise ||
@@ -898,9 +905,9 @@ function refreshMessageWindowResizeObserver(history) {
         return;
       }
 
-      cancelPendingScroll(history);
-      history.scrollTop = history.scrollHeight;
-      _lastMessageWindowScrollTop = history.scrollTop;
+      cancelPendingScroll(liveHistory);
+      liveHistory.scrollTop = liveHistory.scrollHeight;
+      _lastMessageWindowScrollTop = liveHistory.scrollTop;
     });
   }
 
@@ -2929,10 +2936,10 @@ function createProcessGroup(id) {
     <span class="group-title">Processing...</span>
     <span class="step-badge GEN">GEN</span>
     <span class="group-metrics">
-      <span class="metric-time" title="Start time"><span class="material-symbols-outlined">schedule</span><span class="metric-value">--:--</span></span>
-      <span class="metric-steps display-none" title="Steps"><span class="material-symbols-outlined">footprint</span><span class="metric-value">0</span></span>
-      <span class="metric-notifications" title="Warnings/Info/Hint" hidden><span class="material-symbols-outlined">priority_high</span><span class="metric-value">0</span></span>
-      <span class="metric-duration display-none" title="Duration"><span class="material-symbols-outlined">timer</span><span class="metric-value">--</span></span>
+      <span class="metric-time" title="Start time"><x-icon name="schedule"></x-icon><span class="metric-value">--:--</span></span>
+      <span class="metric-steps display-none" title="Steps"><x-icon name="footprint"></x-icon><span class="metric-value">0</span></span>
+      <span class="metric-notifications" title="Warnings/Info/Hint" hidden><x-icon name="priority_high"></x-icon><span class="metric-value">0</span></span>
+      <span class="metric-duration display-none" title="Duration"><x-icon name="timer"></x-icon><span class="metric-value">--</span></span>
 
     </span>
   `;
@@ -3124,7 +3131,7 @@ export function convertIcons(html, classes = "") {
     /icon:\/\/([a-zA-Z0-9_]+)(\[(?:\\.|[^\]])*\])?/g,
     (match, iconName, tooltipBlock) => {
       if (!tooltipBlock) {
-        return `<span class="icon material-symbols-outlined ${classes}">${iconName}</span>`;
+        return `<x-icon class="icon ${classes}" name="${iconName}"></x-icon>`;
       }
 
       const tooltipRaw = tooltipBlock
@@ -3135,7 +3142,7 @@ export function convertIcons(html, classes = "") {
 
       const tooltip = escapeHTML(tooltipRaw);
 
-      return `<span class="icon material-symbols-outlined ${classes}" title="${tooltip}" data-bs-placement="top" data-bs-trigger="hover">${iconName}</span>`;
+      return `<x-icon class="icon ${classes}" title="${tooltip}" data-bs-placement="top" data-bs-trigger="hover" name="${iconName}"></x-icon>`;
     },
   );
 }
@@ -3402,20 +3409,35 @@ function setupCollapsible(
 
   actionButtons.filter(Boolean).forEach((b) => container.appendChild(b));
 
-  // Detect overflow after render
+  const refreshOverflow = () => {
+    const hasOverflow = measureMessageCollapseOverflow(collapseContent, {
+      expanded: messageDiv.classList.contains("expanded"),
+      lazy: messageDiv.classList.contains("lazy-content"),
+    });
+    if (hasOverflow === null) return false;
+    messageDiv.classList.toggle("has-overflow", hasOverflow);
+    return true;
+  };
+  messageDiv.__refreshCollapseOverflow = refreshOverflow;
+
+  // Detect overflow after render. Window replays are measured again after the
+  // staged DOM has moved into the live, correctly sized chat history.
   requestAnimationFrame(() => {
-    const fontSize = parseFloat(
-      getComputedStyle(collapseContent || document.documentElement).fontSize ||
-        "16",
-    );
-    const maxHeight = messageDiv.classList.contains("expanded")
-      ? fontSize * 15
-      : collapseContent?.clientHeight || 0;
-    messageDiv.classList.toggle(
-      "has-overflow",
-      messageDiv.classList.contains("lazy-content") ||
-        (collapseContent?.scrollHeight || 0) > maxHeight,
-    );
+    if (messageDiv.__refreshCollapseOverflow === refreshOverflow) {
+      refreshOverflow();
+    }
+  });
+}
+
+function refreshCollapsibleMessageOverflow(root) {
+  if (!root) return;
+  const messages = root.matches?.(".message-collapsible")
+    ? [root]
+    : root.querySelectorAll?.(".message-collapsible") || [];
+  messages.forEach((message) => {
+    if (typeof message.__refreshCollapseOverflow === "function") {
+      message.__refreshCollapseOverflow();
+    }
   });
 }
 

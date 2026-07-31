@@ -8,6 +8,7 @@
     url(./google-icons.ttf) format('truetype');
 }
 
+x-icon,
 .material-symbols-outlined,
 .material-icons-outlined {
   font-family: 'Material Symbols Outlined';
@@ -33,6 +34,7 @@
   direction: ltr;
 }
 
+html:not(.material-icons-ready) x-icon,
 html:not(.material-icons-ready) .material-symbols-outlined,
 html:not(.material-icons-ready) .material-icons-outlined {
   color: transparent !important;
