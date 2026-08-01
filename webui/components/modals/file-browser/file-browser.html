@@ -41,6 +41,10 @@
                     type="button"
                     class="nav-button back-button"
                     @click="$store.fileBrowser.navigateUp()"
+                    @dragover="$store.fileBrowser.setDropTarget($store.fileBrowser.browser.parentPath, $event)"
+                    @dragleave="$store.fileBrowser.clearDropTarget($store.fileBrowser.browser.parentPath, $event)"
+                    @drop="$store.fileBrowser.dropItems($store.fileBrowser.browser.parentPath, 'parent folder', $event)"
+                    :class="{ 'is-drop-target': $store.fileBrowser.dragOverPath === $store.fileBrowser.browser.parentPath }"
                     :disabled="!$store.fileBrowser.browser.parentPath || $store.fileBrowser.isLoading"
                     aria-label="Navigate up"
                     title="Navigate up"
@@ -216,7 +220,21 @@
                 <!-- File list entries -->
                 <template x-if="$store.fileBrowser.visibleEntries.length">
                   <template x-for="file in $store.fileBrowser.visibleEntries" :key="file.path">
-                    <div class="file-item" :data-is-dir="file.is_dir" :class="{ 'selected': file.selected }">
+                    <div
+                      class="file-item"
+                      :data-is-dir="file.is_dir"
+                      :draggable="!$store.fileBrowser.isPickerMode() && !$store.fileBrowser.isBulkBusy"
+                      :class="{
+                        'selected': file.selected,
+                        'is-dragging': $store.fileBrowser.isDraggingPath(file.path),
+                        'is-drop-target': file.is_dir && $store.fileBrowser.dragOverPath === file.path
+                      }"
+                      @dragstart="$store.fileBrowser.startDrag(file, $event)"
+                      @dragend="$store.fileBrowser.clearDragState()"
+                      @dragover="file.is_dir && $store.fileBrowser.setDropTarget(file.path, $event)"
+                      @dragleave="file.is_dir && $store.fileBrowser.clearDropTarget(file.path, $event)"
+                      @drop="file.is_dir && $store.fileBrowser.dropItems(file.path, file.name, $event)"
+                    >
                       <label class="file-select-cell" @click.stop>
                         <input
                           type="checkbox"
@@ -226,7 +244,7 @@
                         />
                       </label>
                       <div class="file-name" @click="$store.fileBrowser.handleFileNameClick(file)">
-                        <img :src="'/public/' + (file.type === 'unknown' ? 'file' : ($store.fileBrowser.isArchive(file.name) ? 'archive' : file.type)) + '.svg'" class="file-icon" :alt="file.type" />
+                        <img :src="'/public/' + (file.type === 'unknown' ? 'file' : ($store.fileBrowser.isArchive(file.name) ? 'archive' : file.type)) + '.svg'" class="file-icon" :alt="file.type" draggable="false" />
                         <span x-text="file.name"></span>
                       </div>
                       <div class="file-size" x-text="$store.fileBrowser.formatFileSize(file.size)"></div>
@@ -597,7 +615,7 @@
     padding: 8px 0;
     font-size: 0.875rem;
     border-top: 1px solid var(--color-border);
-    transition: background-color 0.2s;
+    transition: background-color 120ms cubic-bezier(0.2, 0, 0, 1), box-shadow 120ms cubic-bezier(0.2, 0, 0, 1), opacity 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1);
     white-space: nowrap;
     border-radius: 4px;
     overflow: visible; /* allow action dropdown menus to overflow the row */
@@ -608,6 +626,19 @@
     }
     .file-item.selected {
     background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    }
+    .file-item.is-dragging {
+    opacity: 0.45;
+    transform: scale(0.995);
+    }
+    .file-item.is-drop-target,
+    .nav-button.is-drop-target {
+    background: color-mix(in srgb, var(--color-primary) 18%, var(--color-input) 82%);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 72%, transparent);
+    }
+    .file-item.is-drop-target .file-icon,
+    .nav-button.is-drop-target .material-symbols-outlined {
+    transform: scale(1.12);
     }
 
     .file-select-cell {
@@ -633,6 +664,7 @@
     margin: 0 1rem 0 0.7rem;
     vertical-align: middle;
     font-size: var(--font-size-sm);
+    transition: transform 120ms cubic-bezier(0.2, 0, 0, 1);
     }
     .file-name {
     display: flex;
@@ -848,6 +880,7 @@
     .nav-button .material-symbols-outlined {
     font-size: 1.05rem;
     line-height: 1;
+    transition: transform 120ms cubic-bezier(0.2, 0, 0, 1);
     }
     .nav-button-label {
     font-size: 0.66rem;
@@ -873,8 +906,17 @@
     .file-item[data-is-dir="true"] {
     cursor: pointer;
     }
+    .file-item[draggable="true"] {
+    cursor: grab;
+    }
+    .file-item[draggable="true"]:active {
+    cursor: grabbing;
+    }
     .file-item[data-is-dir="true"]:hover {
     background-color: var(--color-secondary);
+    }
+    .file-item[data-is-dir="true"].is-drop-target:hover {
+    background: color-mix(in srgb, var(--color-primary) 18%, var(--color-input) 82%);
     }
 
     /* Upload Button Styles */
@@ -1098,6 +1140,13 @@
     }
     .picker-confirm-button {
         flex: 1 1 auto;
+    }
+    }
+    @media (prefers-reduced-motion: reduce) {
+    .file-item,
+    .file-icon,
+    .nav-button .material-symbols-outlined {
+        transition: none;
     }
     }
   </style>
