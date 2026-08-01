@@ -7,7 +7,7 @@ This plugin lets you define reusable `/commands` as `.command.yaml` files with e
 - a `.txt` template body
 - a `.py` script hook
 
-Commands are managed from the plugin modal and can be inserted directly from the chat composer with prefix syntax (`/goal objective`) or an exact trailing command (`objective /goal`).
+Commands are managed from the plugin modal and can be inserted directly from the chat composer with prefix syntax (`/goal objective`) or an exact trailing command (`objective /goal`). The picker opens only for prefix syntax; trailing commands resolve when sent.
 
 ## Features
 

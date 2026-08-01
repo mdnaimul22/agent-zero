@@ -30,7 +30,7 @@
 - On startup, `_commands` copies legacy `usr/plugins/commands` command and skill files into `usr/plugins/_commands` without overwriting existing files, copies scoped legacy command folders to `_commands`, and disables the legacy `commands` plugin roots to prevent duplicate WebUI popovers.
 - Script commands must expose `run(payload)` and return a string or a dict with `text` and optional `effects`; `show_markdown` effects render as auto-dismissing toast notifications.
 - Script commands may emit `send_message` with `text` to submit the rendered composer text immediately after command resolution.
-- Commands accept prefix syntax (`/goal objective`) and exact postfix syntax (`objective /goal`); ordinary mid-sentence mentions are not invocations.
+- Commands accept prefix syntax (`/goal objective`) and exact postfix syntax (`objective /goal`); ordinary mid-sentence mentions are not invocations. The composer picker opens only for prefix syntax, while postfix commands resolve when sent.
 - WebUI sends resolve through the picker effect path, while backend-originated messages resolve before reaching the agent.
 - `/stop` uses the same shared cancellation operation as the composer Stop button, including progress cleanup and terminal logging.
 - Built-in `/computer-use on|off` emits a bounded `computer_use` effect. WebUI

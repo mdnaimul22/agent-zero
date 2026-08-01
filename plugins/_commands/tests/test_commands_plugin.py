@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -63,6 +65,33 @@ def _save_command(
         extra_frontmatter=extra_frontmatter or {},
     )
     return _track_paths(scope, command)
+
+
+def test_composer_picker_ignores_postfix_slashes() -> None:
+    if not shutil.which("node"):
+        pytest.skip("Node.js is required to execute the slash-picker regression.")
+
+    source = (Path(__file__).resolve().parents[1] / "webui" / "commands-slash-store.js").read_text(
+        encoding="utf-8"
+    )
+    start = source.index("function parseSlashInput(")
+    function_source = source[start : source.index("\n\nfunction notifyError", start)]
+    script = f"""
+{function_source}
+
+const leading = parseSlashInput("/goal objective", false);
+if (!leading.active || leading.query !== "goal") throw new Error("leading command hidden");
+
+const trailing = parseSlashInput("objective /goal", false);
+if (trailing.active) throw new Error("postfix command opened the picker");
+
+const path = parseSlashInput("Review /a0/usr/projects/example", false);
+if (path.active) throw new Error("path opened the picker");
+
+const resolvable = parseSlashInput("objective /goal");
+if (!resolvable.active || resolvable.query !== "goal") throw new Error("postfix resolution broke");
+"""
+    subprocess.run(["node", "-e", script], check=True, text=True)
 
 
 @pytest.fixture
