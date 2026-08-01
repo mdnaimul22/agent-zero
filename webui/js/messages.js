@@ -2534,9 +2534,11 @@ export function drawMessageWarning({
       ].filter(Boolean)
     : [];
 
-  //if process group is running, append there
-  const group = getLastProcessGroup(false);
-  if (group) {
+  // Keep replayed warnings in their classified process group.
+  if (
+    arguments[0][PROCESS_GROUP_RENDER_INFO] ||
+    getLastProcessGroup(false)
+  ) {
     return drawProcessStep({
       id,
       title,

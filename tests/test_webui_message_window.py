@@ -184,6 +184,18 @@ assert(windowed.newerCount === 1, "an unfollowed live append must remain availab
     )
 
 
+def test_warning_replay_prefers_classified_process_group():
+    messages = (PROJECT_ROOT / "webui" / "js" / "messages.js").read_text(
+        encoding="utf-8"
+    )
+    warning_handler = messages.split(
+        "export function drawMessageWarning", maxsplit=1
+    )[1].split("export function drawMessageError", maxsplit=1)[0]
+
+    assert "arguments[0][PROCESS_GROUP_RENDER_INFO]" in warning_handler
+    assert "getLastProcessGroup(false)" in warning_handler
+
+
 def test_collapsed_process_details_are_deferred_and_discarded():
     messages = (PROJECT_ROOT / "webui" / "js" / "messages.js").read_text(
         encoding="utf-8"
