@@ -27,7 +27,9 @@ from plugins._browser.helpers.config import (
     build_browser_launch_config,
     get_browser_config,
 )
-from plugins._browser.helpers.playwright import configure_playwright_env, ensure_playwright_binary
+from plugins._browser.helpers.playwright import (
+    ensure_browser_display,
+)
 from plugins._browser.helpers.url import normalize_url
 
 
@@ -591,6 +593,7 @@ class _BrowserRuntimeCore:
         self._closing = False
         self._pending_popups: list[asyncio.Future[int]] = []
         self._background_popup_pages: set[int] = set()
+        self._bootstrap_page: Any | None = None
 
     def _ensure_registry_lock(self) -> asyncio.Lock:
         if self._registry_lock is None:
@@ -773,6 +776,7 @@ class _BrowserRuntimeCore:
                 waiter.set_exception(RuntimeError("Browser context closed."))
         self._pending_popups.clear()
         self._background_popup_pages.clear()
+        self._bootstrap_page = None
         self.pages.clear()
         self.last_interacted_browser_id = None
         for screencast in self.screencasts.values():
@@ -797,20 +801,26 @@ class _BrowserRuntimeCore:
             self.playwright = None
 
     async def _start(self) -> None:
-        from playwright.async_api import async_playwright
+        from plugins._browser import hooks
+
+        preparation = hooks.prepare_playwright_cache()
+        if preparation.get("errors") or not preparation.get("binary"):
+            problem = preparation.get("errors") or "missing binary"
+            raise RuntimeError(f"Browser setup failed: {problem}")
+        from patchright.async_api import async_playwright
 
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         self.downloads_dir.mkdir(parents=True, exist_ok=True)
         self._release_orphaned_profile_singleton()
         browser_config = get_browser_config()
         launch_config = build_browser_launch_config(browser_config)
-        configure_playwright_env()
-        browser_binary = ensure_playwright_binary()
+        browser_binary = Path(preparation["binary"])
+        browser_display = ensure_browser_display()
 
         self.playwright = await async_playwright().start()
         launch_kwargs: dict[str, Any] = {
             "user_data_dir": str(self.profile_dir),
-            "headless": True,
+            "headless": not bool(browser_display),
             "accept_downloads": True,
             "downloads_path": str(self.downloads_dir),
             "viewport": DEFAULT_VIEWPORT,
@@ -818,6 +828,8 @@ class _BrowserRuntimeCore:
             "no_viewport": False,
             "args": launch_config["args"],
         }
+        if browser_display:
+            launch_kwargs["env"] = {**os.environ, "DISPLAY": browser_display}
         if launch_config["channel"]:
             launch_kwargs["channel"] = launch_config["channel"]
         else:
@@ -840,11 +852,12 @@ class _BrowserRuntimeCore:
         self.context.set_default_navigation_timeout(30000)
         self.context.on("close", self._on_context_closed)
         self.context.on("page", self._on_new_page_sync)
-        await self.context.add_init_script(path=str(DOM_HELPER_PATH))
-        await self.context.add_init_script(path=str(CONTENT_HELPER_PATH))
 
         for page in list(self.context.pages):
             if page.url == "about:blank":
+                if browser_display and self._bootstrap_page is None:
+                    self._bootstrap_page = page
+                    continue
                 try:
                     await page.close()
                 except Exception:
@@ -915,7 +928,10 @@ class _BrowserRuntimeCore:
     async def open(self, url: str = "") -> dict[str, Any]:
         await self.ensure_started()
         self._ensure_can_open_page()
-        page = await self.context.new_page()
+        page = self._bootstrap_page
+        self._bootstrap_page = None
+        if not page or page.is_closed():
+            page = await self.context.new_page()
         browser_page = await self._register_page(page)
         self.last_interacted_browser_id = browser_page.id
         target_url = self._initial_url(url)
@@ -1296,6 +1312,7 @@ class _BrowserRuntimeCore:
         result = await page.evaluate(
             "(payload) => globalThis.__spaceBrowserPageContent__.capture(payload || null)",
             payload or None,
+            isolated_context=True,
         )
         self._maybe_promote(resolved_id)
         return result or {}
@@ -1308,6 +1325,7 @@ class _BrowserRuntimeCore:
         result = await page.evaluate(
             "(ref) => globalThis.__spaceBrowserPageContent__.detail(ref)",
             reference_id,
+            isolated_context=True,
         )
         self._maybe_promote(resolved_id)
         return result or {}
@@ -1324,6 +1342,7 @@ class _BrowserRuntimeCore:
         result = await page.evaluate(
             "(payload) => globalThis.__spaceBrowserPageContent__.annotate(payload || null)",
             payload or None,
+            isolated_context=True,
         )
         self._maybe_promote(resolved_id)
         return result or {}
@@ -1332,7 +1351,7 @@ class _BrowserRuntimeCore:
         await self.ensure_started()
         resolved_id = self._resolve_browser_id(browser_id)
         page = self._page(resolved_id)
-        result = await page.evaluate(str(script or "undefined"))
+        result = await page.evaluate(str(script or "undefined"), isolated_context=False)
         self._maybe_promote(resolved_id)
         return {"result": result, "state": await self._state(resolved_id)}
 
@@ -1364,6 +1383,7 @@ class _BrowserRuntimeCore:
         box = await page.evaluate(
             "(ref) => globalThis.__spaceBrowserPageContent__.boundingBoxFor(ref)",
             reference_id,
+            isolated_context=True,
         )
 
         background = focus_popup is False or (
@@ -1515,6 +1535,7 @@ class _BrowserRuntimeCore:
                     "action": normalized_action,
                     "text": str(text or ""),
                 },
+                isolated_context=False,
             ) or {}
         except Exception as exc:
             clipboard_result = {
@@ -1779,6 +1800,7 @@ class _BrowserRuntimeCore:
                     "useOffsets": bool(offset_x or offset_y),
                 },
             },
+            isolated_context=True,
         )
         if not point or not isinstance(point, dict):
             raise ValueError(f"Could not resolve Browser ref {reference_id!r} to a viewport point")
@@ -1995,6 +2017,7 @@ class _BrowserRuntimeCore:
                 "ref": ref,
                 "values": values if values is not None else value,
             },
+            isolated_context=True,
         )
         await self._settle(page, short=True)
         self._maybe_promote(resolved_id)
@@ -2016,6 +2039,7 @@ class _BrowserRuntimeCore:
                 "ref": ref,
                 "checked": bool(checked),
             },
+            isolated_context=True,
         )
         await self._settle(page, short=True)
         self._maybe_promote(resolved_id)
@@ -2036,12 +2060,14 @@ class _BrowserRuntimeCore:
         metadata = await page.evaluate(
             "(ref) => globalThis.__spaceBrowserPageContent__.fileInputFor(ref)",
             ref,
+            isolated_context=True,
         )
         handle = None
         try:
             handle = await page.evaluate_handle(
                 "(ref) => globalThis.__spaceBrowserPageContent__.fileInputElementFor(ref)",
                 ref,
+                isolated_context=True,
             )
             element = handle.as_element() if handle else None
             if element:
@@ -2198,11 +2224,13 @@ class _BrowserRuntimeCore:
             action = await page.evaluate(
                 "(args) => globalThis.__spaceBrowserPageContent__[args.method](args.ref)",
                 {"method": helper_method, "ref": reference_id},
+                isolated_context=True,
             )
         else:
             action = await page.evaluate(
                 "(args) => globalThis.__spaceBrowserPageContent__[args.method](args.ref, args.text)",
                 {"method": helper_method, "ref": reference_id, "text": text},
+                isolated_context=True,
             )
         await self._settle(page, short=False)
         self._maybe_promote(resolved_id)
@@ -2215,8 +2243,8 @@ class _BrowserRuntimeCore:
         *,
         wait_until: str = "domcontentloaded",
     ) -> None:
-        from playwright.async_api import Error as PlaywrightError
-        from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+        from patchright.async_api import Error as PlaywrightError
+        from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
         try:
             await page.goto(url, wait_until=wait_until, timeout=30000)
@@ -2227,8 +2255,8 @@ class _BrowserRuntimeCore:
         await self._settle(page, short=wait_until == "commit")
 
     async def _settle(self, page: Any, short: bool = False) -> None:
-        from playwright.async_api import Error as PlaywrightError
-        from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+        from patchright.async_api import Error as PlaywrightError
+        from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 
         try:
             await page.wait_for_load_state(
@@ -2249,7 +2277,10 @@ class _BrowserRuntimeCore:
         except Exception:
             title = ""
         try:
-            history_length = await page.evaluate("() => globalThis.history?.length || 0")
+            history_length = await page.evaluate(
+                "() => globalThis.history?.length || 0",
+                isolated_context=False,
+            )
         except Exception:
             history_length = 0
         return {
@@ -2384,13 +2415,14 @@ class _BrowserRuntimeCore:
     async def _ensure_content_helper(self, page: Any) -> None:
         await self._ensure_dom_helper(page)
         has_helper = await page.evaluate(
-            "() => Boolean(globalThis.__spaceBrowserPageContent__?.ready?.())"
+            "() => Boolean(globalThis.__spaceBrowserPageContent__?.ready?.())",
+            isolated_context=True,
         )
         if has_helper:
             return
         if self._content_helper_source is None:
             self._content_helper_source = CONTENT_HELPER_PATH.read_text(encoding="utf-8")
-        await page.evaluate(self._content_helper_source)
+        await page.evaluate(self._content_helper_source, isolated_context=True)
 
     async def _ensure_dom_helper(self, page: Any) -> None:
         if self._dom_helper_source is None:
@@ -2408,13 +2440,13 @@ class _BrowserRuntimeCore:
             targets = frames
         for target in targets:
             try:
-                has_helper = await target.evaluate(ready_script)
+                has_helper = await target.evaluate(ready_script, isolated_context=True)
             except Exception:
                 continue
             if has_helper:
                 continue
             with contextlib.suppress(Exception):
-                await target.evaluate(source)
+                await target.evaluate(source, isolated_context=True)
 
 _runtimes: dict[str, BrowserRuntime] = {}
 _runtime_lock = threading.RLock()

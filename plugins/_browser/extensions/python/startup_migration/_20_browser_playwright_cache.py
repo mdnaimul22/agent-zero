@@ -33,7 +33,7 @@ def _start_background_cache_migration() -> threading.Thread:
 
 def _migrate_cache_safely() -> None:
     try:
-        _log_cache_migration_result(hooks.cleanup_playwright_cache())
+        _log_cache_migration_result(hooks.prepare_playwright_cache())
     except Exception as exc:
         PrintStyle.warning("Browser Playwright cache migration failed:", exc)
 

@@ -99,6 +99,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
   x11-xserver-utils \
   xdotool \
   xauth \
+  xvfb \
   dbus-x11 \
   fonts-dejavu \
   fonts-liberation \

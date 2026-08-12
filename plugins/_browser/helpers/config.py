@@ -30,11 +30,6 @@ DEFAULT_MAX_OPEN_TABS = 32
 MIN_MAX_OPEN_TABS = 1
 HARD_MAX_OPEN_TABS = 50
 DEFAULT_HOST_BROWSER_PRIVACY_POLICY = "allow"
-BASE_BROWSER_ARGS = [
-    "--no-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-gpu",
-]
 
 
 def _normalize_extension_paths(value: Any) -> list[str]:
@@ -388,7 +383,7 @@ def describe_browser_extensions(settings: dict[str, Any] | None) -> dict[str, An
 def build_browser_launch_config(settings: dict[str, Any] | None) -> dict[str, Any]:
     config = normalize_browser_config(settings)
     extensions = describe_browser_extensions(config)
-    args = list(BASE_BROWSER_ARGS)
+    args: list[str] = []
     channel: str | None = None
     browser_mode = "chromium"
     proxy = None

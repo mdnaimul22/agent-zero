@@ -110,6 +110,7 @@ from plugins._browser.helpers.runtime import (
 )
 import plugins._browser.helpers.runtime as browser_runtime_module
 from plugins._browser.helpers.playwright import (
+    ensure_playwright_binary,
     get_playwright_binary,
     get_playwright_cache_dir,
 )
@@ -331,6 +332,9 @@ def test_browser_launch_config_uses_full_chromium_for_all_sessions(tmp_path):
     assert default_launch["requires_full_browser"] is True
     assert default_launch["proxy"] is None
     assert not any(arg.startswith("--load-extension=") for arg in default_launch["args"])
+    assert "--no-sandbox" not in default_launch["args"]
+    assert "--disable-dev-shm-usage" not in default_launch["args"]
+    assert "--disable-gpu" not in default_launch["args"]
     assert "--headless=new" not in default_launch["args"]
 
     extension_dir = tmp_path / "extension"
@@ -357,6 +361,102 @@ def _patch_playwright_cache_root(monkeypatch, tmp_path):
         "get_abs_path",
         lambda *parts: str(tmp_path.joinpath(*parts)),
     )
+    monkeypatch.setattr(
+        browser_playwright_module,
+        "get_playwright_chromium_revision",
+        lambda: "1169",
+    )
+
+
+def test_browser_uses_patchright_revision_when_newer_playwright_cache_exists(
+    monkeypatch, tmp_path
+):
+    _patch_playwright_cache_root(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        browser_playwright_module,
+        "get_playwright_chromium_revision",
+        lambda: "1228",
+    )
+    cache_dir = Path(get_playwright_cache_dir())
+    expected = cache_dir / "chromium-1228" / "chrome-linux64" / "chrome"
+    other = cache_dir / "chromium-1234" / "chrome-linux64" / "chrome"
+    expected.parent.mkdir(parents=True)
+    other.parent.mkdir(parents=True)
+    expected.touch()
+    other.touch()
+
+    assert get_playwright_binary() == expected
+
+
+@pytest.mark.parametrize("platform_dir", ["chrome-linux", "chrome-linux64"])
+def test_browser_installs_current_patchright_chromium_for_host_architecture(
+    monkeypatch, tmp_path, platform_dir
+):
+    _patch_playwright_cache_root(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        browser_playwright_module,
+        "get_playwright_chromium_revision",
+        lambda: "1234",
+    )
+    old_binary = (
+        tmp_path / "tmp" / "playwright" / "chromium-1169" / "chrome-linux" / "chrome"
+    )
+    old_binary.parent.mkdir(parents=True)
+    old_binary.touch()
+    expected = (
+        tmp_path / "tmp" / "playwright" / "chromium-1234" / platform_dir / "chrome"
+    )
+
+    def install(command, *, env):
+        assert command == [
+            sys.executable,
+            "-m",
+            "patchright",
+            "install",
+            "chromium",
+            "--no-shell",
+        ]
+        assert env["PLAYWRIGHT_BROWSERS_PATH"] == str(tmp_path / "tmp" / "playwright")
+        expected.parent.mkdir(parents=True)
+        expected.touch()
+
+    monkeypatch.setattr(browser_playwright_module.subprocess, "check_call", install)
+
+    assert ensure_playwright_binary() == expected
+
+
+def test_browser_hook_installs_patchright_for_existing_self_updated_runtime(monkeypatch):
+    current = False
+
+    def is_current(requirement):
+        assert requirement == "patchright==1.61.2"
+        return current
+
+    def install(command, *, cwd):
+        nonlocal current
+        assert command == [
+            "/usr/local/bin/uv",
+            "pip",
+            "install",
+            "--python",
+            sys.executable,
+            "patchright==1.61.2",
+        ]
+        assert cwd == str(PROJECT_ROOT / "plugins" / "_browser")
+        current = True
+
+    monkeypatch.setattr(
+        browser_hooks_module,
+        "_patchright_requirement",
+        lambda: "patchright==1.61.2",
+    )
+    monkeypatch.setattr(browser_hooks_module, "_patchright_is_current", is_current)
+    monkeypatch.setattr(browser_hooks_module.shutil, "which", lambda name: "/usr/local/bin/uv")
+    monkeypatch.setattr(browser_hooks_module.subprocess, "check_call", install)
+
+    browser_hooks_module._ensure_patchright_dependency()
+
+    assert current is True
 
 
 def _write_playwright_binary(cache_dir: Path) -> Path:
@@ -1705,23 +1805,18 @@ def test_browser_runtime_requires_current_content_helper_for_modifier_clicks():
     ).read_text(encoding="utf-8")
 
     assert "__spaceBrowserPageContent__?.ready?.()" in runtime
+    assert "context.add_init_script" not in runtime
+    assert "isolated_context=False" in runtime
 
 
 @pytest.mark.anyio
 async def test_browser_dom_helper_clicks_content_ref_inside_iframe():
-    pytest.importorskip("playwright.async_api")
-    from playwright.async_api import async_playwright
+    pytest.importorskip("patchright.async_api")
+    from patchright.async_api import async_playwright
 
     browser_binary = get_playwright_binary()
     if not browser_binary:
-        pytest.skip("Playwright Chromium binary is not installed")
-
-    dom_helper = (
-        PROJECT_ROOT / "plugins" / "_browser" / "assets" / "browser-dom-helper.js"
-    ).read_text(encoding="utf-8")
-    content_helper = (
-        PROJECT_ROOT / "plugins" / "_browser" / "assets" / "browser-page-content.js"
-    ).read_text(encoding="utf-8")
+        pytest.skip("Patchright Chromium binary is not installed")
 
     async with async_playwright() as playwright:
         try:
@@ -1731,12 +1826,10 @@ async def test_browser_dom_helper_clicks_content_ref_inside_iframe():
                 args=["--no-sandbox"],
             )
         except Exception as exc:
-            pytest.skip(f"Playwright Chromium could not launch: {exc}")
+            pytest.skip(f"Patchright Chromium could not launch: {exc}")
 
         try:
             context = await browser.new_context()
-            await context.add_init_script(dom_helper)
-            await context.add_init_script(content_helper)
             page = await context.new_page()
             await page.set_content(
                 """
@@ -1755,9 +1848,8 @@ async def test_browser_dom_helper_clicks_content_ref_inside_iframe():
                 </html>
                 """
             )
-            await page.wait_for_function(
-                "() => Boolean(document.querySelector('iframe')?.contentWindow?.__spaceBrowserDomHelper__)"
-            )
+            core = _BrowserRuntimeCore("patchright-helper")
+            await core._ensure_content_helper(page)
 
             captured = await page.evaluate(
                 "(payload) => globalThis.__spaceBrowserPageContent__.capture(payload || null)",
@@ -2093,13 +2185,32 @@ def test_browser_docker_installs_full_chromium_to_tmp_cache():
     script = (
         PROJECT_ROOT / "docker" / "run" / "fs" / "ins" / "install_playwright.sh"
     ).read_text(encoding="utf-8")
+    requirements = (PROJECT_ROOT / "requirements.txt").read_text(encoding="utf-8")
 
     assert "PLAYWRIGHT_BROWSERS_PATH=/a0/tmp/playwright" in script
-    assert "playwright install chromium" in script
+    assert "patchright install chromium --no-shell" in script
+    assert "playwright install chromium" not in script
+    assert "uv pip install" not in script
+    assert "patchright==1.61.2" in requirements
     assert "--only-shell" not in script
 
+    runtime = (PROJECT_ROOT / "plugins" / "_browser" / "helpers" / "runtime.py").read_text(
+        encoding="utf-8"
+    )
+    assert "from patchright.async_api import async_playwright" in runtime
+    assert "from playwright.async_api import async_playwright" not in runtime
+    assert runtime.index("hooks.prepare_playwright_cache()") < runtime.index(
+        "from patchright.async_api import async_playwright"
+    )
+    install_additional = (
+        PROJECT_ROOT / "docker" / "run" / "fs" / "ins" / "install_additional.sh"
+    ).read_text(encoding="utf-8")
+    assert '"headless": not bool(browser_display)' in runtime
+    assert 'launch_kwargs["env"] = {**os.environ, "DISPLAY": browser_display}' in runtime
+    assert "  xvfb \\" in install_additional
 
-def test_browser_startup_migration_runs_playwright_cache_cleanup():
+
+def test_browser_startup_migration_prepares_current_playwright_binary():
     extension = (
         PROJECT_ROOT
         / "plugins"
@@ -2111,7 +2222,7 @@ def test_browser_startup_migration_runs_playwright_cache_cleanup():
     ).read_text(encoding="utf-8")
 
     assert "class BrowserPlaywrightCacheMigration(Extension)" in extension
-    assert "hooks.cleanup_playwright_cache()" in extension
+    assert "hooks.prepare_playwright_cache()" in extension
     assert "PrintStyle.warning" in extension
 
 
@@ -2133,6 +2244,55 @@ def test_browser_runtime_removes_stale_profile_singletons(monkeypatch, tmp_path)
         (core.profile_dir / name).exists() or (core.profile_dir / name).is_symlink()
         for name in ("SingletonLock", "SingletonCookie", "SingletonSocket")
     )
+
+
+@pytest.mark.anyio
+async def test_browser_first_open_reuses_headful_bootstrap_page(monkeypatch):
+    class BootstrapPage:
+        url = "about:blank"
+
+        @staticmethod
+        def is_closed():
+            return False
+
+    page = BootstrapPage()
+
+    class Context:
+        pages = [page]
+
+        @staticmethod
+        async def new_page():
+            raise AssertionError("The first headful tab must reuse Chrome's bootstrap page")
+
+    core = _BrowserRuntimeCore("headful")
+    core.context = Context()
+    core._bootstrap_page = page
+
+    async def register(registered_page):
+        assert registered_page is page
+        browser_page = BrowserPage(id=1, page=registered_page)
+        core.pages[1] = browser_page
+        return browser_page
+
+    async def settle(_page, short=False):
+        return None
+
+    async def state(browser_id):
+        return {"id": browser_id, "currentUrl": "about:blank"}
+
+    core._register_page = register
+    core._settle = settle
+    core._state = state
+    monkeypatch.setattr(
+        browser_runtime_module,
+        "get_browser_config",
+        lambda: {"default_homepage": "about:blank", "max_open_tabs": 8},
+    )
+
+    result = await core.open()
+
+    assert result == {"id": 1, "state": {"id": 1, "currentUrl": "about:blank"}}
+    assert core._bootstrap_page is None
 
 
 @pytest.mark.anyio
@@ -2780,7 +2940,12 @@ async def test_browser_viewer_subscribe_returns_initial_snapshot(monkeypatch):
 
     result = await handler.process(
         "browser_viewer_subscribe",
-        {"context_id": "ctx", "browser_id": 1, "viewport_width": 900, "viewport_height": 600},
+        {
+            "context_id": "ctx",
+            "browser_id": 1,
+            "viewport_width": 900,
+            "viewport_height": 600,
+        },
         "sid-snapshot",
     )
 
@@ -3202,7 +3367,7 @@ async def test_browser_runtime_screenshot_file_defaults_to_chat_scoped_artifact(
         async def title(self):
             return "Blank"
 
-        async def evaluate(self, script, payload=None):
+        async def evaluate(self, script, payload=None, **kwargs):
             return 1
 
     core = _BrowserRuntimeCore("ctx/id")
@@ -3321,7 +3486,7 @@ async def test_browser_runtime_ref_point_resolution_applies_offsets():
         def __init__(self):
             self.mouse = FakeMouse()
 
-        async def evaluate(self, script, payload=None):
+        async def evaluate(self, script, payload=None, **kwargs):
             eval_payloads.append((script, payload))
             if payload and "offsets" in payload:
                 return {
@@ -3392,7 +3557,7 @@ async def test_browser_runtime_clipboard_paste_uses_dom_bridge():
         def __init__(self):
             self.keyboard = FakeKeyboard()
 
-        async def evaluate(self, script, payload=None):
+        async def evaluate(self, script, payload=None, **kwargs):
             if payload is not None:
                 eval_payloads.append((script, payload))
                 return {
@@ -3442,7 +3607,7 @@ async def test_browser_runtime_clipboard_paste_falls_back_to_keyboard_insert_tex
         def __init__(self):
             self.keyboard = FakeKeyboard()
 
-        async def evaluate(self, script, payload=None):
+        async def evaluate(self, script, payload=None, **kwargs):
             if payload is not None:
                 return {
                     "action": "paste",
