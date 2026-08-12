@@ -17,7 +17,7 @@ Credentials, authentication files, and hidden reasoning are excluded.
 
 ## Enable
 
-Enable **Migrate Agents** in Plugins, then use the inbox button beside Dashboard.
+Enable **Migrate Agents** in Plugins, then use its **Open** button.
 
 ## Prepare an export
 

@@ -8,7 +8,7 @@
 
 - `helpers/migration.py` owns source parsing, redaction, limits, preview data, and native chat conversion.
 - `api/migration_preview.py` owns read-only upload inspection; `api/migration_import.py` owns confirmed writes.
-- `webui/` and the sidebar extension own source selection, upload, review, consent, and progress UI.
+- `webui/` owns source selection, upload, review, consent, and progress UI.
 - `tests/` owns parser, privacy, archive-safety, native-chat, project, and import-helper regression coverage.
 
 ## Local Contracts
