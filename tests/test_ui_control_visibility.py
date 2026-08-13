@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -41,6 +42,21 @@ def test_ui_controls_have_independent_mobile_and_desktop_visibility() -> None:
     assert "isUiControlVisible('connectionStatus')" in chat_top
     assert "isUiControlVisible('projectSelector')" in chat_top
     assert "isUiControlVisible('rightCanvasRail')" in canvas
+
+
+def test_mobile_canvas_rail_respects_visibility_preference() -> None:
+    canvas = read("webui/components/canvas/right-canvas.html")
+    canvas_css = read("webui/components/canvas/right-canvas.css")
+    mobile_rail_rule = re.search(
+        r"body\.right-canvas-mobile-mode \.right-canvas-rail \{([^}]*)\}",
+        canvas_css,
+        re.S,
+    )
+
+    assert 'x-show="$store.preferences.isUiControlVisible(\'rightCanvasRail\')"' in canvas
+    assert mobile_rail_rule is not None
+    assert re.search(r"^\s*display:\s*flex;\s*$", mobile_rail_rule.group(1), re.M)
+    assert "!important" not in mobile_rail_rule.group(1)
 
 
 def test_ui_control_visibility_settings_are_normalized() -> None:
