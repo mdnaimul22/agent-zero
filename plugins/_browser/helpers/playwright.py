@@ -3,7 +3,6 @@ import os
 import re
 import subprocess
 import sys
-import threading
 from importlib import resources
 from pathlib import Path
 
@@ -19,7 +18,6 @@ RETIRED_PLAYWRIGHT_CACHE_DIRS = (
     ("usr", "plugins", "_browser", "playwright"),
     ("usr", "browser", "playwright"),
 )
-_INSTALL_LOCK = threading.Lock()
 
 
 def _primary_cache_dir() -> Path:
@@ -98,20 +96,19 @@ def get_playwright_chromium_revision() -> str:
 
 
 def ensure_playwright_binary() -> Path:
-    with _INSTALL_LOCK:
-        binary = get_playwright_binary()
-        if binary:
-            return binary
-
-        cache_dir = configure_playwright_env()
-        env = os.environ.copy()
-        env["PLAYWRIGHT_BROWSERS_PATH"] = cache_dir
-        subprocess.check_call(
-            [sys.executable, "-m", "patchright", "install", "chromium", "--no-shell"],
-            env=env,
-        )
-
-        binary = get_playwright_binary()
-        if not binary:
-            raise RuntimeError("Patchright Chromium binary not found after installation")
+    binary = get_playwright_binary()
+    if binary:
         return binary
+
+    cache_dir = configure_playwright_env()
+    env = os.environ.copy()
+    env["PLAYWRIGHT_BROWSERS_PATH"] = cache_dir
+    subprocess.check_call(
+        [sys.executable, "-m", "patchright", "install", "chromium", "--no-shell"],
+        env=env,
+    )
+
+    binary = get_playwright_binary()
+    if not binary:
+        raise RuntimeError("Patchright Chromium binary not found after installation")
+    return binary
