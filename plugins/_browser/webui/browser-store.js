@@ -442,6 +442,11 @@ const model = {
   },
 
   async contextIdForNewBrowser() {
+    const selectedContextId = this.normalizeContextId(chatsStore.selected);
+    if (selectedContextId) {
+      this.contextId = selectedContextId;
+      return selectedContextId;
+    }
     return await this.ensureContextId();
   },
 

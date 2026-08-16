@@ -4,6 +4,7 @@ import atexit
 import asyncio
 import base64
 import contextlib
+import contextvars
 import os
 import re
 import shutil
@@ -35,6 +36,7 @@ PLUGIN_DIR = Path(__file__).resolve().parents[1]
 DOM_HELPER_PATH = PLUGIN_DIR / "assets" / "browser-dom-helper.js"
 CONTENT_HELPER_PATH = PLUGIN_DIR / "assets" / "browser-page-content.js"
 RUNTIME_DATA_KEY = "_browser_runtime"
+SHARED_RUNTIME_ID = "shared"
 DEFAULT_VIEWPORT = {"width": 1024, "height": 768}
 CHROME_SINGLETON_FILES = ("SingletonLock", "SingletonCookie", "SingletonSocket")
 SCREENCAST_MAX_WIDTH = 4096
@@ -289,6 +291,7 @@ def _safe_context_id(context_id: str) -> str:
 class BrowserPage:
     id: int
     page: Any
+    context_id: str = ""
 
 
 class _BrowserScreencast:
@@ -540,12 +543,25 @@ class BrowserRuntime:
         self._closed = False
 
     async def call(self, method: str, *args: Any, **kwargs: Any) -> Any:
+        return await self.call_for(self.context_id, method, *args, **kwargs)
+
+    async def call_for(
+        self,
+        context_id: str,
+        method: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
         if self._closed and method != "close":
             raise RuntimeError("Browser runtime is closed.")
 
         async def runner():
-            fn = getattr(self._core, method)
-            return await fn(*args, **kwargs)
+            token = self._core.request_context_id.set(str(context_id or self.context_id))
+            try:
+                fn = getattr(self._core, method)
+                return await fn(*args, **kwargs)
+            finally:
+                self._core.request_context_id.reset(token)
 
         return await self._worker.execute_inside(runner)
 
@@ -560,6 +576,15 @@ class BrowserRuntime:
                 self._worker.kill(terminate_thread=True)
             finally:
                 self._core.interactive_view.close()
+
+
+class BrowserRuntimeSession:
+    def __init__(self, context_id: str, runtime: BrowserRuntime):
+        self.context_id = str(context_id)
+        self._runtime = runtime
+
+    async def call(self, method: str, *args: Any, **kwargs: Any) -> Any:
+        return await self._runtime.call_for(self.context_id, method, *args, **kwargs)
 
 
 class _BrowserRuntimeCore:
@@ -581,18 +606,23 @@ class _BrowserRuntimeCore:
     def __init__(self, context_id: str):
         self.context_id = context_id
         self.safe_context_id = _safe_context_id(context_id)
+        self.request_context_id: contextvars.ContextVar[str] = contextvars.ContextVar(
+            f"browser_context_{id(self)}",
+            default=context_id,
+        )
         self.playwright = None
         self.context = None
         self.pages: dict[int, BrowserPage] = {}
         self.screencasts: dict[str, _BrowserScreencast] = {}
         self.next_browser_id = 1
-        self.last_interacted_browser_id: int | None = None
+        self._last_interacted_browser_ids: dict[str, int] = {}
         self._dom_helper_source: str | None = None
         self._content_helper_source: str | None = None
         self._start_lock: asyncio.Lock | None = None
         self._registry_lock: asyncio.Lock | None = None
         self._closing = False
         self._pending_popups: list[asyncio.Future[int]] = []
+        self._pending_popup_contexts: dict[asyncio.Future[int], str] = {}
         self._background_popup_pages: set[int] = set()
         self._bootstrap_page: Any | None = None
         self._browser_chrome_height: int | None = None
@@ -600,6 +630,36 @@ class _BrowserRuntimeCore:
         self._browser_window_session: Any | None = None
         self._browser_window_id: int | None = None
         self.interactive_view = BrowserInteractiveView(context_id)
+
+    @property
+    def current_context_id(self) -> str:
+        return str(self.request_context_id.get() or self.context_id)
+
+    @property
+    def last_interacted_browser_id(self) -> int | None:
+        return self._last_interacted_browser_ids.get(self.current_context_id)
+
+    @last_interacted_browser_id.setter
+    def last_interacted_browser_id(self, browser_id: int | None) -> None:
+        self._set_last_interacted(self.current_context_id, browser_id)
+
+    def _set_last_interacted(self, context_id: str, browser_id: int | None) -> None:
+        context_id = str(context_id or self.context_id)
+        if browser_id is None:
+            self._last_interacted_browser_ids.pop(context_id, None)
+        else:
+            self._last_interacted_browser_ids[context_id] = int(browser_id)
+
+    def _page_context_id(self, browser_page: BrowserPage) -> str:
+        return str(browser_page.context_id or self.context_id)
+
+    def _context_browser_ids(self, context_id: str | None = None) -> list[int]:
+        target = str(context_id or self.current_context_id)
+        return sorted(
+            browser_id
+            for browser_id, browser_page in self.pages.items()
+            if self._page_context_id(browser_page) == target
+        )
 
     def _ensure_registry_lock(self) -> asyncio.Lock:
         if self._registry_lock is None:
@@ -619,11 +679,12 @@ class _BrowserRuntimeCore:
         previous_focus: int | None,
         fallback_id: int,
     ) -> int | None:
-        if previous_focus in self.pages:
+        browser_ids = self._context_browser_ids()
+        if previous_focus in browser_ids:
             return int(previous_focus)
-        if fallback_id in self.pages:
+        if fallback_id in browser_ids:
             return int(fallback_id)
-        return next(iter(sorted(self.pages)), None)
+        return next(iter(browser_ids), None)
 
     def _normalize_modifiers(self, modifiers: list[str] | str | None) -> list[str] | None:
         if modifiers is None:
@@ -781,6 +842,7 @@ class _BrowserRuntimeCore:
             if not waiter.done():
                 waiter.set_exception(RuntimeError("Browser context closed."))
         self._pending_popups.clear()
+        self._pending_popup_contexts.clear()
         self._background_popup_pages.clear()
         self._bootstrap_page = None
         self._browser_chrome_height = None
@@ -788,7 +850,7 @@ class _BrowserRuntimeCore:
         self._browser_window_session = None
         self._browser_window_id = None
         self.pages.clear()
-        self.last_interacted_browser_id = None
+        self._last_interacted_browser_ids.clear()
         for screencast in self.screencasts.values():
             screencast.stopped = True
             screencast._drop_queued_frames()
@@ -819,6 +881,8 @@ class _BrowserRuntimeCore:
             raise RuntimeError(f"Browser setup failed: {problem}")
         from patchright.async_api import async_playwright
 
+        self.profile_dir.parent.mkdir(parents=True, exist_ok=True)
+        self._adopt_legacy_profile(self.current_context_id)
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         self.downloads_dir.mkdir(parents=True, exist_ok=True)
         self._release_orphaned_profile_singleton()
@@ -888,6 +952,22 @@ class _BrowserRuntimeCore:
                 continue
             await self._register_page(page)
 
+    def _adopt_legacy_profile(self, context_id: str) -> None:
+        if self.safe_context_id != SHARED_RUNTIME_ID or self.profile_dir.exists():
+            return
+        legacy_profile = Path(
+            files.get_abs_path("tmp/browser/sessions", _safe_context_id(context_id))
+        )
+        if legacy_profile == self.profile_dir or not legacy_profile.is_dir():
+            return
+        try:
+            legacy_profile.rename(self.profile_dir)
+            PrintStyle.info(
+                f"Browser adopted the existing profile for context {context_id}."
+            )
+        except OSError as exc:
+            PrintStyle.warning(f"Browser profile migration failed: {exc}")
+
     def _release_orphaned_profile_singleton(self) -> None:
         lock_path = self.profile_dir / "SingletonLock"
         owner_pid = self._profile_singleton_owner_pid(lock_path)
@@ -951,11 +1031,12 @@ class _BrowserRuntimeCore:
     async def open(self, url: str = "") -> dict[str, Any]:
         await self.ensure_started()
         self._ensure_can_open_page()
+        context_id = self.current_context_id
         page = self._bootstrap_page
         self._bootstrap_page = None
         if not page or page.is_closed():
             page = await self.context.new_page()
-        browser_page = await self._register_page(page)
+        browser_page = await self._register_page(page, context_id)
         self.last_interacted_browser_id = browser_page.id
         target_url = self._initial_url(url)
         if target_url and target_url != "about:blank":
@@ -977,20 +1058,21 @@ class _BrowserRuntimeCore:
             value = DEFAULT_MAX_OPEN_TABS
         return max(1, value)
 
-    def _tab_limit_error(self) -> RepairableException:
+    def _tab_limit_error(self, context_id: str | None = None) -> RepairableException:
         max_open_tabs = self._max_open_tabs()
+        open_tabs = len(self._context_browser_ids(context_id))
         return RepairableException(
-            f"Browser tab limit reached ({len(self.pages)}/{max_open_tabs}). "
+            f"Browser tab limit reached ({open_tabs}/{max_open_tabs}). "
             "Navigate an existing browser_id or close tabs with close/close_all before opening more."
         )
 
     def _ensure_can_open_page(self) -> None:
-        if len(self.pages) >= self._max_open_tabs():
+        if len(self._context_browser_ids()) >= self._max_open_tabs():
             raise self._tab_limit_error()
 
     async def list(self, include_content: bool = False) -> dict[str, Any]:
         await self.ensure_started()
-        ids = sorted(self.pages)
+        ids = self._context_browser_ids()
         if not ids:
             return {
                 "browsers": [],
@@ -1420,6 +1502,7 @@ class _BrowserRuntimeCore:
         loop = asyncio.get_running_loop()
         waiter: asyncio.Future[int] = loop.create_future()
         self._pending_popups.append(waiter)
+        self._pending_popup_contexts[waiter] = self.current_context_id
 
         warning: str | None = None
         opened_id: int | None = None
@@ -1463,6 +1546,7 @@ class _BrowserRuntimeCore:
             finally:
                 if waiter in self._pending_popups:
                     self._pending_popups.remove(waiter)
+                self._pending_popup_contexts.pop(waiter, None)
                 if not waiter.done():
                     waiter.cancel()
 
@@ -1477,6 +1561,7 @@ class _BrowserRuntimeCore:
         finally:
             if waiter in self._pending_popups:
                 self._pending_popups.remove(waiter)
+            self._pending_popup_contexts.pop(waiter, None)
 
         if background:
             # Background-mode click: preserve the pre-click focus even when
@@ -1604,20 +1689,23 @@ class _BrowserRuntimeCore:
         await page.close()
         self.pages.pop(resolved_id, None)
         if self.last_interacted_browser_id == resolved_id:
-            self.last_interacted_browser_id = next(iter(sorted(self.pages)), None)
+            self.last_interacted_browser_id = next(iter(self._context_browser_ids()), None)
         return await self.list()
 
     async def close_all_browsers(self) -> dict[str, Any]:
         await self.ensure_started()
-        await self._stop_all_screencasts()
-        for browser_id in list(self.pages):
+        await self.close_context()
+        return {"browsers": [], "last_interacted_browser_id": None}
+
+    async def close_context(self) -> None:
+        for browser_id in self._context_browser_ids():
+            await self._stop_screencasts_for_browser(browser_id)
             try:
                 await self.pages[browser_id].page.close()
             except Exception:
                 pass
-        self.pages.clear()
+            self.pages.pop(browser_id, None)
         self.last_interacted_browser_id = None
-        return {"browsers": [], "last_interacted_browser_id": None}
 
     async def screenshot(
         self,
@@ -1647,6 +1735,7 @@ class _BrowserRuntimeCore:
         await self.ensure_started()
         resolved_id = self._resolve_browser_id(browser_id)
         page = self._page(resolved_id)
+        page_context_id = self._page_context_id(self.pages[resolved_id])
         raw_path = str(path or "").strip()
         if not raw_path:
             image = await page.screenshot(
@@ -1655,7 +1744,7 @@ class _BrowserRuntimeCore:
                 full_page=bool(full_page),
             )
             saved = chat_media.save_image_bytes(
-                context_id=self.context_id,
+                context_id=page_context_id,
                 payload=image,
                 mime_type="image/jpeg",
                 category="screenshots",
@@ -1664,7 +1753,7 @@ class _BrowserRuntimeCore:
             )
             return {
                 "browser_id": resolved_id,
-                "context_id": self.context_id,
+                "context_id": page_context_id,
                 "path": saved.path,
                 "a0_path": saved.a0_path,
                 "mime": "image/jpeg",
@@ -1693,7 +1782,7 @@ class _BrowserRuntimeCore:
         local_path = str(output_path)
         return {
             "browser_id": resolved_id,
-            "context_id": self.context_id,
+            "context_id": page_context_id,
             "path": local_path,
             "a0_path": files.normalize_a0_path(local_path),
             "mime": mime,
@@ -2277,6 +2366,7 @@ class _BrowserRuntimeCore:
             if not waiter.done():
                 waiter.set_exception(RuntimeError("Browser runtime is closing."))
         self._pending_popups.clear()
+        self._pending_popup_contexts.clear()
         self._background_popup_pages.clear()
         await self._stop_all_screencasts()
         await self._reset_browser_window_session()
@@ -2298,7 +2388,7 @@ class _BrowserRuntimeCore:
             except Exception as exc:
                 PrintStyle.warning(f"Playwright stop failed: {exc}")
             self.playwright = None
-        self.last_interacted_browser_id = None
+        self._last_interacted_browser_ids.clear()
         if delete_profile:
             shutil.rmtree(self.profile_dir, ignore_errors=True)
 
@@ -2383,7 +2473,7 @@ class _BrowserRuntimeCore:
             history_length = 0
         return {
             "id": browser_page.id,
-            "context_id": self.context_id,
+            "context_id": self._page_context_id(browser_page),
             "currentUrl": page.url,
             "title": title,
             "canGoBack": bool(history_length and int(history_length) > 1),
@@ -2391,13 +2481,31 @@ class _BrowserRuntimeCore:
             "loading": False,
         }
 
-    def _register_page_locked(self, page: Any) -> BrowserPage:
+    def _register_page_locked(
+        self,
+        page: Any,
+        context_id: str | None = None,
+    ) -> BrowserPage:
+        requested_context_id = str(context_id or self.current_context_id)
         existing = self._browser_id_for_page(page)
         if existing is not None:
-            return self.pages[existing]
+            browser_page = self.pages[existing]
+            if (
+                context_id is not None
+                and self._page_context_id(browser_page) != requested_context_id
+            ):
+                previous_context_id = self._page_context_id(browser_page)
+                browser_page.context_id = requested_context_id
+                if self._last_interacted_browser_ids.get(previous_context_id) == existing:
+                    self._set_last_interacted(previous_context_id, None)
+            return browser_page
         browser_id = self.next_browser_id
         self.next_browser_id += 1
-        browser_page = BrowserPage(id=browser_id, page=page)
+        browser_page = BrowserPage(
+            id=browser_id,
+            page=page,
+            context_id=requested_context_id,
+        )
         self.pages[browser_id] = browser_page
 
         def on_close() -> None:
@@ -2410,10 +2518,14 @@ class _BrowserRuntimeCore:
         page.on("close", on_close)
         return browser_page
 
-    async def _register_page(self, page: Any) -> BrowserPage:
+    async def _register_page(
+        self,
+        page: Any,
+        context_id: str | None = None,
+    ) -> BrowserPage:
         lock = self._ensure_registry_lock()
         async with lock:
-            browser_page = self._register_page_locked(page)
+            browser_page = self._register_page_locked(page, context_id)
         await self._fit_browser_window(page)
         return browser_page
 
@@ -2479,9 +2591,15 @@ class _BrowserRuntimeCore:
         try:
             lock = self._ensure_registry_lock()
             async with lock:
-                self.pages.pop(browser_id, None)
-                if self.last_interacted_browser_id == browser_id:
-                    self.last_interacted_browser_id = next(iter(sorted(self.pages)), None)
+                browser_page = self.pages.pop(browser_id, None)
+                if browser_page:
+                    context_id = self._page_context_id(browser_page)
+                    if self._last_interacted_browser_ids.get(context_id) == browser_id:
+                        remaining = self._context_browser_ids(context_id)
+                        self._set_last_interacted(
+                            context_id,
+                            next(iter(remaining), None),
+                        )
                 self._background_popup_pages.discard(browser_id)
         except Exception as exc:
             PrintStyle.warning(f"Page unregister failed: {exc}")
@@ -2502,29 +2620,26 @@ class _BrowserRuntimeCore:
                 return
             lock = self._ensure_registry_lock()
             close_over_limit = False
+            context_id = await self._new_page_context_id(page)
             async with lock:
                 if self._closing:
                     return
                 if self._browser_id_for_page(page) is not None:
                     return
-                if len(self.pages) >= self._max_open_tabs():
-                    limit_error = self._tab_limit_error()
-                    while self._pending_popups:
-                        waiter = self._pending_popups.pop(0)
-                        if not waiter.done():
-                            waiter.set_exception(limit_error)
-                            break
+                if len(self._context_browser_ids(context_id)) >= self._max_open_tabs():
+                    limit_error = self._tab_limit_error(context_id)
+                    waiter = self._pop_pending_popup(context_id)
+                    if waiter:
+                        waiter.set_exception(limit_error)
                     close_over_limit = True
                 else:
-                    browser_page = self._register_page_locked(page)
+                    browser_page = self._register_page_locked(page, context_id)
                     new_id = browser_page.id
-                    while self._pending_popups:
-                        waiter = self._pending_popups.pop(0)
-                        if not waiter.done():
-                            waiter.set_result(new_id)
-                            break
+                    waiter = self._pop_pending_popup(context_id)
+                    if waiter:
+                        waiter.set_result(new_id)
                     if new_id not in self._background_popup_pages:
-                        self.last_interacted_browser_id = new_id
+                        self._set_last_interacted(context_id, new_id)
                     else:
                         self._background_popup_pages.discard(new_id)
             if close_over_limit:
@@ -2535,6 +2650,33 @@ class _BrowserRuntimeCore:
         except Exception as exc:
             PrintStyle.warning(f"Popup registration failed: {exc}")
 
+    async def _new_page_context_id(self, page: Any) -> str:
+        opener_fn = getattr(page, "opener", None)
+        if callable(opener_fn):
+            with contextlib.suppress(Exception):
+                opener = await opener_fn()
+                opener_id = self._browser_id_for_page(opener)
+                if opener_id is not None:
+                    return self._page_context_id(self.pages[opener_id])
+        for waiter in self._pending_popups:
+            context_id = self._pending_popup_contexts.get(waiter)
+            if context_id and not waiter.done():
+                return context_id
+        return self.current_context_id
+
+    def _pop_pending_popup(self, context_id: str) -> asyncio.Future[int] | None:
+        for waiter in list(self._pending_popups):
+            if waiter.done():
+                self._pending_popups.remove(waiter)
+                self._pending_popup_contexts.pop(waiter, None)
+                continue
+            if self._pending_popup_contexts.get(waiter) != context_id:
+                continue
+            self._pending_popups.remove(waiter)
+            self._pending_popup_contexts.pop(waiter, None)
+            return waiter
+        return None
+
     def _browser_id_for_page(self, page: Any) -> int | None:
         for browser_id, browser_page in self.pages.items():
             if browser_page.page == page:
@@ -2542,17 +2684,18 @@ class _BrowserRuntimeCore:
         return None
 
     def _resolve_browser_id(self, browser_id: int | str | None = None) -> int:
+        browser_ids = self._context_browser_ids()
         if browser_id is None or str(browser_id).strip() == "":
-            if self.last_interacted_browser_id in self.pages:
+            if self.last_interacted_browser_id in browser_ids:
                 return int(self.last_interacted_browser_id)
-            if self.pages:
-                return sorted(self.pages)[0]
+            if browser_ids:
+                return browser_ids[0]
             raise KeyError("No browser is open. Use action=open first.")
         value = str(browser_id).strip()
         if value.startswith("browser-"):
             value = value.split("-", 1)[1]
         resolved = int(value)
-        if resolved not in self.pages:
+        if resolved not in browser_ids:
             raise KeyError(f"Browser {resolved} is not open.")
         return resolved
 
@@ -2608,18 +2751,26 @@ class _BrowserRuntimeCore:
             with contextlib.suppress(Exception):
                 await target.evaluate(source, isolated_context=True)
 
-_runtimes: dict[str, BrowserRuntime] = {}
+_runtimes: dict[str, BrowserRuntimeSession] = {}
+_shared_runtime: BrowserRuntime | None = None
 _runtime_lock = threading.RLock()
 
 
-async def get_runtime(context_id: str, *, create: bool = True) -> BrowserRuntime | None:
+async def get_runtime(
+    context_id: str,
+    *,
+    create: bool = True,
+) -> BrowserRuntimeSession | None:
+    global _shared_runtime
     context_id = str(context_id or "").strip()
     if not context_id:
         raise ValueError("context_id is required")
     with _runtime_lock:
         runtime = _runtimes.get(context_id)
         if runtime is None and create:
-            runtime = BrowserRuntime(context_id)
+            if _shared_runtime is None:
+                _shared_runtime = BrowserRuntime(SHARED_RUNTIME_ID)
+            runtime = BrowserRuntimeSession(context_id, _shared_runtime)
             _runtimes[context_id] = runtime
         return runtime
 
@@ -2631,7 +2782,7 @@ async def close_runtime(context_id: str, *, delete_profile: bool = True) -> None
     with _runtime_lock:
         runtime = _runtimes.pop(context_id, None)
     if runtime:
-        await runtime.close(delete_profile=delete_profile)
+        await runtime.call("close_context")
 
 
 def close_runtime_sync(context_id: str, *, delete_profile: bool = True) -> None:
@@ -2644,10 +2795,12 @@ def close_runtime_sync(context_id: str, *, delete_profile: bool = True) -> None:
 
 
 async def close_all_runtimes(*, delete_profiles: bool = False) -> None:
+    global _shared_runtime
     with _runtime_lock:
-        runtimes = list(_runtimes.values())
         _runtimes.clear()
-    for runtime in runtimes:
+        runtime = _shared_runtime
+        _shared_runtime = None
+    if runtime:
         try:
             await runtime.close(delete_profile=delete_profiles)
         except Exception as exc:

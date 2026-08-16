@@ -1432,8 +1432,8 @@ def test_browser_extension_settings_stay_user_facing():
     assert "Separate per chat" in config_html
     assert "Shared across chats" in config_html
     assert "Maximum tabs per chat" in config_html
-    assert "Each chat has its own Browser tabs and sign-in profile." in config_html
-    assert "Sign-ins and browser profiles remain isolated per chat." in config_html
+    assert "Each chat shows only its own tabs. Browser sign-ins are shared across chats." in config_html
+    assert "The tab strip shows tabs from every active chat. Browser sign-ins are shared across chats." in config_html
     assert 'x-model="$store.browserConfig.config.browser_tab_scope"' in config_html
     assert 'x-model.number="$store.browserConfig.config.max_open_tabs"' in config_html
     assert 'x-model="$store.browserConfig.config.proxy_server"' in config_html
@@ -1495,6 +1495,8 @@ def test_browser_viewer_uses_tabs_for_session_switching():
     assert "applyBrowserListing" in browser_store
     assert "syncViewerToSelectedContext(selectedContextId)" in browser_store
     assert "async syncViewerToSelectedContext" in browser_store
+    assert "const selectedContextId = this.normalizeContextId(chatsStore.selected);" in browser_store
+    assert "this.contextId = selectedContextId;" in browser_store
     assert "isVisibleBrowserSurface()" in browser_store
     assert "firstBrowserInContext(selectedContextId)" in browser_store
     assert "visibleBrowsers()" in browser_store
@@ -2651,9 +2653,10 @@ async def test_browser_first_open_reuses_headful_bootstrap_page(monkeypatch):
     core.context = Context()
     core._bootstrap_page = page
 
-    async def register(registered_page):
+    async def register(registered_page, context_id=None):
         assert registered_page is page
-        browser_page = BrowserPage(id=1, page=registered_page)
+        assert context_id == "headful"
+        browser_page = BrowserPage(id=1, page=registered_page, context_id=context_id or "")
         core.pages[1] = browser_page
         return browser_page
 
@@ -3449,6 +3452,177 @@ async def test_browser_runtime_sessions_are_context_qualified(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_browser_context_handles_share_one_runtime(monkeypatch):
+    class FakeSharedRuntime:
+        instances = []
+
+        def __init__(self, context_id):
+            self.context_id = context_id
+            self.calls = []
+            self.closed = []
+            self.instances.append(self)
+
+        async def call_for(self, context_id, method, *args, **kwargs):
+            self.calls.append((context_id, method, args, kwargs))
+            return {"context_id": context_id, "method": method}
+
+        async def close(self, delete_profile=False):
+            self.closed.append(delete_profile)
+
+    monkeypatch.setattr(browser_runtime_module, "BrowserRuntime", FakeSharedRuntime)
+    with browser_runtime_module._runtime_lock:
+        previous_runtimes = dict(browser_runtime_module._runtimes)
+        previous_shared = browser_runtime_module._shared_runtime
+        browser_runtime_module._runtimes.clear()
+        browser_runtime_module._shared_runtime = None
+    try:
+        first = await browser_runtime_module.get_runtime("ctx-a")
+        second = await browser_runtime_module.get_runtime("ctx-b")
+
+        assert first is not second
+        assert first._runtime is second._runtime
+        assert len(FakeSharedRuntime.instances) == 1
+        assert FakeSharedRuntime.instances[0].context_id == browser_runtime_module.SHARED_RUNTIME_ID
+        assert await first.call("list") == {"context_id": "ctx-a", "method": "list"}
+        assert await second.call("open", "https://example.org/") == {
+            "context_id": "ctx-b",
+            "method": "open",
+        }
+
+        await browser_runtime_module.close_runtime("ctx-a", delete_profile=True)
+        assert browser_runtime_module._shared_runtime is FakeSharedRuntime.instances[0]
+        assert FakeSharedRuntime.instances[0].calls[-1][:2] == ("ctx-a", "close_context")
+
+        await browser_runtime_module.close_all_runtimes()
+        assert FakeSharedRuntime.instances[0].closed == [False]
+    finally:
+        with browser_runtime_module._runtime_lock:
+            browser_runtime_module._runtimes.clear()
+            browser_runtime_module._runtimes.update(previous_runtimes)
+            browser_runtime_module._shared_runtime = previous_shared
+
+
+@pytest.mark.anyio
+async def test_shared_browser_runtime_keeps_tabs_context_scoped():
+    class FakePage:
+        def __init__(self, url):
+            self.url = url
+            self.closed = False
+
+        async def title(self):
+            return self.url
+
+        async def evaluate(self, script, **kwargs):
+            return 1
+
+        async def close(self):
+            self.closed = True
+
+    core = _BrowserRuntimeCore(browser_runtime_module.SHARED_RUNTIME_ID)
+    page_a = FakePage("https://example.com/")
+    page_b = FakePage("https://example.org/")
+    core.context = object()
+    core.pages = {
+        1: BrowserPage(1, page_a, "ctx-a"),
+        2: BrowserPage(2, page_b, "ctx-b"),
+    }
+    core._set_last_interacted("ctx-a", 1)
+    core._set_last_interacted("ctx-b", 2)
+
+    token = core.request_context_id.set("ctx-a")
+    try:
+        listing = await core.list()
+        assert [browser["id"] for browser in listing["browsers"]] == [1]
+        assert listing["last_interacted_browser_id"] == 1
+        with pytest.raises(KeyError, match="Browser 2 is not open"):
+            await core.state(2)
+        await core.close_context()
+    finally:
+        core.request_context_id.reset(token)
+
+    assert page_a.closed is True
+    assert page_b.closed is False
+    token = core.request_context_id.set("ctx-b")
+    try:
+        listing = await core.list()
+        assert [browser["id"] for browser in listing["browsers"]] == [2]
+        assert listing["browsers"][0]["context_id"] == "ctx-b"
+    finally:
+        core.request_context_id.reset(token)
+
+
+@pytest.mark.anyio
+async def test_shared_browser_runtime_matches_popup_to_its_opener_context():
+    core = _BrowserRuntimeCore(browser_runtime_module.SHARED_RUNTIME_ID)
+    opener_a = object()
+    opener_b = object()
+    core.pages = {
+        1: BrowserPage(1, opener_a, "ctx-a"),
+        2: BrowserPage(2, opener_b, "ctx-b"),
+    }
+    loop = asyncio.get_running_loop()
+    waiter_a = loop.create_future()
+    waiter_b = loop.create_future()
+    core._pending_popups = [waiter_a, waiter_b]
+    core._pending_popup_contexts = {
+        waiter_a: "ctx-a",
+        waiter_b: "ctx-b",
+    }
+
+    class Popup:
+        async def opener(self):
+            return opener_b
+
+    context_id = await core._new_page_context_id(Popup())
+
+    assert context_id == "ctx-b"
+    assert core._pop_pending_popup(context_id) is waiter_b
+    assert core._pending_popups == [waiter_a]
+
+
+def test_explicit_open_claims_page_registered_by_playwright_event():
+    class Page:
+        @staticmethod
+        def on(event, callback):
+            assert event == "close"
+
+    core = _BrowserRuntimeCore(browser_runtime_module.SHARED_RUNTIME_ID)
+    page = Page()
+    registered = core._register_page_locked(
+        page,
+        "ctx-a",
+    )
+    core._set_last_interacted("ctx-a", registered.id)
+
+    token = core.request_context_id.set("ctx-b")
+    try:
+        claimed = core._register_page_locked(page, "ctx-b")
+    finally:
+        core.request_context_id.reset(token)
+
+    assert claimed is registered
+    assert claimed.context_id == "ctx-b"
+    assert core._last_interacted_browser_ids.get("ctx-a") is None
+
+
+def test_shared_browser_runtime_adopts_first_requesting_legacy_profile(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        browser_runtime_module.files,
+        "get_abs_path",
+        lambda *parts: str(tmp_path.joinpath(*parts)),
+    )
+    legacy_profile = tmp_path / "tmp" / "browser" / "sessions" / "ctx-a"
+    (legacy_profile / "Default").mkdir(parents=True)
+    (legacy_profile / "Default" / "Cookies").write_bytes(b"legacy-session")
+
+    core = _BrowserRuntimeCore(browser_runtime_module.SHARED_RUNTIME_ID)
+    core._adopt_legacy_profile("ctx-a")
+
+    assert not legacy_profile.exists()
+    assert (core.profile_dir / "Default" / "Cookies").read_bytes() == b"legacy-session"
+
+
+@pytest.mark.anyio
 async def test_browser_runtime_refuses_new_tabs_when_context_limit_is_reached(monkeypatch):
     core = _BrowserRuntimeCore("ctx-limit")
     core.pages = {
@@ -3856,11 +4030,19 @@ async def test_browser_runtime_screenshot_file_defaults_to_chat_scoped_artifact(
         async def evaluate(self, script, payload=None, **kwargs):
             return 1
 
-    core = _BrowserRuntimeCore("ctx/id")
+    core = _BrowserRuntimeCore(browser_runtime_module.SHARED_RUNTIME_ID)
     core.context = object()
-    core.pages[5] = browser_runtime_module.BrowserPage(id=5, page=FakePage())
+    core.pages[5] = browser_runtime_module.BrowserPage(
+        id=5,
+        page=FakePage(),
+        context_id="ctx/id",
+    )
+    token = core.request_context_id.set("ctx/id")
 
-    result = await core.screenshot_file(5, quality=500)
+    try:
+        result = await core.screenshot_file(5, quality=500)
+    finally:
+        core.request_context_id.reset(token)
 
     assert Path(result["path"]).read_bytes() == b"image-bytes"
     assert result["a0_path"].startswith("/a0/usr/chats/ctx_id/screenshots/browser/browser-5-")
@@ -3880,7 +4062,11 @@ async def test_browser_runtime_screenshot_file_defaults_to_chat_scoped_artifact(
     assert "path" not in screenshot_calls[-1]
 
     png_path = tmp_path / "custom.png"
-    png_result = await core.screenshot_file(5, quality=1, full_page=True, path=str(png_path))
+    token = core.request_context_id.set("ctx/id")
+    try:
+        png_result = await core.screenshot_file(5, quality=1, full_page=True, path=str(png_path))
+    finally:
+        core.request_context_id.reset(token)
 
     assert png_result["path"] == str(png_path)
     assert png_result["mime"] == "image/png"

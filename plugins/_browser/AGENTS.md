@@ -25,14 +25,15 @@
 - Keep exactly one interactive viewer iframe connected during canvas/modal handoff so hidden surfaces cannot compete to resize the same display.
 - Notify the active Xpra client of its new frame geometry before resizing the backing display; after an interactive canvas/modal handoff, reconcile once after Xpra's deferred resize so Chromium cannot retain the previous surface size.
 - Present the Xpra shadow window as the raw browser canvas: remove its HTML decoration and shadow pointer while preserving exact viewport geometry.
-- Give every internal Browser runtime its own Xvfb display and unguessable Xpra gateway token; never expose another chat context's display through a shared viewer.
+- Keep one internal Chromium, Xvfb, and Xpra runtime per Agent Zero process with one unguessable gateway token.
 - Bind Browser Xpra endpoints to loopback, route them through the authenticated virtual-desktop gateway, and keep file transfer, URL opening, printing, and audio disabled.
 - Paint live screencast frames through the Browser panel canvas/ImageBitmap path when available; keep the `<img>`/data URL path for snapshots and fallback rendering.
 - Push internal screencast frames from the runtime to the WebSocket consumer after subscription; keep `read/pop_screencast_frame` as fallback/tooling APIs, not the WebUI hot path.
 - Keep Browser viewer frame transport capability-negotiated: updated clients may request binary/slim screencast frames, while older clients must keep the base64/full-metadata fallback. Do not let the WebUI advertise binary frames unless its Socket.IO client reconstructs attachments as real `Blob`, `ArrayBuffer`, or typed-array values.
-- Keep WebUI Browser tabs scoped to the active chat context by default; aggregate tabs from other AgentContext runtimes only when the Browser settings tab scope is `shared`.
-- Keep Chromium processes and persistent sign-in profiles isolated per chat even when the tab strip is shared; reset/removal may delete only that chat's profile.
-- Show an accessible in-panel startup state while an on-demand Browser runtime is cold-starting; do not create an idle Chromium/Xpra pair for every chat at Agent Zero startup.
+- Keep WebUI Browser tabs scoped to the active chat context by default; aggregate tabs from other context handles only when the Browser settings tab scope is `shared`.
+- Share one persistent internal-Browser sign-in profile across chats while enforcing tab ownership through context-bound runtime handles; resetting or removing a chat closes only its tabs and never deletes the shared profile.
+- On first shared-profile use after an upgrade, adopt the first requesting chat's legacy Browser profile when one exists.
+- Show an accessible in-panel startup state while the on-demand shared Browser runtime is cold-starting; keep that one runtime warm until Browser configuration changes or Agent Zero shuts down.
 - Keep narrow WebUI Browser controls usable by grouping navigation with Annotate/settings above a full-width address bar.
 - For Bring Your Own Browser with an existing host profile, `host_browser_selection` may target automatic CLI selection, a browser family/id, an HTTP CDP discovery address, or a full DevTools WebSocket endpoint and must be forwarded to the connector runtime as `browser_selection`.
 - Browser Settings must refresh connected A0 CLI host-browser inventory while the settings view is open so newly authorized endpoints appear without saving or reopening.
