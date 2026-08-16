@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from typing import Any
 
+from helpers import virtual_desktop_routes
 from helpers.extension import Extension
 from helpers.print_style import PrintStyle
 from plugins._browser import hooks
@@ -13,6 +14,7 @@ _startup_migration_thread: threading.Thread | None = None
 
 class BrowserPlaywrightCacheMigration(Extension):
     def execute(self, **kwargs):
+        virtual_desktop_routes.install_route_hooks()
         _start_background_cache_migration()
 
 

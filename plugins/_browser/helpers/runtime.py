@@ -27,9 +27,7 @@ from plugins._browser.helpers.config import (
     build_browser_launch_config,
     get_browser_config,
 )
-from plugins._browser.helpers.playwright import (
-    ensure_browser_display,
-)
+from plugins._browser.helpers.interactive_view import BrowserInteractiveView
 from plugins._browser.helpers.url import normalize_url
 
 
@@ -558,7 +556,10 @@ class BrowserRuntime:
             await self.call("close", delete_profile=delete_profile)
         finally:
             self._closed = True
-            self._worker.kill(terminate_thread=True)
+            try:
+                self._worker.kill(terminate_thread=True)
+            finally:
+                self._core.interactive_view.close()
 
 
 class _BrowserRuntimeCore:
@@ -594,6 +595,11 @@ class _BrowserRuntimeCore:
         self._pending_popups: list[asyncio.Future[int]] = []
         self._background_popup_pages: set[int] = set()
         self._bootstrap_page: Any | None = None
+        self._browser_chrome_height: int | None = None
+        self._browser_window_page: Any | None = None
+        self._browser_window_session: Any | None = None
+        self._browser_window_id: int | None = None
+        self.interactive_view = BrowserInteractiveView(context_id)
 
     def _ensure_registry_lock(self) -> asyncio.Lock:
         if self._registry_lock is None:
@@ -777,6 +783,10 @@ class _BrowserRuntimeCore:
         self._pending_popups.clear()
         self._background_popup_pages.clear()
         self._bootstrap_page = None
+        self._browser_chrome_height = None
+        self._browser_window_page = None
+        self._browser_window_session = None
+        self._browser_window_id = None
         self.pages.clear()
         self.last_interacted_browser_id = None
         for screencast in self.screencasts.values():
@@ -815,7 +825,15 @@ class _BrowserRuntimeCore:
         browser_config = get_browser_config()
         launch_config = build_browser_launch_config(browser_config)
         browser_binary = Path(preparation["binary"])
-        browser_display = ensure_browser_display()
+        browser_display = self.interactive_view.ensure_display()
+        launch_args = list(launch_config["args"])
+        if browser_display:
+            launch_args.extend(
+                [
+                    "--window-position=0,0",
+                    f"--window-size={self.interactive_view.width},{self.interactive_view.height}",
+                ]
+            )
 
         self.playwright = await async_playwright().start()
         launch_kwargs: dict[str, Any] = {
@@ -823,13 +841,17 @@ class _BrowserRuntimeCore:
             "headless": not bool(browser_display),
             "accept_downloads": True,
             "downloads_path": str(self.downloads_dir),
-            "viewport": DEFAULT_VIEWPORT,
-            "screen": DEFAULT_VIEWPORT,
-            "no_viewport": False,
-            "args": launch_config["args"],
+            "args": launch_args,
         }
         if browser_display:
             launch_kwargs["env"] = {**os.environ, "DISPLAY": browser_display}
+            launch_kwargs["no_viewport"] = True
+        else:
+            launch_kwargs.update(
+                viewport=DEFAULT_VIEWPORT,
+                screen=DEFAULT_VIEWPORT,
+                no_viewport=False,
+            )
         if launch_config["channel"]:
             launch_kwargs["channel"] = launch_config["channel"]
         else:
@@ -857,6 +879,7 @@ class _BrowserRuntimeCore:
             if page.url == "about:blank":
                 if browser_display and self._bootstrap_page is None:
                     self._bootstrap_page = page
+                    await self._fit_browser_window(page)
                     continue
                 try:
                     await page.close()
@@ -1236,8 +1259,12 @@ class _BrowserRuntimeCore:
     async def set_active(self, browser_id: int | str | None) -> dict[str, Any]:
         await self.ensure_started()
         resolved_id = self._resolve_browser_id(browser_id)
+        page = self._page(resolved_id)
         # Explicit focus change — bypass _maybe_promote.
         self.last_interacted_browser_id = int(resolved_id)
+        with contextlib.suppress(Exception):
+            await page.bring_to_front()
+        await self._fit_browser_window(page)
         return await self._state(resolved_id)
 
     async def state(self, browser_id: int | str | None = None) -> dict[str, Any]:
@@ -1703,7 +1730,7 @@ class _BrowserRuntimeCore:
             await screencast.start(
                 quality=quality,
                 every_nth_frame=every_nth_frame,
-                viewport=page.viewport_size or DEFAULT_VIEWPORT,
+                viewport=await self._page_viewport(page),
                 capture_scale=capture_scale,
             )
         except Exception:
@@ -1715,6 +1742,61 @@ class _BrowserRuntimeCore:
             "stream_id": stream_id,
             "browser_id": resolved_id,
             "state": await self._state(resolved_id),
+        }
+
+    @staticmethod
+    async def _page_viewport(page: Any) -> dict[str, int]:
+        viewport = getattr(page, "viewport_size", None)
+        if viewport:
+            return {
+                "width": int(viewport.get("width") or DEFAULT_VIEWPORT["width"]),
+                "height": int(viewport.get("height") or DEFAULT_VIEWPORT["height"]),
+            }
+        try:
+            measured = await page.evaluate(
+                "() => ({ width: globalThis.innerWidth, height: globalThis.innerHeight })",
+                isolated_context=False,
+            )
+            return {
+                "width": int(measured.get("width") or DEFAULT_VIEWPORT["width"]),
+                "height": int(measured.get("height") or DEFAULT_VIEWPORT["height"]),
+            }
+        except Exception:
+            return dict(DEFAULT_VIEWPORT)
+
+    async def interactive_viewer(
+        self,
+        browser_id: int | str | None = None,
+        *,
+        width: int = 0,
+        height: int = 0,
+    ) -> dict[str, Any]:
+        await self.ensure_started()
+        resolved_id = self._resolve_browser_id(browser_id)
+        page = self._page(resolved_id)
+        current_viewport = await self._page_viewport(page)
+        viewer = self.interactive_view.ensure_viewer(
+            width or int(current_viewport.get("width") or DEFAULT_VIEWPORT["width"]),
+            height or int(current_viewport.get("height") or DEFAULT_VIEWPORT["height"]),
+        )
+        if not viewer.get("available"):
+            return viewer
+
+        await self._stop_screencasts_for_browser(resolved_id)
+        with contextlib.suppress(Exception):
+            await page.bring_to_front()
+        viewport_result = await self.set_viewport(
+            resolved_id,
+            int(viewer.get("width") or width or DEFAULT_VIEWPORT["width"]),
+            int(viewer.get("height") or height or DEFAULT_VIEWPORT["height"]),
+            resize_interactive=True,
+        )
+        self.last_interacted_browser_id = int(resolved_id)
+        return {
+            **viewer,
+            "browser_id": resolved_id,
+            "state": viewport_result["state"],
+            "viewport": viewport_result["viewport"],
         }
 
     async def read_screencast_frame(
@@ -1756,15 +1838,30 @@ class _BrowserRuntimeCore:
         width: int,
         height: int,
         restart_screencast: bool = False,
+        resize_interactive: bool = False,
+        include_state: bool = True,
     ) -> dict[str, Any]:
         await self.ensure_started()
         resolved_id = self._resolve_browser_id(browser_id)
         page = self._page(resolved_id)
+        if resize_interactive:
+            resized = self.interactive_view.resize(width, height)
+            viewport = {
+                "width": int(resized.get("width") or self.interactive_view.width),
+                "height": int(resized.get("height") or self.interactive_view.height),
+            }
+            await self._fit_browser_window(page)
+            self._maybe_promote(resolved_id)
+            return {
+                "state": await self._state(resolved_id) if include_state else None,
+                "viewport": viewport,
+            }
+
         viewport = {
             "width": max(320, min(4096, int(width or DEFAULT_VIEWPORT["width"]))),
             "height": max(200, min(4096, int(height or DEFAULT_VIEWPORT["height"]))),
         }
-        current_viewport = page.viewport_size or {}
+        current_viewport = await self._page_viewport(page)
         changed = (
             abs(int(current_viewport.get("width") or 0) - viewport["width"])
             > VIEWPORT_SIZE_TOLERANCE
@@ -2182,6 +2279,7 @@ class _BrowserRuntimeCore:
         self._pending_popups.clear()
         self._background_popup_pages.clear()
         await self._stop_all_screencasts()
+        await self._reset_browser_window_session()
         for browser_id in list(self.pages):
             try:
                 await self.pages[browser_id].page.close()
@@ -2315,7 +2413,67 @@ class _BrowserRuntimeCore:
     async def _register_page(self, page: Any) -> BrowserPage:
         lock = self._ensure_registry_lock()
         async with lock:
-            return self._register_page_locked(page)
+            browser_page = self._register_page_locked(page)
+        await self._fit_browser_window(page)
+        return browser_page
+
+    async def _fit_browser_window(self, page: Any) -> None:
+        if getattr(self.interactive_view, "display", None) is None or not self.context:
+            return
+        try:
+            if self._browser_window_session is None or self._browser_window_page is not page:
+                await self._reset_browser_window_session()
+                self._browser_window_page = page
+                self._browser_window_session = await self.context.new_cdp_session(page)
+                target = await self._browser_window_session.send("Browser.getWindowForTarget")
+                self._browser_window_id = target.get("windowId")
+                if self._browser_window_id is None:
+                    await self._reset_browser_window_session()
+                    return
+                current = await self._browser_window_session.send(
+                    "Browser.getWindowBounds",
+                    {"windowId": self._browser_window_id},
+                )
+                if current.get("bounds", {}).get("windowState") != "normal":
+                    await self._browser_window_session.send(
+                        "Browser.setWindowBounds",
+                        {
+                            "windowId": self._browser_window_id,
+                            "bounds": {"windowState": "normal"},
+                        },
+                    )
+            if self._browser_chrome_height is None:
+                chrome_height = await page.evaluate(
+                    "() => Math.max(0, globalThis.outerHeight - globalThis.innerHeight)",
+                    isolated_context=False,
+                )
+                self._browser_chrome_height = max(0, min(256, int(chrome_height or 0)))
+            chrome_height = self._browser_chrome_height
+            await self._browser_window_session.send(
+                "Browser.setWindowBounds",
+                {
+                    "windowId": self._browser_window_id,
+                    "bounds": {
+                        "windowState": "normal",
+                        "left": 0,
+                        "top": -chrome_height,
+                        "width": self.interactive_view.width,
+                        "height": self.interactive_view.height + chrome_height,
+                    },
+                },
+            )
+        except Exception as exc:
+            await self._reset_browser_window_session()
+            PrintStyle.warning(f"Interactive Browser window fit failed: {exc}")
+
+    async def _reset_browser_window_session(self) -> None:
+        session = self._browser_window_session
+        self._browser_window_page = None
+        self._browser_window_session = None
+        self._browser_window_id = None
+        if session:
+            with contextlib.suppress(Exception):
+                await session.detach()
 
     async def _unregister_page_async(self, browser_id: int) -> None:
         try:
@@ -2372,6 +2530,8 @@ class _BrowserRuntimeCore:
             if close_over_limit:
                 with contextlib.suppress(Exception):
                     await page.close()
+            else:
+                await self._fit_browser_window(page)
         except Exception as exc:
             PrintStyle.warning(f"Popup registration failed: {exc}")
 

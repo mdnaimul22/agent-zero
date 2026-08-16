@@ -2,23 +2,30 @@
 
 ## Purpose
 
-- Own the built-in Playwright browser tool and WebUI browser viewer.
+- Own the built-in Patchright browser tool and WebUI browser viewer.
 - Bridge browser automation, page inspection helpers, and browser panel UI.
 
 ## Ownership
 
 - `plugin.yaml` and `default_config.yaml` own metadata and browser settings defaults.
 - `tools/browser.py` owns the agent-facing browser tool.
-- `helpers/` owns Playwright runtime, selectors, URL helpers, extension management, and connector runtime logic.
+- `helpers/` owns the Patchright runtime, private interactive display, selectors, URL helpers, extension management, and connector runtime logic.
 - `api/` owns status, extension, and browser WebSocket handlers.
 - `assets/`, `prompts/`, `skills/`, `extensions/`, and `webui/` own browser scripts, prompts, skill guidance, hook contributions, and UI.
 
 ## Local Contracts
 
 - Keep browser actions safe around external pages, credentials, and user data.
-- Preserve Playwright lifecycle cleanup and WebSocket viewer compatibility across regular host browsers and Electron WebContentsView embedding.
+- Preserve Patchright lifecycle cleanup and WebSocket viewer compatibility across regular host browsers and Electron WebContentsView embedding.
 - Keep the WebUI Browser inside its own modal/canvas affordance; do not replace it with page-level navigation.
-- Default the visible WebUI Browser to live CDP screencast for responsiveness. Keep lightweight CDP/DOM state snapshots as the fallback transport.
+- Default the visible WebUI Browser to the authenticated Xpra HTML5 viewer for its existing Patchright page. Keep live CDP screencast and lightweight snapshots as automatic fallbacks.
+- Keep headful Chromium in a normal window with its own toolbar clipped above the private display; do not use browser fullscreen, which shows Chromium's exit warning.
+- Throttle interactive resize updates throughout a drag and let the native-sized Chromium viewport follow the private display; do not defer all layout updates until resizing stops.
+- Keep exactly one interactive viewer iframe connected during canvas/modal handoff so hidden surfaces cannot compete to resize the same display.
+- Notify the active Xpra client of its new frame geometry before resizing the backing display; after an interactive canvas/modal handoff, reconcile once after Xpra's deferred resize so Chromium cannot retain the previous surface size.
+- Present the Xpra shadow window as the raw browser canvas: remove its HTML decoration and shadow pointer while preserving exact viewport geometry.
+- Give every internal Browser runtime its own Xvfb display and unguessable Xpra gateway token; never expose another chat context's display through a shared viewer.
+- Bind Browser Xpra endpoints to loopback, route them through the authenticated virtual-desktop gateway, and keep file transfer, URL opening, printing, and audio disabled.
 - Paint live screencast frames through the Browser panel canvas/ImageBitmap path when available; keep the `<img>`/data URL path for snapshots and fallback rendering.
 - Push internal screencast frames from the runtime to the WebSocket consumer after subscription; keep `read/pop_screencast_frame` as fallback/tooling APIs, not the WebUI hot path.
 - Keep Browser viewer frame transport capability-negotiated: updated clients may request binary/slim screencast frames, while older clients must keep the base64/full-metadata fallback. Do not let the WebUI advertise binary frames unless its Socket.IO client reconstructs attachments as real `Blob`, `ArrayBuffer`, or typed-array values.
@@ -35,6 +42,7 @@
 - Run internal Chromium headful through Patchright on the private virtual display; do not add user-agent or header spoofing on top of the patched driver.
 - Browser startup and on-demand launch must converge on the Chromium revision declared by Patchright; let its installer select the host architecture rather than hardcoding x64 or ARM downloads.
 - `hooks.prepare_playwright_cache()` owns reconciliation of the pinned Patchright package and Chromium binary so repository self-updates and fresh images use the same setup path.
+- Browser startup must install the shared virtual-desktop route hook itself; do not make Browser depend on the Desktop plugin being enabled.
 
 ## Work Guidance
 
@@ -47,7 +55,7 @@
 ## Verification
 
 - Smoke-test browser launch, navigation, DOM capture, and WebUI viewer after runtime changes.
-- For viewer render-path changes, verify the live Browser panel paints a screencast frame on canvas with `frameSrc` empty and snapshots still falling back to the image path.
+- For viewer render-path changes, verify direct iframe interaction reaches the same page controlled by Patchright, separate contexts use separate displays, and an unavailable Xpra runtime falls back to CDP screencast/snapshot rendering.
 - Run browser prompt/skill regression tests after changing browser prompt or Browser plugin skills.
 
 ## Child DOX Index

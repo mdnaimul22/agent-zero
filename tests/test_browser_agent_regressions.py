@@ -82,7 +82,7 @@ sys.modules.setdefault("plugins._model_config.helpers.model_config", _model_conf
 def anyio_backend():
     return "asyncio"
 
-from helpers import ephemeral_images
+from helpers import ephemeral_images, virtual_desktop
 from helpers.errors import RepairableException
 from plugins._browser.helpers.config import (
     build_browser_launch_config,
@@ -109,6 +109,8 @@ from plugins._browser.helpers.runtime import (
     normalize_url,
 )
 import plugins._browser.helpers.runtime as browser_runtime_module
+from plugins._browser.helpers.interactive_view import BrowserInteractiveView
+import plugins._browser.helpers.interactive_view as browser_interactive_view_module
 from plugins._browser.helpers.playwright import (
     ensure_playwright_binary,
     get_playwright_binary,
@@ -833,7 +835,8 @@ def test_browser_viewer_allows_slow_extension_startup():
     assert "const BROWSER_COMMAND_TIMEOUT_MS = 45000;" in js
     assert "? BROWSER_FIRST_INSTALL_TIMEOUT_MS" in js
     assert ": BROWSER_SUBSCRIBE_TIMEOUT_MS" in js
-    assert "Installing Chromium for the first Browser run" in js
+    assert "browserInstallExpected" in js
+    assert "Installing Chromium for the first Browser run" not in js
 
 
 def test_browser_viewer_creates_chat_when_no_context_is_selected():
@@ -878,6 +881,20 @@ def test_browser_canvas_startup_waits_for_raw_viewport_settle():
     assert "if (this.hasFrame() && !targetChanged)" in js
     assert "this.cancelFrameRender();" in js
     assert "this.resetRenderedFrame();" in js
+
+
+def test_browser_interactive_modal_handoff_reconciles_after_xpra_resize():
+    js = (PROJECT_ROOT / "plugins" / "_browser" / "webui" / "browser-store.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "const INTERACTIVE_VIEWPORT_SETTLE_MS = 320;" in js
+    assert "const surfaceMode = this._mode;" in js
+    assert 'surfaceMode === "modal" && this.usesInteractiveTransport()' in js
+    assert "this.scheduleViewportSyncForSurface(sequence, INTERACTIVE_VIEWPORT_SETTLE_MS, surfaceMode);" in js
+    assert "scheduleViewportSyncForSurface(sequence, delayMs = 0, mode = this._mode)" in js
+    assert "this._mode !== mode" in js
+    assert "(!force && !restartStream && this._lastViewportKey === key)" in js
 
 
 def test_browser_surface_handoffs_keep_existing_frame_until_replacement_arrives():
@@ -1393,6 +1410,12 @@ def test_browser_viewer_uses_tabs_for_session_switching():
     assert ':key="$store.browserPage.browserTabKey(browser)"' in main_html
     assert "browser.context_id" in main_html
     assert ':title="$store.browserPage.browserTabTooltip(browser)"' in main_html
+    assert ':aria-busy="$store.browserPage.isBrowserLoading(browser).toString()"' in main_html
+    assert 'class="browser-tab-loading spinning"' in main_html
+    assert 'x-show="$store.browserPage.isBrowserLoading(browser)"' in main_html
+    assert "<span x-text=\"$store.browserPage.loadingMessage()\">Loading</span>" not in main_html
+    assert "isBrowserLoading(browser)" in browser_store
+    assert "loadingMessage()" not in browser_store
     assert "browser-tab-context" not in main_html
     assert 'handleSelectedContextChange($store.chats?.selected)' in main_html
     assert "activeBrowserContextId" in browser_store
@@ -1445,7 +1468,7 @@ def test_browser_tabs_close_without_confirmation_or_busy_lock():
     assert "_commandInFlightCount" in browser_store
 
 
-def test_browser_viewer_defaults_to_live_screencast_with_snapshot_fallback():
+def test_browser_viewer_defaults_to_interactive_with_screencast_and_snapshot_fallbacks():
     ws_browser = (PROJECT_ROOT / "plugins" / "_browser" / "api" / "ws_browser.py").read_text(
         encoding="utf-8"
     )
@@ -1465,6 +1488,9 @@ def test_browser_viewer_defaults_to_live_screencast_with_snapshot_fallback():
     assert 'runtime.call("screenshot"' in ws_browser
     assert 'VIEWER_TRANSPORT_SNAPSHOT = "snapshot"' in ws_browser
     assert 'VIEWER_TRANSPORT_SCREENCAST = "screencast"' in ws_browser
+    assert 'VIEWER_TRANSPORT_INTERACTIVE = "interactive"' in ws_browser
+    assert "async def _effective_viewer(" in ws_browser
+    assert "return VIEWER_TRANSPORT_SCREENCAST, viewer" in ws_browser
     assert "def _viewer_transport(data: dict[str, Any])" in ws_browser
     assert "return VIEWER_TRANSPORT_SNAPSHOT" in ws_browser
     assert "self._stream_state" in ws_browser
@@ -1510,8 +1536,20 @@ def test_browser_viewer_defaults_to_live_screencast_with_snapshot_fallback():
     assert "return await globalThis.createImageBitmap(blob);" in browser_store
     assert 'const BROWSER_VIEWER_TRANSPORT_SNAPSHOT = "snapshot";' in browser_store
     assert 'const BROWSER_VIEWER_TRANSPORT_SCREENCAST = "screencast";' in browser_store
-    assert "viewerTransport: BROWSER_VIEWER_TRANSPORT_SCREENCAST" in browser_store
-    assert "liveScreencastEnabled: true" in browser_store
+    assert 'const BROWSER_VIEWER_TRANSPORT_INTERACTIVE = "interactive";' in browser_store
+    assert "const VIEWPORT_SYNC_INTERVAL_MS = 50;" in browser_store
+    assert "viewerTransport: BROWSER_VIEWER_TRANSPORT_INTERACTIVE" in browser_store
+    assert "return BROWSER_VIEWER_TRANSPORT_INTERACTIVE;" in browser_store
+    assert "usesInteractiveTransport()" in browser_store
+    assert "isInteractiveSurface(stage = null)" in browser_store
+    assert "prepareInteractiveViewFrame(frame = null)" in browser_store
+    assert 'style.id = "a0-xpra-browser-frame-css";' in browser_store
+    assert "#shadow_pointer" in browser_store
+    assert "xpraWindow._set_decorated?.(false);" in browser_store
+    assert "xpraWindow.updateCSSGeometry?.();" in browser_store
+    assert "syncInteractiveViewSize()" in browser_store
+    assert "frame?.contentWindow?.client?._screen_resized?.();" in browser_store
+    assert "applyViewer(data = {})" in browser_store
     assert "requestedViewerTransport()" in browser_store
     assert "normalizeViewerTransport(value = \"\")" in browser_store
     assert "usesScreencastTransport()" in browser_store
@@ -1583,6 +1621,11 @@ def test_browser_viewer_defaults_to_live_screencast_with_snapshot_fallback():
     assert "canvas_wheel_screenshot" not in ws_browser
     assert "surface_mode: this._mode" not in browser_store
     assert '<canvas class="browser-frame browser-frame-canvas"' in main_html
+    assert '<iframe class="browser-interactive-frame"' in main_html
+    assert 'x-if="$store.browserPage.isInteractiveSurface($el.parentElement)"' in main_html
+    assert 'aria-label="Browser viewport"' in main_html
+    assert 'title="Interactive Browser viewport"' not in main_html
+    assert 'allow="clipboard-read; clipboard-write"' in main_html
     assert 'x-init="$store.browserPage.attachFrameCanvas($el)"' in main_html
     assert '<img class="browser-frame browser-frame-image"' in main_html
     assert "$store.browserPage.hasFrame()" in main_html
@@ -2207,7 +2250,12 @@ def test_browser_docker_installs_full_chromium_to_tmp_cache():
     ).read_text(encoding="utf-8")
     assert '"headless": not bool(browser_display)' in runtime
     assert 'launch_kwargs["env"] = {**os.environ, "DISPLAY": browser_display}' in runtime
+    assert 'launch_kwargs["no_viewport"] = True' in runtime
+    assert '"windowState": "fullscreen"' not in runtime
+    assert "self.interactive_view.ensure_display()" in runtime
     assert "  xvfb \\" in install_additional
+    assert "XPRA_PACKAGES=(xpra xpra-x11 xpra-html5)" in install_additional
+    assert "  xdotool \\" in install_additional
 
 
 def test_browser_startup_migration_prepares_current_playwright_binary():
@@ -2222,8 +2270,246 @@ def test_browser_startup_migration_prepares_current_playwright_binary():
     ).read_text(encoding="utf-8")
 
     assert "class BrowserPlaywrightCacheMigration(Extension)" in extension
+    assert "virtual_desktop_routes.install_route_hooks()" in extension
     assert "hooks.prepare_playwright_cache()" in extension
     assert "PrintStyle.warning" in extension
+
+
+def test_browser_interactive_views_use_isolated_loopback_sessions(monkeypatch, tmp_path):
+    class FakeProcess:
+        def __init__(self):
+            self.returncode = None
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+    next_display = iter((71, 72))
+    next_port = iter((44001, 44002))
+
+    def fake_ensure_display(view):
+        view.display = next(next_display)
+        view._xvfb = FakeProcess()
+        return view.display_name
+
+    def fake_resize(view, width, height):
+        view.width, view.height = virtual_desktop.normalize_size(width, height)
+        return {"ok": True, "width": view.width, "height": view.height}
+
+    def fake_start_xpra(view, xpra):
+        assert xpra == "/usr/bin/xpra"
+        view.port = next(next_port)
+        view._xpra = FakeProcess()
+
+    monkeypatch.setattr(
+        browser_interactive_view_module.files,
+        "get_abs_path",
+        lambda *parts: str(tmp_path.joinpath(*parts)),
+    )
+    monkeypatch.setattr(BrowserInteractiveView, "ensure_display", fake_ensure_display)
+    monkeypatch.setattr(BrowserInteractiveView, "resize", fake_resize)
+    monkeypatch.setattr(BrowserInteractiveView, "_start_xpra", fake_start_xpra)
+    monkeypatch.setattr(
+        browser_interactive_view_module,
+        "collect_status",
+        lambda: {
+            "available": True,
+            "missing": [],
+            "binaries": {"xpra": "/usr/bin/xpra"},
+            "xpra_html_root": "/usr/share/xpra/www",
+        },
+    )
+
+    views = [BrowserInteractiveView("ctx-a"), BrowserInteractiveView("ctx-b")]
+    try:
+        viewers = [view.ensure_viewer(1200, 700) for view in views]
+
+        assert views[0].token != views[1].token
+        assert views[0].display != views[1].display
+        assert all(viewer["available"] for viewer in viewers)
+        for view, viewer in zip(views, viewers, strict=True):
+            endpoint = virtual_desktop.proxy_for_token(view.token)
+            assert endpoint is not None
+            assert endpoint.host == "127.0.0.1"
+            assert endpoint.owner == "browser"
+            assert endpoint.port == view.port
+            assert viewer["token"] == view.token
+            assert "file_transfer=false" in viewer["url"]
+            assert "printing=false" in viewer["url"]
+    finally:
+        for view in views:
+            view.close()
+
+    assert all(virtual_desktop.proxy_for_token(view.token) is None for view in views)
+
+
+@pytest.mark.anyio
+async def test_browser_interactive_viewer_reuses_the_automated_page():
+    class FakePage:
+        viewport_size = {"width": 1024, "height": 768}
+
+    class FakeInteractiveView:
+        def __init__(self):
+            self.ensure_calls = []
+
+        def ensure_viewer(self, width, height):
+            self.ensure_calls.append((width, height))
+            return {
+                "available": True,
+                "token": "browser-token",
+                "url": "/desktop/session/browser-token/",
+                "width": width,
+                "height": height,
+            }
+
+    page = FakePage()
+    interactive_view = FakeInteractiveView()
+    viewport_calls = []
+    stopped = []
+    core = _BrowserRuntimeCore("ctx")
+    core.context = object()
+    core.pages[7] = BrowserPage(id=7, page=page)
+    core.interactive_view = interactive_view
+
+    async def ensure_started():
+        return None
+
+    async def stop_screencasts(browser_id):
+        stopped.append(browser_id)
+
+    async def set_viewport(browser_id, width, height, **kwargs):
+        viewport_calls.append((browser_id, width, height, kwargs))
+        return {"state": {"id": browser_id}, "viewport": {"width": width, "height": height}}
+
+    core.ensure_started = ensure_started
+    core._stop_screencasts_for_browser = stop_screencasts
+    core.set_viewport = set_viewport
+
+    result = await core.interactive_viewer(7, width=1200, height=700)
+
+    assert core.pages[7].page is page
+    assert interactive_view.ensure_calls == [(1200, 700)]
+    assert stopped == [7]
+    assert viewport_calls == [(7, 1200, 700, {"resize_interactive": True})]
+    assert core.last_interacted_browser_id == 7
+    assert result["url"] == "/desktop/session/browser-token/"
+
+
+@pytest.mark.anyio
+async def test_browser_interactive_window_clips_chrome_without_fullscreen():
+    commands = []
+
+    class FakeSession:
+        async def send(self, method, params=None):
+            commands.append((method, params))
+            if method == "Browser.getWindowForTarget":
+                return {"windowId": 7}
+            if method == "Browser.getWindowBounds":
+                return {
+                    "bounds": {
+                        "windowState": "normal",
+                        "left": 0,
+                        "top": 0,
+                        "width": 1024,
+                        "height": 768,
+                    }
+                }
+            return {}
+
+        async def detach(self):
+            commands.append(("detach", None))
+
+    class FakeContext:
+        async def new_cdp_session(self, page):
+            assert page is fake_page
+            return FakeSession()
+
+    class FakeInteractiveView:
+        display = 0
+        width = 1200
+        height = 700
+
+    class FakePage:
+        async def evaluate(self, script, **kwargs):
+            commands.append(("evaluate", script))
+            return 87
+
+    fake_page = FakePage()
+    core = _BrowserRuntimeCore("ctx")
+    core.context = FakeContext()
+    core.interactive_view = FakeInteractiveView()
+
+    await core._fit_browser_window(fake_page)
+    core.interactive_view.width = 1280
+    core.interactive_view.height = 720
+    await core._fit_browser_window(fake_page)
+    await core._reset_browser_window_session()
+
+    assert commands == [
+        ("Browser.getWindowForTarget", None),
+        ("Browser.getWindowBounds", {"windowId": 7}),
+        (
+            "evaluate",
+            "() => Math.max(0, globalThis.outerHeight - globalThis.innerHeight)",
+        ),
+        (
+            "Browser.setWindowBounds",
+            {
+                "windowId": 7,
+                "bounds": {
+                    "windowState": "normal",
+                    "left": 0,
+                    "top": -87,
+                    "width": 1200,
+                    "height": 787,
+                },
+            },
+        ),
+        (
+            "Browser.setWindowBounds",
+            {
+                "windowId": 7,
+                "bounds": {
+                    "windowState": "normal",
+                    "left": 0,
+                    "top": -87,
+                    "width": 1280,
+                    "height": 807,
+                },
+            },
+        ),
+        ("detach", None),
+    ]
+
+
+@pytest.mark.anyio
+async def test_browser_viewer_falls_back_when_interactive_runtime_is_unavailable():
+    calls = []
+
+    class FakeRuntime:
+        async def call(self, method, *args, **kwargs):
+            calls.append((method, args, kwargs))
+            return {"available": False, "error": "xpra unavailable"}
+
+    handler = ws_browser_module.WsBrowser(SimpleNamespace(), threading.RLock(), manager=None)
+    transport, viewer = await handler._effective_viewer(
+        FakeRuntime(),
+        7,
+        {
+            "viewer_transport": "interactive",
+            "viewport_width": 1200,
+            "viewport_height": 700,
+        },
+    )
+
+    assert transport == ws_browser_module.VIEWER_TRANSPORT_SCREENCAST
+    assert viewer == {"available": False, "error": "xpra unavailable"}
+    assert calls == [("interactive_viewer", (7,), {"width": 1200, "height": 700})]
 
 
 def test_browser_runtime_removes_stale_profile_singletons(monkeypatch, tmp_path):
@@ -3245,6 +3531,7 @@ async def test_browser_viewer_viewport_input_dispatches_resize(monkeypatch):
             "width": 1280,
             "height": 720,
             "restart_stream": True,
+            "viewer_transport": "interactive",
         },
         "sid-1",
     )
@@ -3254,8 +3541,66 @@ async def test_browser_viewer_viewport_input_dispatches_resize(monkeypatch):
         "snapshot": None,
     }
     assert calls == [
-        ("set_viewport", (7, 1280, 720), {"restart_screencast": True})
+        (
+            "set_viewport",
+            (7, 1280, 720),
+            {
+                "restart_screencast": True,
+                "resize_interactive": True,
+                "include_state": False,
+            },
+        )
     ]
+
+
+@pytest.mark.anyio
+async def test_browser_interactive_resize_uses_native_window_viewport():
+    fitted = []
+
+    class FakePage:
+        viewport_size = None
+
+        async def set_viewport_size(self, viewport):
+            raise AssertionError("Interactive native viewport must not enable emulation")
+
+    class FakeInteractiveView:
+        display = 0
+        width = 1024
+        height = 768
+
+        def resize(self, width, height):
+            self.width = width
+            self.height = height
+            return {"ok": True, "width": width, "height": height}
+
+    page = FakePage()
+    core = _BrowserRuntimeCore("ctx")
+    core.context = object()
+    core.pages[7] = browser_runtime_module.BrowserPage(id=7, page=page)
+    core.interactive_view = FakeInteractiveView()
+
+    async def fake_fit(fitted_page):
+        fitted.append(fitted_page)
+
+    async def fake_state(browser_id):
+        return {"id": browser_id}
+
+    core._fit_browser_window = fake_fit
+    core._state = fake_state
+
+    result = await core.set_viewport(
+        7,
+        1280,
+        720,
+        resize_interactive=True,
+        include_state=False,
+    )
+
+    assert result == {
+        "state": None,
+        "viewport": {"width": 1280, "height": 720},
+    }
+    assert fitted == [page]
 
 
 @pytest.mark.anyio

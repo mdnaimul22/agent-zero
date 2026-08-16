@@ -1,9 +1,6 @@
-import atexit
 import json
 import os
 import re
-import select
-import shutil
 import subprocess
 import sys
 import threading
@@ -23,9 +20,6 @@ RETIRED_PLAYWRIGHT_CACHE_DIRS = (
     ("usr", "browser", "playwright"),
 )
 _INSTALL_LOCK = threading.Lock()
-_DISPLAY_LOCK = threading.Lock()
-_DISPLAY_PROCESS: subprocess.Popen | None = None
-_DISPLAY_NAME = ""
 
 
 def _primary_cache_dir() -> Path:
@@ -62,82 +56,6 @@ def configure_playwright_env() -> str:
     Path(cache_dir).mkdir(parents=True, exist_ok=True)
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = cache_dir
     return cache_dir
-
-
-def ensure_browser_display() -> str:
-    global _DISPLAY_NAME, _DISPLAY_PROCESS
-
-    with _DISPLAY_LOCK:
-        if _DISPLAY_PROCESS and _DISPLAY_PROCESS.poll() is None:
-            return _DISPLAY_NAME
-
-        xvfb = shutil.which("Xvfb")
-        if not xvfb:
-            return ""
-
-        read_fd, write_fd = os.pipe()
-        try:
-            process = subprocess.Popen(
-                [
-                    xvfb,
-                    "-displayfd",
-                    str(write_fd),
-                    "-screen",
-                    "0",
-                    "1365x768x24",
-                    "+extension",
-                    "GLX",
-                    "-nolisten",
-                    "tcp",
-                    "-noreset",
-                    "-ac",
-                ],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                pass_fds=(write_fd,),
-            )
-        except OSError:
-            os.close(read_fd)
-            return ""
-        finally:
-            os.close(write_fd)
-
-        try:
-            ready, _, _ = select.select([read_fd], [], [], 5)
-            display_number = os.read(read_fd, 32).decode().strip() if ready else ""
-        finally:
-            os.close(read_fd)
-
-        if not display_number.isdigit() or process.poll() is not None:
-            _terminate_browser_display(process)
-            return ""
-
-        _DISPLAY_PROCESS = process
-        _DISPLAY_NAME = f":{display_number}"
-        return _DISPLAY_NAME
-
-
-def close_browser_display() -> None:
-    global _DISPLAY_NAME, _DISPLAY_PROCESS
-
-    with _DISPLAY_LOCK:
-        process = _DISPLAY_PROCESS
-        _DISPLAY_PROCESS = None
-        _DISPLAY_NAME = ""
-    if process:
-        _terminate_browser_display(process)
-
-
-def _terminate_browser_display(process: subprocess.Popen) -> None:
-    if process.poll() is not None:
-        return
-    process.terminate()
-    try:
-        process.wait(timeout=2)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=2)
 
 
 def find_playwright_binary(cache_dir: Path, revision: str = "") -> Path | None:
@@ -197,6 +115,3 @@ def ensure_playwright_binary() -> Path:
         if not binary:
             raise RuntimeError("Patchright Chromium binary not found after installation")
         return binary
-
-
-atexit.register(close_browser_display)

@@ -20,10 +20,13 @@
                 <div class="browser-tab-shell" :class="{ 'is-active': $store.browserPage.isActiveBrowser(browser) }">
 	                  <button type="button" class="browser-tab" role="tab"
 	                    :aria-selected="$store.browserPage.isActiveBrowser(browser).toString()"
+	                    :aria-busy="$store.browserPage.isBrowserLoading(browser).toString()"
 	                    :title="$store.browserPage.browserTabTooltip(browser)"
 	                    @click="$store.browserPage.selectBrowser(browser.id, browser.context_id)">
                     <x-icon class="browser-tab-icon" aria-hidden="true" name="language"></x-icon>
                     <span class="browser-tab-title" x-text="$store.browserPage.browserTabTitle(browser)"></span>
+                    <x-icon class="browser-tab-loading spinning" aria-hidden="true"
+                      x-show="$store.browserPage.isBrowserLoading(browser)" name="progress_activity"></x-icon>
                   </button>
 	                  <button type="button" class="browser-tab-close"
 	                    :title="'Close ' + $store.browserPage.browserTabLabel(browser)"
@@ -185,15 +188,22 @@
           </form>
         </div>
 
-	        <div class="browser-stage" tabindex="0" @click="$el.focus()"
-	          :class="{ 'is-annotating': $store.browserPage.annotating }"
-	          @wheel.prevent="$store.browserPage.handleStageWheel($event)">
-	          <canvas class="browser-frame browser-frame-canvas"
-	            x-show="$store.browserPage.frameCanvasReady"
-	            x-init="$store.browserPage.attachFrameCanvas($el)"
-	            @click="$store.browserPage.sendMouse('click', $event)"
-	            @mousemove.throttle.250ms="$store.browserPage.sendMouse('move', $event)"></canvas>
-	          <template x-if="$store.browserPage.frameSrc">
+        <div class="browser-stage" tabindex="0" @click="$el.focus()"
+          :class="{ 'is-annotating': $store.browserPage.annotating }"
+          @wheel.prevent="$store.browserPage.handleStageWheel($event)">
+          <template x-if="$store.browserPage.isInteractiveSurface($el.parentElement)">
+            <iframe class="browser-interactive-frame"
+              :src="$store.browserPage.interactiveViewUrl"
+              aria-label="Browser viewport"
+              allow="clipboard-read; clipboard-write"
+              @load="$store.browserPage.onInteractiveViewLoad()"></iframe>
+          </template>
+          <canvas class="browser-frame browser-frame-canvas"
+            x-show="!$store.browserPage.usesInteractiveTransport() && $store.browserPage.frameCanvasReady"
+            x-init="$store.browserPage.attachFrameCanvas($el)"
+            @click="$store.browserPage.sendMouse('click', $event)"
+            @mousemove.throttle.250ms="$store.browserPage.sendMouse('move', $event)"></canvas>
+          <template x-if="!$store.browserPage.usesInteractiveTransport() && $store.browserPage.frameSrc">
             <img class="browser-frame browser-frame-image" :src="$store.browserPage.frameSrc"
               @click="$store.browserPage.sendMouse('click', $event)"
               @mousemove.throttle.250ms="$store.browserPage.sendMouse('move', $event)" draggable="false" />
@@ -282,18 +292,11 @@
           </template>
         </div>
 
-        <div class="browser-bottom-status"
-          :class="{ 'is-active': $store.browserPage.isBusy() || $store.browserPage.error, 'has-error': $store.browserPage.error && !$store.browserPage.isBusy() }">
-          <template x-if="$store.browserPage.isBusy()">
-            <div class="browser-status" :title="$store.browserPage.loadingMessage()">
-              <x-icon class="spinning" name="progress_activity"></x-icon>
-              <span x-text="$store.browserPage.loadingMessage()">Loading</span>
-            </div>
-          </template>
-          <template x-if="!$store.browserPage.isBusy() && $store.browserPage.error">
+        <template x-if="$store.browserPage.error">
+          <div class="browser-bottom-status has-error">
             <div class="browser-error" x-text="$store.browserPage.error" :title="$store.browserPage.error"></div>
-          </template>
-        </div>
+          </div>
+        </template>
       </div>
     </template>
   </div>
@@ -601,6 +604,13 @@
       white-space: nowrap;
       font-size: 0.88rem;
       font-weight: 600;
+    }
+
+    .browser-tab-loading {
+      flex: 0 0 auto;
+      color: color-mix(in srgb, var(--color-text) 66%, var(--color-primary) 34%);
+      font-size: 0.96rem;
+      line-height: 1;
     }
 
     .browser-tab-close {
@@ -997,19 +1007,31 @@
         cursor: crosshair;
       }
 
-	    .browser-frame {
-	      display: block;
-	      position: absolute;
-	      inset: 0;
-	      width: 100%;
-	      height: 100%;
-	      min-width: 0;
-	      min-height: 0;
-	      object-fit: contain;
-	      image-rendering: auto;
-	      user-select: none;
-	      background: #fff;
-      }
+    .browser-frame {
+      display: block;
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      object-fit: contain;
+      image-rendering: auto;
+      user-select: none;
+      background: #fff;
+    }
+
+    .browser-interactive-frame {
+      display: block;
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      box-sizing: border-box;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #fff;
+    }
 
     .browser-annotation-layer {
       position: absolute;
@@ -1239,7 +1261,6 @@
       background: color-mix(in srgb, #7f1d1d 22%, var(--color-background));
     }
 
-    .browser-status,
     .browser-error {
       display: inline-flex;
       align-items: center;
@@ -1250,15 +1271,10 @@
       white-space: nowrap;
     }
 
-    .browser-status span:not(.material-symbols-outlined),
     .browser-error {
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
-    }
-
-    .browser-status .material-symbols-outlined {
-      font-size: 15px;
     }
 
 	    .browser-modal .spinning,

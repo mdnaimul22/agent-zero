@@ -21,11 +21,13 @@ const BROWSER_SUBSCRIBE_TIMEOUT_MS = 60000;
 const BROWSER_FIRST_INSTALL_TIMEOUT_MS = 300000;
 const BROWSER_COMMAND_TIMEOUT_MS = 45000;
 const BROWSER_CONFIG_REFRESH_MS = 15000;
+const BROWSER_VIEWER_TRANSPORT_INTERACTIVE = "interactive";
 const BROWSER_VIEWER_TRANSPORT_SNAPSHOT = "snapshot";
 const BROWSER_VIEWER_TRANSPORT_SCREENCAST = "screencast";
-const VIEWPORT_SYNC_DEBOUNCE_MS = 220;
+const VIEWPORT_SYNC_INTERVAL_MS = 50;
 const VIEWPORT_SYNC_SIZE_TOLERANCE = 4;
 const CANVAS_VIEWPORT_SETTLE_MS = 520;
+const INTERACTIVE_VIEWPORT_SETTLE_MS = 320;
 const SURFACE_VIEWPORT_STABLE_FRAMES = 4;
 const SURFACE_VIEWPORT_MAX_WAIT_MS = 1200;
 const FRAME_REJECT_SYNC_COOLDOWN_MS = 600;
@@ -168,9 +170,10 @@ const model = {
   frameSrc: "",
   frameCanvasReady: false,
   frameState: null,
-  viewerTransport: BROWSER_VIEWER_TRANSPORT_SCREENCAST,
+  viewerTransport: BROWSER_VIEWER_TRANSPORT_INTERACTIVE,
+  interactiveViewUrl: "",
+  viewerFallbackReason: "",
   tabScope: "per_context",
-  liveScreencastEnabled: true,
   annotating: false,
   annotationComments: [],
   annotationDraft: null,
@@ -216,6 +219,7 @@ const model = {
   _openSignature: "",
   _connectSequence: 0,
   _viewerToken: "",
+  _subscribedViewerTransport: BROWSER_VIEWER_TRANSPORT_INTERACTIVE,
   _contextCreatePromise: null,
   _lastSelectedContextId: "",
   _sessionRefreshPromise: null,
@@ -879,6 +883,7 @@ const model = {
 
   resetRenderedFrame() {
     this.cancelFrameRender();
+    this.interactiveViewUrl = "";
     this.clearFrameSrc();
     this.clearFrameCanvas();
     this._lastFrameDimensions = null;
@@ -932,6 +937,7 @@ const model = {
 
   async syncViewportAfterSurfaceOpen(sequence = this._surfaceOpenSequence) {
     if (!this.connected || !this.activeBrowserId) return;
+    const surfaceMode = this._mode;
     await this.waitForSurfaceViewport({ sequence });
     if (!this.isCurrentSurfaceOpen(sequence)) {
       return;
@@ -939,19 +945,24 @@ const model = {
     await this.syncViewport(true, {
       restartStream: this._mode === "canvas" && this.usesScreencastTransport(),
     });
-    if (this._mode !== "canvas") return;
-    this.scheduleViewportSyncForSurface(sequence, 240);
-    this.scheduleViewportSyncForSurface(sequence, 520);
+    if (surfaceMode === "modal" && this.usesInteractiveTransport()) {
+      this.scheduleViewportSyncForSurface(sequence, INTERACTIVE_VIEWPORT_SETTLE_MS, surfaceMode);
+      return;
+    }
+    if (surfaceMode !== "canvas") return;
+    this.scheduleViewportSyncForSurface(sequence, 240, surfaceMode);
+    this.scheduleViewportSyncForSurface(sequence, 520, surfaceMode);
   },
 
   requestedViewerTransport() {
-    return this.liveScreencastEnabled
-      ? BROWSER_VIEWER_TRANSPORT_SCREENCAST
-      : BROWSER_VIEWER_TRANSPORT_SNAPSHOT;
+    return BROWSER_VIEWER_TRANSPORT_INTERACTIVE;
   },
 
   normalizeViewerTransport(value = "") {
     const normalized = String(value || "").trim().toLowerCase().replace("-", "_");
+    if (normalized === BROWSER_VIEWER_TRANSPORT_INTERACTIVE) {
+      return BROWSER_VIEWER_TRANSPORT_INTERACTIVE;
+    }
     if (normalized === BROWSER_VIEWER_TRANSPORT_SCREENCAST) {
       return BROWSER_VIEWER_TRANSPORT_SCREENCAST;
     }
@@ -972,6 +983,101 @@ const model = {
 
   usesScreencastTransport() {
     return this.viewerTransport === BROWSER_VIEWER_TRANSPORT_SCREENCAST;
+  },
+
+  usesInteractiveTransport() {
+    return this.viewerTransport === BROWSER_VIEWER_TRANSPORT_INTERACTIVE
+      && Boolean(this.interactiveViewUrl);
+  },
+
+  isInteractiveSurface(stage = null) {
+    return this.usesInteractiveTransport() && stage === this._stageElement;
+  },
+
+  prepareInteractiveViewFrame(frame = null) {
+    const target = frame || this._stageElement?.querySelector?.(".browser-interactive-frame");
+    const remoteWindow = target?.contentWindow;
+    if (!remoteWindow) return false;
+    try {
+      const remoteDocument = target.contentDocument || remoteWindow.document;
+      if (!remoteDocument) return false;
+      if (!remoteDocument.getElementById("a0-xpra-browser-frame-css")) {
+        const style = remoteDocument.createElement("style");
+        style.id = "a0-xpra-browser-frame-css";
+        style.textContent = `
+          #shadow_pointer {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+          }
+          .window canvas,
+          .undecorated canvas {
+            display: block !important;
+            margin: 0 !important;
+          }
+        `;
+        remoteDocument.head?.appendChild(style);
+      }
+
+      const normalizeWindows = () => {
+        const windows = Object.values(remoteWindow.client?.id_to_window || {});
+        for (const xpraWindow of windows) {
+          xpraWindow.resizable = false;
+          xpraWindow.decorations = false;
+          xpraWindow.decorated = false;
+          xpraWindow.metadata = { ...(xpraWindow.metadata || {}), decorations: false };
+          xpraWindow._set_decorated?.(false);
+          xpraWindow.configure_border_class?.();
+          xpraWindow.leftoffset = 0;
+          xpraWindow.rightoffset = 0;
+          xpraWindow.topoffset = 0;
+          xpraWindow.bottomoffset = 0;
+          xpraWindow.updateCSSGeometry?.();
+        }
+        return windows.length > 0;
+      };
+
+      const screen = remoteDocument.querySelector?.("#screen");
+      if (screen && !remoteWindow.__a0BrowserFrameObserver && remoteWindow.MutationObserver) {
+        const observer = new remoteWindow.MutationObserver(normalizeWindows);
+        observer.observe(screen, { childList: true });
+        remoteWindow.__a0BrowserFrameObserver = observer;
+      }
+      return normalizeWindows();
+    } catch {
+      return false;
+    }
+  },
+
+  syncInteractiveViewSize() {
+    if (!this.usesInteractiveTransport()) return;
+    const frame = this._stageElement?.querySelector?.(".browser-interactive-frame");
+    try {
+      this.prepareInteractiveViewFrame(frame);
+      frame?.contentWindow?.client?._screen_resized?.();
+    } catch {}
+  },
+
+  applyViewer(data = {}) {
+    if (data?.viewer_transport) {
+      this.viewerTransport = this.normalizeViewerTransport(data.viewer_transport);
+    }
+    if (Object.prototype.hasOwnProperty.call(data || {}, "interactive_view")) {
+      const viewer = data.interactive_view;
+      this.interactiveViewUrl = viewer?.available && viewer?.url ? String(viewer.url) : "";
+      this.viewerFallbackReason = String(data.viewer_fallback_reason || viewer?.error || "");
+    }
+    if (this.viewerTransport !== BROWSER_VIEWER_TRANSPORT_INTERACTIVE) {
+      this.interactiveViewUrl = "";
+    }
+  },
+
+  onInteractiveViewLoad() {
+    if (!this.usesInteractiveTransport()) return;
+    this.prepareInteractiveViewFrame();
+    this.switchingBrowserId = null;
+    this._surfaceSwitching = false;
+    this.queueViewportSync(true);
   },
 
   supportsBinaryFrames() {
@@ -1003,9 +1109,9 @@ const model = {
     return { width, height };
   },
 
-  scheduleViewportSyncForSurface(sequence, delayMs = 0) {
+  scheduleViewportSyncForSurface(sequence, delayMs = 0, mode = this._mode) {
     globalThis.setTimeout?.(() => {
-      if (!this.isCurrentSurfaceOpen(sequence) || this._mode !== "canvas") {
+      if (!this.isCurrentSurfaceOpen(sequence) || this._mode !== mode) {
         return;
       }
       this.queueViewportSync(true);
@@ -1093,7 +1199,8 @@ const model = {
       replaceAll: Boolean(data.all_browsers),
       replaceContext: !data.all_browsers,
     });
-    this.viewerTransport = this.normalizeViewerTransport(data.viewer_transport);
+    this.applyViewer(data);
+    this._subscribedViewerTransport = this.viewerTransport;
     this.setActiveBrowserId(
       data.active_browser_id || requestedBrowserId || this.activeBrowserId || null,
       data.active_browser_context_id || contextId,
@@ -1108,9 +1215,7 @@ const model = {
       const frameHandler = ({ data }) => {
         if (data?.context_id !== this.contextId) return;
         if (data?.viewer_id && data.viewer_id !== this._viewerToken) return;
-        if (data?.viewer_transport) {
-          this.viewerTransport = this.normalizeViewerTransport(data.viewer_transport);
-        }
+        this.applyViewer(data);
         this.applyTabScope(data);
         const incomingContextId = this.normalizeContextId(data.context_id || this.contextId);
         const incomingBrowserId = this.normalizeBrowserId(data.browser_id || data.state?.id);
@@ -1180,9 +1285,7 @@ const model = {
       const stateHandler = ({ data }) => {
         if (data?.context_id !== this.contextId) return;
         if (data?.viewer_id && data.viewer_id !== this._viewerToken) return;
-        if (data?.viewer_transport) {
-          this.viewerTransport = this.normalizeViewerTransport(data.viewer_transport);
-        }
+        this.applyViewer(data);
         this.applyTabScope(data);
         const commandContextId = this.normalizeContextId(data.active_browser_context_id || data.context_id || this.contextId);
         if (Array.isArray(data.browsers)) {
@@ -1384,7 +1487,7 @@ const model = {
   },
 
   hasFrame() {
-    return Boolean(this.frameSrc || this.frameCanvasReady);
+    return Boolean(this.interactiveViewUrl || this.frameSrc || this.frameCanvasReady);
   },
 
   paintFrameBitmap(bitmap) {
@@ -1419,6 +1522,10 @@ const model = {
   },
 
   frameElement() {
+    if (this.usesInteractiveTransport()) {
+      const iframe = this._stageElement?.querySelector?.(".browser-interactive-frame");
+      if (iframe) return iframe;
+    }
     if (this.frameCanvasReady) {
       const canvas = this.currentFrameCanvas();
       if (canvas) return canvas;
@@ -1467,7 +1574,7 @@ const model = {
         replaceAll: Boolean(data.all_browsers),
         replaceContext: !data.all_browsers,
       });
-      this.viewerTransport = this.normalizeViewerTransport(data.viewer_transport);
+      this.applyViewer(data);
       const result = data.result || {};
       const resultContextId = this.normalizeContextId(
         result.context_id
@@ -1510,7 +1617,12 @@ const model = {
           previousActiveBrowserId,
           previousActiveContextId,
         );
-      if ((commandName === "open" || commandName === "close" || activeChanged) && this.contextId && this.activeBrowserId) {
+      const viewerTransportChanged = this._subscribedViewerTransport !== this.viewerTransport;
+      if (
+        (commandName === "open" || commandName === "close" || activeChanged || viewerTransportChanged)
+        && this.contextId
+        && this.activeBrowserId
+      ) {
         await this.connectViewer({
           browserId: this.activeBrowserId,
           contextId: this.activeBrowserContextId,
@@ -1668,6 +1780,10 @@ const model = {
 
   isActiveBrowser(browser) {
     return this.sameBrowserTab(browser?.id, browser?.context_id, this.activeBrowserId, this.activeBrowserContextId);
+  },
+
+  isBrowserLoading(browser) {
+    return Boolean(browser?.loading || (this.isActiveBrowser(browser) && this.isBusy()));
   },
 
   browserTabTitle(browser) {
@@ -1831,6 +1947,7 @@ const model = {
     if (snapshot.state) {
       this.applyActiveFrameState(snapshot.state);
     }
+    if (this.usesInteractiveTransport()) return;
     const frameBrowserId = snapshotId || this.activeBrowserId;
     this.queueFrameRender(`data:${snapshot.mime || "image/jpeg"};base64,${snapshot.image}`, {
       browserId: frameBrowserId,
@@ -2521,13 +2638,21 @@ const model = {
 
   queueViewportSync(force = false) {
     this.clearRenderedFrameIfViewportChanged();
+    if (force) {
+      if (this._viewportSyncTimer) {
+        globalThis.clearTimeout(this._viewportSyncTimer);
+        this._viewportSyncTimer = null;
+      }
+      void this.syncViewport(true);
+      return;
+    }
     if (this._viewportSyncTimer) {
-      globalThis.clearTimeout(this._viewportSyncTimer);
+      return;
     }
     this._viewportSyncTimer = globalThis.setTimeout(() => {
       this._viewportSyncTimer = null;
-      void this.syncViewport(force);
-    }, force ? 0 : VIEWPORT_SYNC_DEBOUNCE_MS);
+      void this.syncViewport(false);
+    }, VIEWPORT_SYNC_INTERVAL_MS);
   },
 
   async syncViewport(force = false, options = {}) {
@@ -2542,7 +2667,7 @@ const model = {
     }
     const key = `${contextId}:${this.activeBrowserId}:${viewport.width}x${viewport.height}`;
     if (
-      (!restartStream && this._lastViewportKey === key)
+      (!force && !restartStream && this._lastViewportKey === key)
       || (
         !force
         && !restartStream
@@ -2555,11 +2680,13 @@ const model = {
       return;
     }
     try {
+      this.syncInteractiveViewSize();
       await websocket.emit("browser_viewer_input", {
         context_id: contextId,
         browser_id: this.activeBrowserId,
         viewer_id: this._viewerToken,
         input_type: "viewport",
+        viewer_transport: this.viewerTransport,
         width: viewport.width,
         height: viewport.height,
         restart_stream: restartStream && this.usesScreencastTransport(),
@@ -2739,6 +2866,9 @@ const model = {
     this._viewerToken = "";
     this.switchingBrowserId = null;
     this.viewerTransport = this.requestedViewerTransport();
+    this._subscribedViewerTransport = this.viewerTransport;
+    this.interactiveViewUrl = "";
+    this.viewerFallbackReason = "";
     this.tabScope = "per_context";
     this._surfaceMounted = false;
     this._surfaceSwitching = false;
@@ -3010,13 +3140,6 @@ const model = {
     return this.frameState?.currentUrl || this.address || "about:blank";
   },
 
-  loadingMessage() {
-    if (this.browserInstallExpected) {
-      const cacheDir = this.status?.playwright?.cache_dir || "/a0/tmp/playwright";
-      return `Installing Chromium for the first Browser run. This can take a few minutes; future starts reuse ${cacheDir}.`;
-    }
-    return "Loading";
-  },
 };
 
 export const store = createStore("browserPage", model);
