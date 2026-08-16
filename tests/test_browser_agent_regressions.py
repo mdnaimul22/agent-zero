@@ -395,6 +395,7 @@ def test_browser_launch_config_uses_full_chromium_for_all_sessions(tmp_path):
     assert default_launch["channel"] is None
     assert default_launch["requires_full_browser"] is True
     assert default_launch["proxy"] is None
+    assert "--hide-crash-restore-bubble" in default_launch["args"]
     assert not any(arg.startswith("--load-extension=") for arg in default_launch["args"])
     assert "--no-sandbox" not in default_launch["args"]
     assert "--disable-dev-shm-usage" not in default_launch["args"]
@@ -1783,12 +1784,13 @@ def test_browser_annotate_mode_ui_and_prompt_hooks():
     assert "Draft to chat" not in panel_html
     assert "Send now" not in panel_html
     assert 'class="browser-annotation-popover-close"' in panel_html
-    assert 'class="btn btn-ok browser-annotation-add"' in panel_html
-    assert 'class="browser-annotation-mic mic-inactive"' in panel_html
+    assert panel_html.count('class="browser-annotation-mic mic-inactive"') == 2
     assert 'class="browser-annotation-send"' in panel_html
     assert 'name="arrow_forward"' in panel_html
+    assert 'name="add_comment"' not in panel_html
     assert "data-whisper-microphone" in panel_html
     assert "syncAnnotationMicrophoneUI()" in panel_html
+    assert "startAnnotationVoice(true)" in panel_html
     assert "@pointerdown.stop.prevent=\"$store.browserPage.startAnnotationSelection($event)\"" in panel_html
     assert "clearAnnotationHover()" in panel_html
     assert "@keydown.window=\"$store.browserPage.handleKeydown($event)\"" in panel_html
@@ -1798,7 +1800,8 @@ def test_browser_annotate_mode_ui_and_prompt_hooks():
     assert "pendingAnnotations()" in browser_store
     assert "annotationBatchLabel()" in browser_store
     assert "updateAnnotationHover(event)" in browser_store
-    assert "startAnnotationVoice()" in browser_store
+    assert "startAnnotationVoice(draftComment = false)" in browser_store
+    assert "this.annotationDraftText = existing" in browser_store
     assert "options.sendImmediately" in browser_store
     assert "clampAnnotationTrayPosition" in browser_store
     assert '"browser_viewer_annotation"' in browser_store
@@ -3397,6 +3400,7 @@ async def test_browser_viewer_subscribe_without_runtime_does_not_create_runtime(
         return None
 
     monkeypatch.setattr(ws_browser_module, "get_runtime", fake_get_runtime)
+    monkeypatch.setattr(ws_browser_module, "has_restorable_browser_tabs", lambda context_id: False)
     monkeypatch.setattr(ws_browser_module, "get_browser_config", lambda: {"browser_tab_scope": "per_context"})
     monkeypatch.setattr(
         ws_browser_module.AgentContext,
@@ -3419,6 +3423,49 @@ async def test_browser_viewer_subscribe_without_runtime_does_not_create_runtime(
     assert result["active_browser_id"] is None
     assert result["browsers"] == []
     assert ("sid-empty", "ctx") not in ws_browser_module.WsBrowser._streams
+
+
+@pytest.mark.anyio
+async def test_browser_viewer_subscribe_starts_runtime_for_saved_tabs(monkeypatch):
+    calls = []
+
+    class FakeRuntime:
+        async def call(self, method, *args, **kwargs):
+            if method == "list":
+                return {
+                    "browsers": [
+                        {"id": 4, "context_id": "ctx", "currentUrl": "https://example.com/"}
+                    ],
+                    "last_interacted_browser_id": 4,
+                }
+            if method == "interactive_viewer":
+                return {"available": True, "browser_id": 4, "url": "/desktop/session/test/"}
+            raise AssertionError(method)
+
+    async def fake_get_runtime(context_id, create=True):
+        calls.append(create)
+        return FakeRuntime() if create else None
+
+    monkeypatch.setattr(ws_browser_module, "get_runtime", fake_get_runtime)
+    monkeypatch.setattr(ws_browser_module, "has_restorable_browser_tabs", lambda context_id: True)
+    monkeypatch.setattr(ws_browser_module, "get_browser_config", lambda: {"browser_tab_scope": "per_context"})
+    monkeypatch.setattr(
+        ws_browser_module.AgentContext,
+        "get",
+        staticmethod(lambda context_id: SimpleNamespace(id=context_id)),
+    )
+
+    handler = ws_browser_module.WsBrowser(SimpleNamespace(), threading.RLock(), manager=None)
+    result = await handler.process(
+        "browser_viewer_subscribe",
+        {"context_id": "ctx", "viewer_transport": "interactive"},
+        "sid-restore",
+    )
+
+    assert calls[:2] == [False, True]
+    assert result["active_browser_id"] == 4
+    assert result["browsers"][0]["currentUrl"] == "https://example.com/"
+    await handler.on_disconnect("sid-restore")
 
 
 @pytest.mark.anyio
@@ -3449,6 +3496,42 @@ async def test_browser_runtime_sessions_are_context_qualified(monkeypatch):
             "last_interacted_browser_id": 1,
         }
     ]
+
+
+@pytest.mark.anyio
+async def test_shared_runtime_session_list_includes_restored_inactive_chats(monkeypatch):
+    class FakeSharedRuntime:
+        async def call_for(self, context_id, method):
+            assert context_id == browser_runtime_module.SHARED_RUNTIME_ID
+            assert method == "list_all"
+            return {
+                "browsers": [
+                    {"id": 1, "context_id": "ctx-a", "currentUrl": "https://example.com/"},
+                    {"id": 2, "context_id": "ctx-b", "currentUrl": "https://example.org/"},
+                ],
+                "last_interacted_browser_ids": {"ctx-a": 1, "ctx-b": 2},
+            }
+
+    monkeypatch.setattr(
+        browser_runtime_module,
+        "get_browser_config",
+        lambda: {"browser_tab_scope": "shared"},
+    )
+    with browser_runtime_module._runtime_lock:
+        previous_runtimes = dict(browser_runtime_module._runtimes)
+        previous_shared = browser_runtime_module._shared_runtime
+        browser_runtime_module._runtimes.clear()
+        browser_runtime_module._shared_runtime = FakeSharedRuntime()
+    try:
+        sessions = await list_runtime_sessions()
+    finally:
+        with browser_runtime_module._runtime_lock:
+            browser_runtime_module._runtimes.clear()
+            browser_runtime_module._runtimes.update(previous_runtimes)
+            browser_runtime_module._shared_runtime = previous_shared
+
+    assert [session["context_id"] for session in sessions] == ["ctx-a", "ctx-b"]
+    assert [session["last_interacted_browser_id"] for session in sessions] == [1, 2]
 
 
 @pytest.mark.anyio
@@ -3584,7 +3667,7 @@ def test_explicit_open_claims_page_registered_by_playwright_event():
     class Page:
         @staticmethod
         def on(event, callback):
-            assert event == "close"
+            assert event in {"close", "framenavigated"}
 
     core = _BrowserRuntimeCore(browser_runtime_module.SHARED_RUNTIME_ID)
     page = Page()
@@ -3603,6 +3686,99 @@ def test_explicit_open_claims_page_registered_by_playwright_event():
     assert claimed is registered
     assert claimed.context_id == "ctx-b"
     assert core._last_interacted_browser_ids.get("ctx-a") is None
+
+
+@pytest.mark.anyio
+async def test_browser_restores_per_context_then_all_shared_tabs(monkeypatch):
+    saved = []
+    browser_config = {"browser_tab_scope": "per_context", "max_open_tabs": 32}
+
+    class Page:
+        def __init__(self):
+            self.url = "about:blank"
+
+        @staticmethod
+        def is_closed():
+            return False
+
+        @staticmethod
+        def on(event, callback):
+            assert event in {"close", "framenavigated"}
+
+    class Context:
+        async def new_page(self):
+            return Page()
+
+    async def goto(page, url, **kwargs):
+        page.url = url
+
+    monkeypatch.setattr(
+        browser_runtime_module,
+        "get_browser_config",
+        lambda: browser_config,
+    )
+    monkeypatch.setattr(
+        browser_runtime_module,
+        "_save_browser_tabs",
+        lambda tabs: saved.append(tabs),
+    )
+
+    core = _BrowserRuntimeCore(browser_runtime_module.SHARED_RUNTIME_ID)
+    core.context = Context()
+    core._restore_state_loaded = True
+    core._restore_state_exists = True
+    core._restore_entries = [
+        {"context_id": "ctx-a", "url": "https://example.com/one", "active": True},
+        {"context_id": "ctx-b", "url": "https://example.org/two", "active": True},
+    ]
+    monkeypatch.setattr(core, "_goto", goto)
+
+    token = core.request_context_id.set("ctx-a")
+    try:
+        await core._restore_tabs_for_scope()
+    finally:
+        core.request_context_id.reset(token)
+
+    assert [page.context_id for page in core.pages.values()] == ["ctx-a"]
+    assert [entry["context_id"] for entry in saved[-1]] == ["ctx-b", "ctx-a"]
+
+    browser_config["browser_tab_scope"] = "shared"
+    token = core.request_context_id.set("ctx-a")
+    try:
+        await core._restore_tabs_for_scope()
+    finally:
+        core.request_context_id.reset(token)
+
+    assert [page.context_id for page in core.pages.values()] == ["ctx-a", "ctx-b"]
+    assert {entry["url"] for entry in saved[-1]} == {
+        "https://example.com/one",
+        "https://example.org/two",
+    }
+    assert core._restored_all is True
+
+
+def test_unexpected_browser_exit_keeps_last_saved_tabs(monkeypatch):
+    saved = []
+    restore_entries = [
+        {"context_id": "ctx-a", "url": "https://example.com/", "active": True}
+    ]
+    monkeypatch.setattr(
+        browser_runtime_module,
+        "_save_browser_tabs",
+        lambda tabs: saved.append(tabs),
+    )
+
+    core = _BrowserRuntimeCore(browser_runtime_module.SHARED_RUNTIME_ID)
+    core.context = object()
+    core._restore_state_loaded = True
+    core._restore_entries = restore_entries
+    core.pages = {1: BrowserPage(1, SimpleNamespace(url="https://example.com/"), "ctx-a")}
+
+    core._on_context_closed()
+
+    assert saved == []
+    assert core._restore_entries == restore_entries
+    assert core.pages == {}
 
 
 def test_shared_browser_runtime_adopts_first_requesting_legacy_profile(monkeypatch, tmp_path):

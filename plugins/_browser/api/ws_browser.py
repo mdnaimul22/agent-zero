@@ -14,7 +14,11 @@ from plugins._browser.helpers.config import (
     TAB_SCOPE_KEY,
     get_browser_config,
 )
-from plugins._browser.helpers.runtime import get_runtime, list_runtime_sessions
+from plugins._browser.helpers.runtime import (
+    get_runtime,
+    has_restorable_browser_tabs,
+    list_runtime_sessions,
+)
 
 
 FRAME_READ_TIMEOUT_SECONDS = 0.5
@@ -80,6 +84,8 @@ class WsBrowser(WsHandler):
 
         create_browser = self._bool(data.get("create_browser", data.get("createBrowser")))
         runtime = await get_runtime(context_id, create=create_browser)
+        if not runtime and not create_browser and has_restorable_browser_tabs(context_id):
+            runtime = await get_runtime(context_id)
         listing = {"browsers": [], "last_interacted_browser_id": None}
         browsers: list[dict[str, Any]] = []
         if runtime:

@@ -2718,13 +2718,23 @@ const model = {
     }
   },
 
-  async startAnnotationVoice() {
+  async startAnnotationVoice(draftComment = false) {
     try {
       const { store: whisperStore } = await import(
         "/plugins/_whisper_stt/webui/whisper-stt-store.js"
       );
       await whisperStore.handleMicrophoneClick(async (text, options = {}) => {
-        if (options.sendImmediately) {
+        if (draftComment) {
+          const transcript = String(text || "").trim();
+          if (transcript && this.annotationDraft) {
+            const existing = String(this.annotationDraftText || "").trim();
+            this.annotationDraftText = existing ? `${existing}\n${transcript}` : transcript;
+            if (options.sendImmediately) {
+              this.addAnnotationComment();
+              await this.sendAnnotationsToChat();
+            }
+          }
+        } else if (options.sendImmediately) {
           await this.sendAnnotationsToChat(text);
         } else {
           this.draftAnnotationsToChat(text);

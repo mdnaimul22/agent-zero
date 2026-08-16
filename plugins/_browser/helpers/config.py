@@ -408,7 +408,7 @@ def describe_browser_extensions(settings: dict[str, Any] | None) -> dict[str, An
 def build_browser_launch_config(settings: dict[str, Any] | None) -> dict[str, Any]:
     config = normalize_browser_config(settings)
     extensions = describe_browser_extensions(config)
-    args: list[str] = []
+    args = ["--hide-crash-restore-bubble"]
     channel: str | None = None
     browser_mode = "chromium"
     proxy = None
