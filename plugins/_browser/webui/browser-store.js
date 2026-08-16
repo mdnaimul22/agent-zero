@@ -176,6 +176,7 @@ const model = {
   tabScope: "per_context",
   annotating: false,
   annotationComments: [],
+  annotationHover: null,
   annotationDraft: null,
   annotationDraftText: "",
   annotationDragRect: null,
@@ -208,6 +209,8 @@ const model = {
   _annotationPointer: null,
   _annotationTrayDrag: null,
   _annotationSequence: 0,
+  _annotationHoverSequence: 0,
+  _annotationHoverAt: 0,
   _mode: "",
   _surfaceMounted: false,
   _surfaceSwitching: false,
@@ -1607,8 +1610,8 @@ const model = {
       }
       this.applySnapshot(data.snapshot);
       if (["navigate", "back", "forward", "reload", "close"].includes(commandName)) {
-        this.clearAnnotationsForBrowser(previousActiveBrowserId, null, previousActiveContextId);
         this.cancelAnnotationDraft();
+        this.clearAnnotationHover();
       }
       const activeChanged = this.activeBrowserId
         && !this.sameBrowserTab(
@@ -1927,6 +1930,7 @@ const model = {
     this.frameState = nextState;
     if (previousUrl && nextUrl && previousUrl !== nextUrl) {
       this.cancelAnnotationDraft();
+      this.clearAnnotationHover();
     }
     if (!this.addressFocused && nextState.currentUrl) {
       this.address = nextState.currentUrl;
@@ -1976,6 +1980,12 @@ const model = {
     return Boolean(this.loading || this.commandInFlight || this._surfaceSwitching || this.isSwitchingBrowser());
   },
 
+  browserLoadingLabel() {
+    if (this.commandInFlight && !this.activeBrowserId) return "Starting Browser…";
+    if (this.isSwitchingBrowser()) return "Switching Browser tab…";
+    return "Connecting to Browser…";
+  },
+
   setActiveBrowserId(id, contextId = "") {
     const previous = this.activeBrowserId;
     const previousContextId = this.activeBrowserContextId;
@@ -1994,6 +2004,7 @@ const model = {
       this._lastViewportKey = "";
       this._lastViewport = null;
       this.cancelAnnotationDraft();
+      this.clearAnnotationHover();
     }
   },
 
@@ -2146,6 +2157,7 @@ const model = {
     this.closeExtensionsMenu();
     if (!nextValue) {
       this.cancelAnnotationDraft();
+      this.clearAnnotationHover();
       this.annotationDragRect = null;
       this._annotationPointer = null;
     } else {
@@ -2171,8 +2183,25 @@ const model = {
     ));
   },
 
+  pendingAnnotations() {
+    const contextId = this.normalizeContextId(this.activeBrowserContextId || this.contextId);
+    if (!contextId) return [];
+    return this.annotationComments.filter(
+      (annotation) => this.normalizeContextId(annotation.contextId) === contextId,
+    );
+  },
+
   nextAnnotationIndex() {
-    return this.visibleAnnotations().length + 1;
+    return this.pendingAnnotations().length + 1;
+  },
+
+  annotationBatchLabel() {
+    const annotations = this.pendingAnnotations();
+    const pageCount = new Set(
+      annotations.map((annotation) => `${annotation.browserId}:${annotation.url}`),
+    ).size;
+    if (pageCount <= 1) return `Annotations (${annotations.length})`;
+    return `Annotations (${annotations.length} across ${pageCount} pages)`;
   },
 
   annotationTrayStyle() {
@@ -2259,19 +2288,13 @@ const model = {
     this.annotationTrayPosition = null;
   },
 
-  clearVisibleAnnotations() {
-    this.clearAnnotationsForBrowser(this.activeBrowserId, this.activeAnnotationUrl(), this.activeBrowserContextId);
+  clearPendingAnnotations() {
+    const contextId = this.normalizeContextId(this.activeBrowserContextId || this.contextId);
+    if (!contextId) return;
+    this.annotationComments = this.annotationComments.filter(
+      (annotation) => this.normalizeContextId(annotation.contextId) !== contextId,
+    );
     this.resetAnnotationTrayPosition();
-  },
-
-  clearAnnotationsForBrowser(browserId, url = null, contextId = "") {
-    const numericBrowserId = this.normalizeBrowserId(browserId);
-    const normalizedContextId = this.normalizeContextId(contextId || this.activeBrowserContextId);
-    if (!numericBrowserId) return;
-    this.annotationComments = this.annotationComments.filter((annotation) => {
-      if (!this.sameBrowserTab(annotation.browserId, annotation.contextId, numericBrowserId, normalizedContextId)) return true;
-      return url ? String(annotation.url || "") !== String(url) : false;
-    });
   },
 
   annotationBoxStyle(rect = {}) {
@@ -2352,6 +2375,7 @@ const model = {
     const point = this.stagePointForEvent(event);
     if (!point) return;
     this.cancelAnnotationDraft();
+    this.clearAnnotationHover();
     this.annotationError = "";
     this._annotationPointer = {
       id: event.pointerId,
@@ -2368,7 +2392,11 @@ const model = {
   },
 
   moveAnnotationSelection(event) {
-    if (!this.annotating || !this._annotationPointer) return;
+    if (!this.annotating) return;
+    if (!this._annotationPointer) {
+      void this.updateAnnotationHover(event);
+      return;
+    }
     if (event.pointerId !== this._annotationPointer.id) return;
     const point = this.stagePointForEvent(event);
     if (!point) return;
@@ -2414,6 +2442,63 @@ const model = {
     this.annotationDragRect = null;
   },
 
+  clearAnnotationHover() {
+    this._annotationHoverSequence += 1;
+    this.annotationHover = null;
+  },
+
+  async updateAnnotationHover(event) {
+    if (!this.annotating || this.annotationBusy || this.annotationDraft || this._annotationPointer) return;
+    const now = Date.now();
+    if (now - this._annotationHoverAt < 90) return;
+    const point = this.stagePointForEvent(event);
+    const contextId = this.normalizeContextId(this.activeBrowserContextId || this.contextId);
+    const browserId = this.activeBrowserId;
+    if (!point || !contextId || !browserId) return;
+
+    this._annotationHoverAt = now;
+    const url = this.activeAnnotationUrl();
+    const sequence = this._annotationHoverSequence + 1;
+    this._annotationHoverSequence = sequence;
+    try {
+      const response = await websocket.request(
+        "browser_viewer_annotation",
+        {
+          context_id: contextId,
+          browser_id: browserId,
+          viewer_id: this._viewerToken,
+          payload: {
+            kind: "element",
+            point: { x: Math.round(point.x), y: Math.round(point.y) },
+            viewport: this.currentViewportSize(),
+            url,
+            title: this.activeTitle,
+          },
+        },
+        { timeoutMs: 10000 },
+      );
+      if (
+        sequence !== this._annotationHoverSequence
+        || !this.sameBrowserTab(browserId, contextId, this.activeBrowserId, this.activeBrowserContextId)
+        || url !== this.activeAnnotationUrl()
+      ) return;
+      const metadata = firstOk(response).annotation || {};
+      const rect = metadata?.target?.rect || metadata?.rect;
+      this.annotationHover = rect
+        ? { rect: this.clampAnnotationRect(rect), metadata }
+        : null;
+    } catch {
+      if (sequence === this._annotationHoverSequence) this.annotationHover = null;
+    }
+  },
+
+  annotationHoverLabel() {
+    const target = this.annotationHover?.metadata?.target || {};
+    const tag = String(target.tagName || "").toLowerCase();
+    const summary = String(target.summary || "").trim();
+    return [tag ? `<${tag}>` : "Element", summary].filter(Boolean).join(" ");
+  },
+
   cancelAnnotationDraft() {
     this.annotationDraft = null;
     this.annotationDraftText = "";
@@ -2428,6 +2513,7 @@ const model = {
     const url = this.activeAnnotationUrl();
     const title = this.activeTitle;
     this._annotationSequence = sequence;
+    this.clearAnnotationHover();
     this.annotationBusy = true;
     this.annotationError = "";
     try {
@@ -2474,7 +2560,7 @@ const model = {
   addAnnotationComment() {
     const comment = String(this.annotationDraftText || "").trim();
     if (!this.annotationDraft || !comment) return;
-    if (this.visibleAnnotations().length >= ANNOTATION_MAX_COMMENTS) {
+    if (this.pendingAnnotations().length >= ANNOTATION_MAX_COMMENTS) {
       this.annotationError = `Keep each batch to ${ANNOTATION_MAX_COMMENTS} annotations or fewer.`;
       this.error = this.annotationError;
       return;
@@ -2492,18 +2578,18 @@ const model = {
 
   removeAnnotationComment(annotationId) {
     this.annotationComments = this.annotationComments.filter((annotation) => annotation.id !== annotationId);
-    if (!this.visibleAnnotations().length) {
+    if (!this.pendingAnnotations().length) {
       this.resetAnnotationTrayPosition();
     }
   },
 
-  annotationChipLabel(annotation) {
-    const prefix = annotation?.kind === "area" ? "Area" : "Element";
-    return `${prefix} ${annotation?.index || ""}`.trim();
-  },
-
   formatAnnotationRect(rect = {}) {
-    const normalized = this.clampAnnotationRect(rect);
+    const normalized = {
+      x: Math.round(Number(rect.x || 0)),
+      y: Math.round(Number(rect.y || 0)),
+      width: Math.max(1, Math.round(Number(rect.width || 1))),
+      height: Math.max(1, Math.round(Number(rect.height || 1))),
+    };
     return `x=${normalized.x}, y=${normalized.y}, width=${normalized.width}, height=${normalized.height}`;
   },
 
@@ -2554,45 +2640,60 @@ const model = {
     return lines.join("\n");
   },
 
-  buildAnnotationsPrompt() {
-    const annotations = this.visibleAnnotations();
+  buildAnnotationsPrompt(instruction = "") {
+    const annotations = this.pendingAnnotations();
     if (!annotations.length) return "";
-    const lines = [
-      "Browser annotations",
-      `Page title: ${this.activeTitle}`,
-      `Page URL: ${this.activeAnnotationUrl()}`,
-      `Browser id: ${this.activeBrowserId}`,
-      "",
-    ];
-    annotations.forEach((annotation, index) => {
+    const lines = ["Browser annotations"];
+    const spokenInstruction = String(instruction || "").trim();
+    if (spokenInstruction) lines.push(`Instruction: ${spokenInstruction}`);
+    lines.push("");
+
+    const pages = new Map();
+    for (const annotation of annotations) {
+      const key = `${annotation.contextId}:${annotation.browserId}:${annotation.url}`;
+      if (!pages.has(key)) pages.set(key, []);
+      pages.get(key).push(annotation);
+    }
+
+    let annotationNumber = 0;
+    Array.from(pages.values()).forEach((pageAnnotations, pageIndex) => {
+      const page = pageAnnotations[0];
       lines.push(
-        `Annotation ${index + 1}`,
-        `Comment: ${annotation.comment}`,
-        `Selection kind: ${annotation.kind}`,
-        `Coordinates: ${this.formatAnnotationRect(annotation.rect)}`,
+        `Page ${pageIndex + 1}`,
+        `Page title: ${page.title || "Untitled"}`,
+        `Page URL: ${page.url || "about:blank"}`,
+        `Browser id: ${page.browserId}`,
+        "",
       );
-      const metadata = this.formatAnnotationMetadata(annotation.metadata);
-      if (metadata) {
-        lines.push(metadata);
-      }
-      lines.push("");
+      pageAnnotations.forEach((annotation) => {
+        annotationNumber += 1;
+        lines.push(
+          `Annotation ${annotationNumber}`,
+          `Comment: ${annotation.comment}`,
+          `Selection kind: ${annotation.kind}`,
+          `Coordinates: ${this.formatAnnotationRect(annotation.rect)}`,
+        );
+        const metadata = this.formatAnnotationMetadata(annotation.metadata);
+        if (metadata) lines.push(metadata);
+        lines.push("");
+      });
     });
     return lines.join("\n").trim();
   },
 
-  draftAnnotationsToChat() {
-    const prompt = this.buildAnnotationsPrompt();
+  draftAnnotationsToChat(instruction = "") {
+    const prompt = this.buildAnnotationsPrompt(instruction);
     if (!prompt) return;
     const existingMessage = String(chatInputStore.message || "").trim();
     chatInputStore.message = existingMessage ? `${existingMessage}\n\n${prompt}` : prompt;
     chatInputStore.adjustTextareaHeight?.();
     chatInputStore.focus?.();
-    this.clearVisibleAnnotations();
+    this.clearPendingAnnotations();
     this.toggleAnnotationMode(false);
   },
 
-  async sendAnnotationsToChat() {
-    const prompt = this.buildAnnotationsPrompt();
+  async sendAnnotationsToChat(instruction = "") {
+    const prompt = this.buildAnnotationsPrompt(instruction);
     if (!prompt) return;
     chatInputStore.message = prompt;
     chatInputStore.adjustTextareaHeight?.();
@@ -2605,11 +2706,40 @@ const model = {
         chatInputStore.focus?.();
         return;
       }
-      this.clearVisibleAnnotations();
+      this.clearPendingAnnotations();
       this.toggleAnnotationMode(false);
     } catch (error) {
       this.error = error instanceof Error ? error.message : String(error);
     }
+  },
+
+  async startAnnotationVoice() {
+    try {
+      const { store: whisperStore } = await import(
+        "/plugins/_whisper_stt/webui/whisper-stt-store.js"
+      );
+      await whisperStore.handleMicrophoneClick(async (text, options = {}) => {
+        if (options.sendImmediately) {
+          await this.sendAnnotationsToChat(text);
+        } else {
+          this.draftAnnotationsToChat(text);
+        }
+        whisperStore.stop();
+      });
+      whisperStore.updateMicrophoneButtonUI();
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : String(error);
+    }
+  },
+
+  async syncAnnotationMicrophoneUI() {
+    try {
+      const { store: whisperStore } = await import(
+        "/plugins/_whisper_stt/webui/whisper-stt-store.js"
+      );
+      await whisperStore.ensureStatusLoaded({ suppressError: true });
+      whisperStore.updateMicrophoneButtonUI();
+    } catch {}
   },
 
   currentViewportSize() {
@@ -2880,6 +3010,7 @@ const model = {
     this.annotationError = "";
     this.cancelAnnotationDraft();
     this.cancelAnnotationSelection();
+    this.clearAnnotationHover();
     this.resetAnnotationTrayPosition();
     if (this.contextId) {
       try {

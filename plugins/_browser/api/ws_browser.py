@@ -143,7 +143,8 @@ class WsBrowser(WsHandler):
                     viewer_transport=viewer_transport,
                 )
             self._streams[stream_key] = asyncio.create_task(stream_task)
-            snapshot = await self._snapshot_for_browser(runtime, active_id)
+            if viewer_transport != VIEWER_TRANSPORT_INTERACTIVE:
+                snapshot = await self._snapshot_for_browser(runtime, active_id)
 
         browsers, all_browsers, tab_scope = await self._tabs_for_scope(context_id, browsers)
 
@@ -291,7 +292,11 @@ class WsBrowser(WsHandler):
             active_id,
             data,
         )
-        snapshot = await self._snapshot_for_result(runtime, result)
+        snapshot = (
+            None
+            if viewer_transport == VIEWER_TRANSPORT_INTERACTIVE
+            else await self._snapshot_for_result(runtime, result)
+        )
         browsers, all_browsers, tab_scope = await self._tabs_for_scope(
             context_id,
             listing.get("browsers") or [],

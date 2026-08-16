@@ -1432,6 +1432,8 @@ def test_browser_extension_settings_stay_user_facing():
     assert "Separate per chat" in config_html
     assert "Shared across chats" in config_html
     assert "Maximum tabs per chat" in config_html
+    assert "Each chat has its own Browser tabs and sign-in profile." in config_html
+    assert "Sign-ins and browser profiles remain isolated per chat." in config_html
     assert 'x-model="$store.browserConfig.config.browser_tab_scope"' in config_html
     assert 'x-model.number="$store.browserConfig.config.max_open_tabs"' in config_html
     assert 'x-model="$store.browserConfig.config.proxy_server"' in config_html
@@ -1473,11 +1475,19 @@ def test_browser_viewer_uses_tabs_for_session_switching():
     assert "browser.context_id" in main_html
     assert ':title="$store.browserPage.browserTabTooltip(browser)"' in main_html
     assert ':aria-busy="$store.browserPage.isBrowserLoading(browser).toString()"' in main_html
-    assert 'class="browser-tab-loading spinning"' in main_html
-    assert 'x-show="$store.browserPage.isBrowserLoading(browser)"' in main_html
+    assert 'class="browser-tab-loading"' in main_html
+    assert "'is-visible': $store.browserPage.isBrowserLoading(browser)" in main_html
+    tab_button = main_html.index('class="browser-tab"')
+    tab_button_end = main_html.index("</button>", tab_button)
+    tab_spinner = main_html.index('class="browser-tab-loading"', tab_button_end)
+    tab_close = main_html.index('class="browser-tab-close"', tab_spinner)
+    assert tab_button_end < tab_spinner < tab_close
     assert "<span x-text=\"$store.browserPage.loadingMessage()\">Loading</span>" not in main_html
     assert "isBrowserLoading(browser)" in browser_store
     assert "loadingMessage()" not in browser_store
+    assert 'class="browser-empty browser-starting" role="status" aria-live="polite"' in main_html
+    assert "browserLoadingLabel()" in browser_store
+    assert "Starting Browser…" in browser_store
     assert "browser-tab-context" not in main_html
     assert 'handleSelectedContextChange($store.chats?.selected)' in main_html
     assert "activeBrowserContextId" in browser_store
@@ -1570,6 +1580,8 @@ def test_browser_viewer_defaults_to_interactive_with_screencast_and_snapshot_fal
     assert "except TimeoutError:" in ws_browser
     assert "stop_screencast" in ws_browser
     assert "viewer_transport == VIEWER_TRANSPORT_SCREENCAST" in ws_browser
+    assert "viewer_transport != VIEWER_TRANSPORT_INTERACTIVE" in ws_browser
+    assert "if viewer_transport == VIEWER_TRANSPORT_INTERACTIVE" in ws_browser
     assert '"viewer_transport": viewer_transport' in ws_browser
     assert "viewer_transport: str = VIEWER_TRANSPORT_SNAPSHOT" in ws_browser
     assert '"Page.startScreencast"' in runtime
@@ -1766,21 +1778,44 @@ def test_browser_annotate_mode_ui_and_prompt_hooks():
     assert "browser-annotation-tray" in panel_html
     assert "annotationTrayStyle()" in panel_html
     assert "startAnnotationTrayDrag($event)" in panel_html
-    assert "Draft to chat" in panel_html
-    assert "Send now" in panel_html
+    assert "Draft to chat" not in panel_html
+    assert "Send now" not in panel_html
+    assert 'class="browser-annotation-popover-close"' in panel_html
+    assert 'class="btn btn-ok browser-annotation-add"' in panel_html
+    assert 'class="browser-annotation-mic mic-inactive"' in panel_html
+    assert 'class="browser-annotation-send"' in panel_html
+    assert 'name="arrow_forward"' in panel_html
+    assert "data-whisper-microphone" in panel_html
+    assert "syncAnnotationMicrophoneUI()" in panel_html
     assert "@pointerdown.stop.prevent=\"$store.browserPage.startAnnotationSelection($event)\"" in panel_html
+    assert "clearAnnotationHover()" in panel_html
     assert "@keydown.window=\"$store.browserPage.handleKeydown($event)\"" in panel_html
     assert "annotationComments: []" in browser_store
+    assert "annotationHover: null" in browser_store
     assert "annotationTrayPosition: null" in browser_store
+    assert "pendingAnnotations()" in browser_store
+    assert "annotationBatchLabel()" in browser_store
+    assert "updateAnnotationHover(event)" in browser_store
+    assert "startAnnotationVoice()" in browser_store
+    assert "options.sendImmediately" in browser_store
     assert "clampAnnotationTrayPosition" in browser_store
     assert '"browser_viewer_annotation"' in browser_store
     assert 'event?.key === "." && (event.metaKey || event.ctrlKey)' in browser_store
     assert "Browser annotations" in browser_store
+    assert "Instruction:" in browser_store
+    assert "Page ${pageIndex + 1}" in browser_store
     assert "Comment:" in browser_store
     assert "Coordinates:" in browser_store
     assert "Selector:" in browser_store
     assert "DOM:" in browser_store
     assert "value=\\\"[redacted]\\\"" in browser_store
+
+    whisper_store = (
+        PROJECT_ROOT / "plugins" / "_whisper_stt" / "webui" / "whisper-stt-store.js"
+    ).read_text(encoding="utf-8")
+    assert "finalTranscriptHandler" in whisper_store
+    assert "deliverVoiceMessage(text)" in whisper_store
+    assert '"[data-whisper-microphone], #microphone-button"' in whisper_store
 
 
 def test_browser_visual_mode_bridges_clipboard_shortcuts():
@@ -3305,6 +3340,50 @@ async def test_browser_viewer_subscribe_returns_initial_snapshot(monkeypatch):
     assert ("screenshot", (1,), {"quality": ws_browser_module.SCREENSHOT_QUALITY}) in calls
 
     await handler.on_disconnect("sid-snapshot")
+
+
+@pytest.mark.anyio
+async def test_browser_viewer_subscribe_skips_snapshot_for_interactive(monkeypatch):
+    calls = []
+
+    class FakeRuntime:
+        async def call(self, method, *args, **kwargs):
+            calls.append(method)
+            if method == "list":
+                return {
+                    "browsers": [{"id": 1, "context_id": "ctx", "currentUrl": "about:blank"}],
+                    "last_interacted_browser_id": 1,
+                }
+            if method == "interactive_viewer":
+                return {"available": True, "browser_id": 1, "url": "/desktop/session/test/"}
+            if method == "screenshot":
+                raise AssertionError("Interactive Browser must not wait for a redundant screenshot")
+            raise AssertionError(method)
+
+    async def fake_get_runtime(context_id, create=True):
+        assert context_id == "ctx"
+        assert create is False
+        return FakeRuntime()
+
+    monkeypatch.setattr(ws_browser_module, "get_runtime", fake_get_runtime)
+    monkeypatch.setattr(ws_browser_module, "get_browser_config", lambda: {"browser_tab_scope": "per_context"})
+    monkeypatch.setattr(
+        ws_browser_module.AgentContext,
+        "get",
+        staticmethod(lambda context_id: SimpleNamespace(id=context_id)),
+    )
+
+    handler = ws_browser_module.WsBrowser(SimpleNamespace(), threading.RLock(), manager=None)
+    result = await handler.process(
+        "browser_viewer_subscribe",
+        {"context_id": "ctx", "browser_id": 1, "viewer_transport": "interactive"},
+        "sid-interactive",
+    )
+
+    assert result["viewer_transport"] == "interactive"
+    assert result["snapshot"] is None
+    assert "screenshot" not in calls
+    await handler.on_disconnect("sid-interactive")
 
 
 @pytest.mark.anyio
