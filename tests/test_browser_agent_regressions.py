@@ -22,6 +22,19 @@ class _TestAgentContext:
         return None
 
 
+class _TestAgent:
+    pass
+
+
+class _TestAgentConfig:
+    pass
+
+
+class _TestAgentContextType:
+    BACKGROUND = "background"
+    USER = SimpleNamespace(value="user")
+
+
 class _TestResponse(SimpleNamespace):
     def __init__(self, message="", break_loop=False, **kwargs):
         super().__init__(message=message, break_loop=break_loop, **kwargs)
@@ -67,7 +80,15 @@ class _TestWsResult(dict):
         )
 
 
-sys.modules.setdefault("agent", SimpleNamespace(AgentContext=_TestAgentContext))
+sys.modules.setdefault(
+    "agent",
+    SimpleNamespace(
+        Agent=_TestAgent,
+        AgentConfig=_TestAgentConfig,
+        AgentContext=_TestAgentContext,
+        AgentContextType=_TestAgentContextType,
+    ),
+)
 sys.modules.setdefault("helpers.tool", SimpleNamespace(Response=_TestResponse, Tool=_TestTool))
 sys.modules.setdefault("helpers.ws", SimpleNamespace(WsHandler=_TestWsHandler))
 sys.modules.setdefault("helpers.ws_manager", SimpleNamespace(WsResult=_TestWsResult))
@@ -293,6 +314,47 @@ def test_browser_model_selection_falls_back_to_main_for_missing_preset(monkeypat
     assert selection["source_kind"] == "main"
     assert selection["preset_status"] == "missing"
     assert selection["config"] == {"provider": "openrouter", "name": "main/model"}
+
+
+def test_browser_model_preset_controls_followup_turn_and_clears(monkeypatch):
+    import importlib
+    import plugins._browser.helpers.config as browser_config_module
+
+    state = {}
+    agent = SimpleNamespace(
+        set_data=lambda key, value: state.__setitem__(key, value),
+        get_data=lambda key: state.get(key),
+    )
+    monkeypatch.setattr(
+        browser_config_module,
+        "resolve_browser_model_selection",
+        lambda agent=None, settings=None: {
+            "source_kind": "preset",
+            "selected_preset_name": "Browser",
+        },
+    )
+
+    browser_config_module.activate_browser_model(agent)
+    assert browser_config_module.browser_model_is_active(agent)
+
+    provider_module = importlib.import_module(
+        "plugins._browser.extensions.python._functions.agent.Agent.get_chat_model.start._20_browser_model"
+    )
+    cleanup_module = importlib.import_module(
+        "plugins._browser.extensions.python.monologue_end._20_browser_model"
+    )
+    selected_model = object()
+    monkeypatch.setattr(
+        provider_module,
+        "resolve_browser_model",
+        lambda agent, fallback=None: selected_model,
+    )
+    model_data = {"result": object()}
+    provider_module.BrowserModelProvider(agent).execute(data=model_data)
+    assert model_data["result"] is selected_model
+
+    cleanup_module.BrowserModelCleanup(agent).execute()
+    assert not browser_config_module.browser_model_is_active(agent)
 
 
 def test_browser_model_preset_options_include_missing_selected(monkeypatch):
