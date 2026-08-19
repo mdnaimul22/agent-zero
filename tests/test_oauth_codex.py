@@ -521,6 +521,42 @@ def test_extract_sse_text_deltas_ignores_final_done_text():
     )
 
 
+def test_collect_completed_response_restores_native_output_items():
+    item = {
+        "id": "msg_1",
+        "type": "message",
+        "status": "completed",
+        "content": [
+            {
+                "type": "output_text",
+                "annotations": [],
+                "logprobs": [],
+                "text": "Hello",
+            }
+        ],
+        "role": "assistant",
+    }
+
+    class FakeResponse:
+        encoding = "utf-8"
+
+        def iter_content(self, chunk_size=8192, decode_unicode=True):
+            del chunk_size, decode_unicode
+            yield (
+                'data: {"type":"response.output_item.done","output_index":0,'
+                f'"item":{json.dumps(item)}}}\n\n'
+            ).encode()
+            yield (
+                b'data: {"type":"response.completed",'
+                b'"response":{"id":"resp_1","output":[]}}\n\n'
+            )
+
+    assert codex.collect_completed_response(FakeResponse()) == {
+        "id": "resp_1",
+        "output": [item],
+    }
+
+
 def test_collect_completed_response_falls_back_to_text_deltas():
     class FakeResponse:
         encoding = "utf-8"
