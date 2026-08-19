@@ -208,6 +208,44 @@ def test_prepare_responses_body_adds_codex_client_metadata(monkeypatch):
     assert body["include"] == ["output_text", "reasoning.encrypted_content"]
 
 
+def test_prepare_responses_body_tightens_existing_response_tool_only(monkeypatch):
+    monkeypatch.setattr(codex, "build_client_metadata", lambda: {})
+    response_tool = {
+        "type": "function",
+        "name": "response",
+        "description": "final answer",
+        "parameters": {"type": "object", "additionalProperties": True},
+    }
+    other_tool = {
+        "type": "function",
+        "name": "search",
+        "parameters": {"type": "object", "additionalProperties": True},
+    }
+
+    body = codex.prepare_responses_body(
+        {"input": [], "tools": [response_tool, other_tool]},
+        force_stream=True,
+    )
+
+    assert body["tools"] == [
+        {
+            **response_tool,
+            "strict": True,
+            "parameters": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+                "additionalProperties": False,
+            },
+        },
+        other_tool,
+    ]
+    assert codex.prepare_responses_body(
+        {"input": [], "tools": [other_tool]},
+        force_stream=True,
+    )["tools"] == [other_tool]
+
+
 @pytest.mark.parametrize(
     ("request_reasoning", "expected"),
     [

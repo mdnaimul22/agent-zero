@@ -168,7 +168,7 @@ def test_responses_function_tools_add_empty_properties_to_mcp_schemas(
     ]
 
 
-def test_response_tool_native_contract_is_strict_and_requires_text(monkeypatch):
+def test_response_tool_native_contract_stays_provider_neutral(monkeypatch):
     prompt_root = PROJECT_ROOT / "agents" / "agent0" / "prompts"
     prompt = (prompt_root / "agent.system.tool.response.md").read_text(encoding="utf-8")
 
@@ -195,13 +195,8 @@ def test_response_tool_native_contract_is_strict_and_requires_text(monkeypatch):
     response_tool = next(tool for tool in tools if tool["name"] == "response")
 
     assert description == "final answer to user"
-    assert response_tool["parameters"] == {
-        "type": "object",
-        "properties": {"text": {"type": "string"}},
-        "required": ["text"],
-        "additionalProperties": False,
-    }
-    assert response_tool["strict"] is True
+    assert response_tool["parameters"] == responses_tools._schema_from_prompt(prompt)
+    assert "strict" not in response_tool
 
 
 def test_complex_prompt_args_are_not_guessed_as_string_schemas():

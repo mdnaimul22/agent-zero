@@ -39,31 +39,20 @@ def build_responses_function_tools(agent: Any) -> tuple[list[dict[str, Any]], di
             continue
         native_name = _native_tool_name(tool_name)
         name_map[native_name] = tool_name
-        parameters = (
+        tools.append(
             {
-                "type": "object",
-                "properties": {"text": {"type": "string"}},
-                "required": ["text"],
-                "additionalProperties": False,
+                "type": "function",
+                "name": native_name,
+                "description": _truncate(
+                    tool_policy.tool_prompt_description(
+                        prompt,
+                        tool_name,
+                        fallback=tool_name,
+                    )
+                ),
+                "parameters": _schema_from_prompt(prompt),
             }
-            if tool_name == "response"
-            else _schema_from_prompt(prompt)
         )
-        tool = {
-            "type": "function",
-            "name": native_name,
-            "description": _truncate(
-                tool_policy.tool_prompt_description(
-                    prompt,
-                    tool_name,
-                    fallback=tool_name,
-                )
-            ),
-            "parameters": parameters,
-        }
-        if tool_name == "response":
-            tool["strict"] = True
-        tools.append(tool)
 
     for tool_name, tool in _mcp_tools(agent):
         if not tool_policy.resolve_tool(

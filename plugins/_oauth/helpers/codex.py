@@ -670,6 +670,25 @@ def fetch_models() -> list[str]:
 def prepare_responses_body(body: dict[str, Any], *, force_stream: bool) -> dict[str, Any]:
     normalized = dict(body)
     settings = codex_config()
+    tools = normalized.get("tools")
+    if isinstance(tools, list):
+        normalized["tools"] = [
+            {
+                **tool,
+                "strict": True,
+                "parameters": {
+                    "type": "object",
+                    "properties": {"text": {"type": "string"}},
+                    "required": ["text"],
+                    "additionalProperties": False,
+                },
+            }
+            if isinstance(tool, dict)
+            and tool.get("type") == "function"
+            and tool.get("name") == "response"
+            else tool
+            for tool in tools
+        ]
     reasoning_effort = normalized.pop("reasoning_effort", None)
     reasoning = normalized.get("reasoning")
     if isinstance(reasoning, dict):
