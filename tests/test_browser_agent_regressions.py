@@ -2357,6 +2357,7 @@ def test_browser_docker_installs_full_chromium_to_tmp_cache():
     assert "self.interactive_view.ensure_display()" in runtime
     assert "  xvfb \\" in install_additional
     assert "  xdotool \\" in install_additional
+    assert "  xclip \\" in install_additional
 
 
 def test_browser_docker_pins_python_313_compatible_desktop_packages():
@@ -2370,8 +2371,14 @@ def test_browser_docker_pins_python_313_compatible_desktop_packages():
     assert 'XPRA_HTML5_VERSION="19-r1-1"' in install_additional
     assert 'XPRA_HTML5_VERSION="21-r1-1"' in install_additional
     assert '"python3-uno=$LIBREOFFICE_VERSION"' in install_additional
+    assert 'apt-get download "gir1.2-atk-1.0=$ATK_VERSION"' in install_additional
+    assert '  "$ATK_GIR_PACKAGE" \\' in install_additional
+    assert "  gir1.2-gtk-3.0 \\" in install_additional
+    assert '"xpra-client=$XPRA_VERSION"' in install_additional
+    assert '"xpra-client-gtk3=$XPRA_VERSION"' in install_additional
     assert '"xpra-server=$XPRA_VERSION"' in install_additional
     assert '"xpra-html5=$XPRA_HTML5_VERSION"' in install_additional
+    assert install_additional.index("apt-get download") < install_additional.index('s/kali-rolling/$KALI_SUITE')
     assert "https://xpra.org/beta" not in install_additional
 
 

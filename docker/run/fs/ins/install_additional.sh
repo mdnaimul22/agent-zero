@@ -33,9 +33,16 @@ LIBREOFFICE_PACKAGES=(
 XPRA_PACKAGES=(
   "xpra-common=$XPRA_VERSION"
   "xpra-server=$XPRA_VERSION"
+  "xpra-client=$XPRA_VERSION"
+  "xpra-client-gtk3=$XPRA_VERSION"
   "xpra-x11=$XPRA_VERSION"
   "xpra-html5=$XPRA_HTML5_VERSION"
 )
+
+apt-get update
+ATK_VERSION="$(dpkg-query -W -f='${Version}' libatk1.0-0t64)"
+ATK_GIR_PACKAGE="/tmp/gir1.2-atk-1.0_${ATK_VERSION}_${arch}.deb"
+(cd /tmp && apt-get download "gir1.2-atk-1.0=$ATK_VERSION")
 
 for source in /etc/apt/sources.list /etc/apt/sources.list.d/kali.sources; do
   [ ! -f "$source" ] || sed -i "s/kali-rolling/$KALI_SUITE/g" "$source"
@@ -54,6 +61,8 @@ Architectures: $arch
 EOF
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  "$ATK_GIR_PACKAGE" \
+  gir1.2-gtk-3.0 \
   "${LIBREOFFICE_PACKAGES[@]}" \
   "${XPRA_PACKAGES[@]}" \
   xfce4-session \
@@ -66,7 +75,10 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
   libglib2.0-bin \
   xfce4-terminal \
   x11-xserver-utils \
+  x11-utils \
+  x11-apps \
   xdotool \
+  xclip \
   xauth \
   xvfb \
   dbus-x11 \
@@ -78,4 +90,5 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
   fonts-noto-cjk \
   fonts-noto-color-emoji
 
+rm -f "$ATK_GIR_PACKAGE"
 rm -rf /var/lib/apt/lists/*
