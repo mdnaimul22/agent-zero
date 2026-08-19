@@ -2356,8 +2356,23 @@ def test_browser_docker_installs_full_chromium_to_tmp_cache():
     assert '"windowState": "fullscreen"' not in runtime
     assert "self.interactive_view.ensure_display()" in runtime
     assert "  xvfb \\" in install_additional
-    assert "XPRA_PACKAGES=(xpra xpra-x11 xpra-html5)" in install_additional
     assert "  xdotool \\" in install_additional
+
+
+def test_browser_docker_pins_python_313_compatible_desktop_packages():
+    install_additional = (
+        PROJECT_ROOT / "docker" / "run" / "fs" / "ins" / "install_additional.sh"
+    ).read_text(encoding="utf-8")
+
+    assert 'KALI_SUITE="kali-last-snapshot"' in install_additional
+    assert 'LIBREOFFICE_VERSION="4:26.2.4.2-1"' in install_additional
+    assert 'XPRA_VERSION="6.5.2-r0-1"' in install_additional
+    assert 'XPRA_HTML5_VERSION="19-r1-1"' in install_additional
+    assert 'XPRA_HTML5_VERSION="21-r1-1"' in install_additional
+    assert '"python3-uno=$LIBREOFFICE_VERSION"' in install_additional
+    assert '"xpra-server=$XPRA_VERSION"' in install_additional
+    assert '"xpra-html5=$XPRA_HTML5_VERSION"' in install_additional
+    assert "https://xpra.org/beta" not in install_additional
 
 
 def test_browser_startup_migration_prepares_current_playwright_binary():
