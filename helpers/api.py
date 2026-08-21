@@ -83,7 +83,7 @@ class ApiHandler:
             if isinstance(output, Response):
                 return output
             else:
-                response_json = json.dumps(output)
+                response_json = json.dumps(output, default=float)
                 return Response(
                     response=response_json, status=200, mimetype="application/json"
                 )
