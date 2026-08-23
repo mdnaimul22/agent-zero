@@ -614,7 +614,7 @@ class Memory:
         res = max(
             0, min(1, res)
         )  # float precision can cause values like 1.0000000596046448
-        return res
+        return float(res)  # native float, not numpy scalar (JSON serializable)
 
     @staticmethod
     def format_docs_plain(docs: list[Document]) -> list[str]:

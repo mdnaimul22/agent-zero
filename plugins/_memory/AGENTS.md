@@ -24,6 +24,7 @@
 
 ## Work Guidance
 
+- Keep dashboard metadata JSON-safe without changing shared API serialization.
 - Coordinate tool, prompt, and consolidation changes so saved memories remain useful and bounded.
 
 ## Verification
