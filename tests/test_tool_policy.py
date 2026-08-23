@@ -132,6 +132,35 @@ def test_provider_native_schemas_omit_blocked_local_tool(
     assert [tool["name"] for tool in tools] == ["allowed"]
 
 
+def test_inherited_prompt_filter_skips_tool_inventory(monkeypatch, tmp_path: Path):
+    agent = _Agent(tmp_path)
+    prompt = "### shell\nRun a command."
+    policy_reads = 0
+
+    def inherited_policy(_agent):
+        nonlocal policy_reads
+        policy_reads += 1
+        return {
+            "mode": "inherit",
+            "default": "allow",
+            "mcp_default": "allow",
+            "allowed": [],
+            "blocked": [],
+        }
+
+    monkeypatch.setattr(tool_policy, "get_policy", inherited_policy)
+    monkeypatch.setattr(
+        tool_policy,
+        "_policy_tool_names",
+        lambda _agent: pytest.fail("inherited policy inventoried tools"),
+    )
+
+    assert tool_policy.filter_tool_prompt(
+        agent, "agent.system.tool.shell.md", prompt
+    ) == prompt
+    assert policy_reads == 1
+
+
 def test_required_response_survives_default_block(monkeypatch, tmp_path: Path) -> None:
     _write_prompt(
         tmp_path,
