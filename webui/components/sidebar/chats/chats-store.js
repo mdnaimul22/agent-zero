@@ -17,6 +17,7 @@ import { store as chatInputStore } from "/components/chat/input/input-store.js";
 
 const model = {
   contexts: [],
+  contextsJson: "",
   selected: "",
   selectedContext: null,
   loggedIn: false,
@@ -58,9 +59,14 @@ const model = {
     const incomingContexts = Array.isArray(contextsList) ? contextsList : [];
 
     // Sort by created_at time (newer first)
-    this.contexts = incomingContexts
+    const nextContexts = incomingContexts
       .filter((context) => !this.deletedContextIds[context?.id])
       .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    const contextsJson = JSON.stringify(nextContexts);
+    if (contextsJson !== this.contextsJson) {
+      this.contextsJson = contextsJson;
+      this.contexts = nextContexts;
+    }
 
     // Keep selectedContext in sync when the currently selected context's
     // metadata changes (e.g. project activation/deactivation).
