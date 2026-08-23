@@ -1,4 +1,6 @@
 import base64
+from contextvars import ContextVar, Token
+from copy import deepcopy
 import hashlib
 import json
 import os
@@ -175,6 +177,9 @@ UI_CONTROL_VISIBILITY_DEFAULTS = {
 SETTINGS_FILE = files.get_abs_path("usr/settings.json")
 _settings: Settings | None = None
 _runtime_settings_snapshot: Settings | None = None
+_prompt_settings_snapshot: ContextVar[Settings | None] = ContextVar(
+    "prompt_settings_snapshot", default=None
+)
 
 OptionT = TypeVar("OptionT", bound=FieldOption)
 
@@ -375,10 +380,27 @@ def get_settings() -> Settings:
     return norm
 
 
+def get_settings_for_prompt() -> Settings:
+    if (snapshot := _prompt_settings_snapshot.get()) is not None:
+        return deepcopy(snapshot)
+    return get_settings()
+
+
+def begin_prompt_settings_snapshot() -> Token:
+    return _prompt_settings_snapshot.set(get_settings())
+
+
+def end_prompt_settings_snapshot(token: Token) -> None:
+    _prompt_settings_snapshot.reset(token)
+
+
 def reload_settings() -> Settings:
     global _settings
     _settings = None
-    return get_settings()
+    current = get_settings()
+    if _prompt_settings_snapshot.get() is not None:
+        _prompt_settings_snapshot.set(deepcopy(current))
+    return current
 
 
 def set_runtime_settings_snapshot(settings: Settings) -> None:
