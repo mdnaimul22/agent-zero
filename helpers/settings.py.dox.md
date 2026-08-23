@@ -70,7 +70,7 @@
   within each `Agent.prepare_prompt()` call.
 - Explicit reloads also refresh an active prompt snapshot.
 - `max_consecutive_unusable_responses` defaults to `5` and controls the cost circuit breaker for malformed or repeated main-model outputs.
-- `ui_control_visibility` stores validated mobile and desktop visibility flags for the project selector, clock, connection status, and right canvas rail; missing or malformed values fall back per device.
+- `ui_control_visibility` stores validated mobile and desktop visibility flags for the project selector, clock, connection status, context-window usage indicator, and right canvas rail; missing or malformed values fall back per device.
 - The Global default-profile selector lists only globally available profiles.
   A currently configured unavailable profile remains visible with an explicit
   unavailable label so settings can round-trip it truthfully, except that the

@@ -18,6 +18,13 @@ def test_ui_controls_have_independent_mobile_and_desktop_visibility() -> None:
     interface = read("webui/components/settings/agent/interface.html")
     chat_top = read("webui/components/chat/top-section/chat-top.html")
     canvas = read("webui/components/canvas/right-canvas.html")
+    context_usage = read(
+        "plugins/_context_window/extensions/webui/model-context-strip-end/context-window.html"
+    )
+    context_settings = read(
+        "plugins/_context_window/extensions/webui/interface-controls-end/context-window.html"
+    )
+    context_store = read("plugins/_context_window/webui/context-window-store.js")
     index = read("webui/index.html")
     ui_server = read("helpers/ui_server.py")
 
@@ -26,6 +33,8 @@ def test_ui_controls_have_independent_mobile_and_desktop_visibility() -> None:
         assert control in settings_store
 
     assert "registerUiControlVisibility" in preferences
+    assert "contextWindowUsage" in context_store
+    assert "contextWindowUsage" in context_settings
     assert 'id="interface-controls-end"' in interface
 
     assert "section-interface" in settings_store
@@ -43,6 +52,7 @@ def test_ui_controls_have_independent_mobile_and_desktop_visibility() -> None:
     assert "isUiControlVisible('time')" in chat_top
     assert "isUiControlVisible('connectionStatus')" in chat_top
     assert "isUiControlVisible('projectSelector')" in chat_top
+    assert "isUiControlVisible('contextWindowUsage')" in context_usage
     assert "isUiControlVisible('rightCanvasRail')" in canvas
 
 
@@ -60,6 +70,7 @@ normalized = settings.normalize_settings({
     **settings.get_default_settings(),
     "ui_control_visibility": {
         "time": {"mobile": True, "desktop": False},
+        "contextWindowUsage": {"mobile": False, "desktop": True},
         "projectSelector": "invalid",
         "unknown": {"mobile": False},
     },
@@ -78,5 +89,6 @@ print(json.dumps({"defaults": defaults, "normalized": normalized}))
 
     assert defaults["time"] == {"mobile": False, "desktop": True}
     assert normalized["time"] == {"mobile": True, "desktop": False}
+    assert normalized["contextWindowUsage"] == {"mobile": False, "desktop": True}
     assert normalized["projectSelector"] == {"mobile": True, "desktop": True}
     assert "unknown" not in normalized

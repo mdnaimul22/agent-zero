@@ -171,6 +171,7 @@ UI_CONTROL_VISIBILITY_DEFAULTS = {
     "projectSelector": {"mobile": True, "desktop": True},
     "time": {"mobile": False, "desktop": True},
     "connectionStatus": {"mobile": True, "desktop": True},
+    "contextWindowUsage": {"mobile": True, "desktop": True},
     "rightCanvasRail": {"mobile": True, "desktop": True},
 }
 
