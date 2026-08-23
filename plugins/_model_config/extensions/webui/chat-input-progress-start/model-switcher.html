@@ -177,6 +177,8 @@
             </div>
           </div>
         </template>
+
+        <x-extension id="model-context-strip-end"></x-extension>
       </div>
     </div>
   </template>
@@ -195,6 +197,11 @@
     gap: 8px;
     min-width: 0;
     flex-wrap: wrap;
+  }
+  .model-context-strip > x-extension,
+  .model-context-strip > x-extension > x-component,
+  .model-context-strip > x-extension > x-component > div[x-data] {
+    display: contents;
   }
   .agent-profile-avatar {
     width: 1.35rem;

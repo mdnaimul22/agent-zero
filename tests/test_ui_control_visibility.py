@@ -25,6 +25,9 @@ def test_ui_controls_have_independent_mobile_and_desktop_visibility() -> None:
         assert control in preferences
         assert control in settings_store
 
+    assert "registerUiControlVisibility" in preferences
+    assert 'id="interface-controls-end"' in interface
+
     assert "section-interface" in settings_store
     assert 'settings/agent/interface.html' in settings
     assert "smartphone" in interface
