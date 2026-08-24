@@ -2,24 +2,25 @@
 
 ## Purpose
 
-- Repair malformed Agent Zero tool-call JSON and persist compact repaired output.
+- Repair malformed Agent Zero tool-call JSON and preserve raw output as compact thoughts JSON when repair cannot produce a tool call.
 
 ## Ownership
 
-- `helpers/context_doctor.py` validates and repairs tool-call JSON.
+- `helpers/context_doctor.py` transforms output and refreshes log fields.
 - `extensions/python/message_loop_result/` normalizes completed model output before default processing.
-- `webui/config.html` exposes XML-output suppression only.
+- `webui/config.html` exposes XML suppression and log-detail settings.
 
 ## Local Contracts
 
-- Repaired tool-call JSON is always minified.
-- Invalid non-tool output is unchanged; native processing retains ownership.
-- Do not write settings that alter repair mode or log content.
+- Repaired and fallback JSON is always minified.
+- Nonempty non-tool output becomes `{"thoughts":[raw]}`; XML-like output becomes `{}` only when suppression is enabled.
+- Log kvps and heading always reflect transformed output; `update_log` controls only View Details content.
+- A repaired `response` tool call refreshes the response log item when streaming did not create it.
 
 ## Work Guidance
 
 - Keep repair scoped to complete tool-call JSON.
-- Use framework-installed `json_repair`; apply the plugin-local parser patch before repair. Do not vendor dependencies.
+- Use framework-installed `json_repair`; apply plugin-local parser patch before repair. Do not vendor dependencies.
 
 ## Verification
 

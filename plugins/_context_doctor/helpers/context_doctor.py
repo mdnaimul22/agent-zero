@@ -1,4 +1,4 @@
-"""Repair complete Agent Zero tool-call JSON into compact JSON."""
+"""Repair completed model output into compact JSON."""
 
 from __future__ import annotations
 
@@ -22,38 +22,88 @@ def _is_tool_call(value: Any) -> bool:
     )
 
 
-def repair_and_minify(response: str, *, suppress_xml: bool) -> str | None:
-    """Return compact tool-call JSON, XML fallback, or ``None`` for other output."""
-    if not response:
-        return None
-
-    try:
-        from plugins._context_doctor.helpers.json_repair_patch import apply_patch
-        from json_repair import repair_json
-
-        apply_patch()
-        repaired = repair_json(response, return_objects=True)
-    except Exception:
-        return "{}" if suppress_xml and "<" in response and ">" in response else None
-
-    if isinstance(repaired, list):
-        repaired = next((item for item in repaired if _is_tool_call(item)), None)
-    if _is_tool_call(repaired):
-        return json.dumps(repaired, ensure_ascii=False, separators=(",", ":"))
-    return "{}" if suppress_xml and "<" in response and ">" in response else None
+_A0_SALVAGE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "thoughts": {"type": "array", "items": {"type": "string"}},
+        "headline": {"type": "string"},
+        "tool_name": {"type": "string"},
+        "tool_args": {"type": "object"},
+    },
+    "required": [],
+}
 
 
-def update_log_item(agent: Any, log_item: Any, response: str) -> None:
-    """Replace final log details with repaired JSON and derived display fields."""
+def _a0_completeness_score(value: dict[str, Any]) -> int:
+    return sum(field in value for field in ("thoughts", "headline", "tool_name", "tool_args")) + bool(
+        value.get("tool_args")
+    )
+
+
+def transform_response(response: str, *, suppress_xml: bool) -> str:
+    """Return compact repaired tool JSON or a compact raw-text fallback."""
+    if response:
+        try:
+            from plugins._context_doctor.helpers.json_repair_patch import apply_patch
+            from json_repair import repair_json
+
+            apply_patch()
+            try:
+                repaired = repair_json(
+                    response,
+                    return_objects=True,
+                    schema=_A0_SALVAGE_SCHEMA,
+                    schema_repair_mode="salvage",
+                )
+            except Exception:
+                repaired = repair_json(response, return_objects=True)
+
+            candidates = repaired if isinstance(repaired, list) else [repaired]
+            try:
+                no_schema = repair_json(response, return_objects=True)
+            except Exception:
+                no_schema = None
+            if isinstance(no_schema, list):
+                valid = [item for item in no_schema if _is_tool_call(item)]
+                if len(valid) > 1 or (len(valid) == 1 and not _is_tool_call(repaired)):
+                    candidates = no_schema
+            repaired = max(
+                (item for item in candidates if _is_tool_call(item)),
+                key=_a0_completeness_score,
+                default=None,
+            )
+        except Exception:
+            repaired = None
+
+        if _is_tool_call(repaired):
+            return json.dumps(repaired, ensure_ascii=False, separators=(",", ":"))
+
+    if suppress_xml and "<" in response and ">" in response:
+        return "{}"
+    return json.dumps({"thoughts": [response]}, ensure_ascii=False, separators=(",", ":"))
+
+
+def update_log_item(
+    agent: Any,
+    log_item: Any,
+    response: str,
+    *,
+    update_log: bool,
+    raw_response: str,
+) -> None:
+    """Refresh log fields from transformed JSON; optionally replace raw details."""
     try:
         parsed = json.loads(response)
-        if not _is_tool_call(parsed):
+        if not isinstance(parsed, dict):
             return
-        heading = parsed.get("headline") or f"Using {parsed['tool_name']}"
-        log_item.update(
-            content=response,
-            kvps=parsed,
-            heading=f"{getattr(agent, 'agent_name', 'A0')}: {heading}",
-        )
+        heading = parsed.get("headline")
+        if not isinstance(heading, str) or not heading:
+            tool_name = parsed.get("tool_name")
+            heading = f"Using {tool_name}" if isinstance(tool_name, str) else ""
+        kwargs: dict[str, Any] = {"kvps": parsed}
+        if heading:
+            kwargs["heading"] = f"{getattr(agent, 'agent_name', 'A0')}: {heading}"
+        kwargs["content"] = response if update_log else raw_response
+        log_item.update(**kwargs)
     except (AttributeError, TypeError, ValueError):
         pass
