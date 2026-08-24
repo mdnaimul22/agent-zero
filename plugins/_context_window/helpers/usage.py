@@ -1,11 +1,14 @@
 import hashlib
+import math
 from typing import Any
 
 from helpers import files, history, skills, tokens
+from helpers.llm_result import result_from_metadata
 
 
 PARTS_KEY = "context_window_usage"
 CACHE_KEY = "_context_window_usage_cache"
+PROVIDER_USAGE_KEY = "context_window_provider_usage"
 USAGE_KEYS = (
     "messages",
     "system_tools",
@@ -43,6 +46,7 @@ def capture_context(agent: Any, loop_data: Any) -> None:
         return
 
     output = list(getattr(loop_data, "history_output", None) or [])
+    parts["_history_output"] = output
     skill_output = [message for message in output if skills.skill_instruction_name(message)]
     skill_tokens = _output_tokens(agent, "history_skills", skill_output)
     parts["messages"] = max(_history_tokens(agent, output) - skill_tokens, 0)
@@ -78,9 +82,20 @@ def finalize(agent: Any) -> None:
     if not isinstance(parts, dict) or not isinstance(window, dict):
         return
 
+    history_output = parts.pop("_history_output", None)
     total = _non_negative_int(window.get("tokens"))
     usage = {key: _non_negative_int(parts.get(key)) for key in MEASURED_KEYS}
     measured_total = sum(usage.values())
+    if total and measured_total >= total and isinstance(history_output, list):
+        message_output = [
+            message
+            for message in history_output
+            if not skills.skill_instruction_name(message)
+        ]
+        usage["messages"] = _output_tokens(
+            agent, "history_messages", message_output
+        )
+        measured_total = sum(usage.values())
     if measured_total > total and measured_total:
         usage = _scale_to_total(usage, total, measured_total)
         measured_total = total
@@ -98,7 +113,73 @@ def usage_snapshot(value: Any) -> dict[str, int]:
     return {key: _non_negative_int(value.get(key)) for key in USAGE_KEYS}
 
 
-def _parts(agent: Any) -> dict[str, int] | None:
+def capture_provider_usage(agent: Any, result: Any) -> None:
+    if agent is None or result is None or not hasattr(result, "usage"):
+        return
+
+    snapshot = provider_usage_snapshot(getattr(result, "usage", None))
+    agent.set_data(
+        PROVIDER_USAGE_KEY,
+        snapshot if snapshot else {"available": False},
+    )
+
+
+def latest_provider_usage(agent: Any) -> dict[str, int | float]:
+    data = getattr(agent, "data", None)
+    if isinstance(data, dict) and PROVIDER_USAGE_KEY in data:
+        stored = data.get(PROVIDER_USAGE_KEY)
+        if isinstance(stored, dict) and stored.get("available") is False:
+            return {}
+        return provider_usage_snapshot(stored)
+
+    all_messages = getattr(getattr(agent, "history", None), "all_messages", None)
+    if not callable(all_messages):
+        return {}
+    for message in reversed(all_messages()):
+        if not getattr(message, "ai", False):
+            continue
+        result = result_from_metadata(getattr(message, "metadata", None))
+        if result:
+            return provider_usage_snapshot(result.usage)
+    return {}
+
+
+def provider_usage_snapshot(value: Any) -> dict[str, int | float]:
+    if not isinstance(value, dict):
+        return {}
+
+    input_details = {
+        **_mapping(value.get("prompt_tokens_details")),
+        **_mapping(value.get("input_tokens_details")),
+    }
+    result: dict[str, int | float] = {}
+    fields = {
+        "input_tokens": (value.get("input_tokens"), value.get("prompt_tokens")),
+        "cached_tokens": (
+            input_details.get("cached_tokens"),
+            input_details.get("cache_read_tokens"),
+            value.get("cache_read_input_tokens"),
+            value.get("cached_tokens"),
+        ),
+        "output_tokens": (
+            value.get("output_tokens"),
+            value.get("completion_tokens"),
+        ),
+    }
+    for key, values in fields.items():
+        number = _optional_non_negative_int(*values)
+        if number is not None:
+            result[key] = number
+
+    cost = _optional_non_negative_float(
+        value.get("cost"), value.get("response_cost")
+    )
+    if cost is not None:
+        result["cost"] = cost
+    return result
+
+
+def _parts(agent: Any) -> dict[str, Any] | None:
     params = _temporary_params(agent)
     value = params.get(PARTS_KEY) if params is not None else None
     return value if isinstance(value, dict) else None
@@ -158,6 +239,34 @@ def _non_negative_int(value: Any) -> int:
         return max(int(value or 0), 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _optional_non_negative_int(*values: Any) -> int | None:
+    for value in values:
+        if value is None:
+            continue
+        try:
+            return max(int(value), 0)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _optional_non_negative_float(*values: Any) -> float | None:
+    for value in values:
+        if value is None:
+            continue
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(number):
+            return max(number, 0)
+    return None
 
 
 def _scale_to_total(values: dict[str, int], total: int, current: int) -> dict[str, int]:

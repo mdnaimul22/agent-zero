@@ -449,7 +449,8 @@ async def test_unified_turn_stops_chat_stream_after_text_tool_request(monkeypatc
     async def response_callback(chunk: str, full: str):
         return full if extract_tools.extract_tool_request(full) else None
 
-    result = await wrapper.unified_turn(
+    result = await wrapper.unified_turn.__wrapped__(
+        wrapper,
         messages=[],
         response_callback=response_callback,
     )

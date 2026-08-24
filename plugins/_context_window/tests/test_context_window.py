@@ -1,15 +1,21 @@
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-from agent import Agent, LoopData
-from helpers import extension, history
-from plugins._context_window.api.context_window import ContextWindow
-from plugins._context_window.helpers import usage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import models
+from agent import Agent, LoopData
+from helpers import extension, extract_tools, history, litellm_transport
+from helpers.llm_result import LLMResult
+from plugins._context_window.api.context_window import ContextWindow
+from plugins._context_window.helpers import usage
 
 
 class _Log:
@@ -80,6 +86,7 @@ async def test_usage_follows_prompt_sources_and_reconciles_to_total(monkeypatch)
     assert sum(breakdown.values()) == window["tokens"]
     assert all(breakdown[key] > 0 for key in usage.USAGE_KEYS)
     assert usage.PARTS_KEY not in loop_data.params_temporary
+    assert "history_messages" not in agent.data[usage.CACHE_KEY]
 
 
 @pytest.mark.asyncio
@@ -115,6 +122,7 @@ async def test_api_returns_only_counts_and_effective_limit(monkeypatch):
             "system_prompt": 0,
             "extras": 0,
         },
+        "provider_usage": {},
     }
     assert "text" not in result
 
@@ -147,6 +155,34 @@ def test_webui_and_accounting_are_plugin_owned():
     assert "right: 1.25rem" in component
     assert "width: min(17rem, calc(100vw - 3rem))" in component
     assert 'label: "Free space"' in context_store
+    assert "Last model call" not in component
+    assert ">Price<" in component
+    assert ">Cache hit<" in component
+    assert ">Tokens In/Out<" in component
+    assert "context-window-cache-meter" not in component
+    assert "price: {" in context_store
+    assert "hasData: cost !== null" in context_store
+    assert 'label: cost === null ? "" : formatCost(cost)' in context_store
+    assert "usage.provider.price.hasData" in component
+    assert "usage.provider.price.label" in component
+    assert 'value < 0.001 ? "<$0.001"' in context_store
+    assert "maximumSignificantDigits: 3" in context_store
+    assert "border-top: 1px solid var(--color-border)" in component
+    assert " → " in context_store
+    assert "summaryTokens" in context_store
+    assert 'summaryPercent: `${percentLabel} used`' in context_store
+    assert "formatTokens(output)} tok" not in context_store
+    assert "context-window-summary-tokens" in component
+    assert "context-window-summary-percent" in component
+    assert "font-family: var(--font-family-main)" in component
+    assert "<details" not in component
+    assert "Reasoning" not in component
+    assert "Images sent" not in component
+    assert "provider did not split out their token cost" not in context_store
+    assert "cached / input" in context_store
+    assert "Math.round(cachePercent)" in context_store
+    assert "context-window-dot" not in component
+    assert "dotStyle" not in context_store
     assert "Breakdown available after the next message." in component
     assert "startswith(" not in helper
     assert "rpartition(" not in helper
@@ -156,6 +192,9 @@ def test_source_prompt_extensions_are_registered():
     expected = {
         "_functions/agent/Agent/prepare_prompt/start": "ResetContextUsage",
         "_functions/agent/Agent/prepare_prompt/end": "StoreContextUsage",
+        "_functions/agent/Agent/call_chat_model_turn/end": "RecordProviderUsage",
+        "_functions/models/LiteLLMChatWrapper/unified_turn/start": "DrainProviderUsage",
+        "_functions/models/LiteLLMChatWrapper/unified_turn/end": "RestoreProviderResponse",
         "message_loop_prompts_after": "CaptureContextUsage",
     }
     for point, class_name in expected.items():
@@ -176,6 +215,75 @@ def test_source_prompt_extensions_are_registered():
         point = f"_functions/{module}/build_prompt/end"
         classes = extension._get_extension_classes(point)  # type: ignore[attr-defined]
         assert any(cls.__name__ == recorder for cls in classes)
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_drains_terminal_provider_usage(monkeypatch):
+    response = '{"tool_name":"response","tool_args":{"text":"done"}}'
+    chunks = [
+        {"choices": [{"delta": {"content": response}, "message": {}}]},
+        {"choices": [{"delta": {"content": " ignored"}, "message": {}}]},
+        {
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 12_000,
+                "prompt_tokens_details": {"cached_tokens": 9_000},
+                "completion_tokens": 80,
+            },
+            "_hidden_params": {"response_cost": 0.0042},
+        },
+    ]
+    consumed = []
+
+    async def stream():
+        for chunk in chunks:
+            consumed.append(chunk)
+            yield chunk
+
+    async def fake_acompletion(*args, **kwargs):
+        assert kwargs["stream_options"] == {"include_usage": True}
+        return stream()
+
+    async def fake_rate_limiter(*args, **kwargs):
+        return None
+
+    callback_calls = []
+
+    async def response_callback(chunk: str, full: str):
+        callback_calls.append((chunk, full))
+        return full if extract_tools.extract_tool_request(full) else None
+
+    monkeypatch.setattr(litellm_transport, "acompletion", fake_acompletion)
+    monkeypatch.setattr(models, "apply_rate_limiter", fake_rate_limiter)
+    wrapper = models.LiteLLMChatWrapper(
+        model="test-model",
+        provider="openrouter",
+        model_config=None,
+        api_base="https://openrouter.ai/api/v1",
+    )
+
+    result = await wrapper.unified_turn(
+        messages=[
+            SystemMessage(content="stable instructions"),
+            HumanMessage(content="question"),
+        ],
+        response_callback=response_callback,
+        explicit_caching=True,
+    )
+
+    assert consumed == chunks
+    assert callback_calls == [
+        (response, response),
+        (" ignored", response + " ignored"),
+    ]
+    assert result.response == response
+    assert result.output_items[0].type == "message"
+    assert result.usage == {
+        "prompt_tokens": 12_000,
+        "prompt_tokens_details": {"cached_tokens": 9_000},
+        "completion_tokens": 80,
+        "cost": 0.0042,
+    }
 
 
 def test_prompt_fragment_cache_is_bounded_and_content_addressed(monkeypatch):
@@ -248,3 +356,72 @@ def test_history_ledger_changes_without_invalidating_fragment_cache(monkeypatch)
     assert second["messages"] == 400 - second["skills"]
     assert calls.count("stable tools") == 1
     assert len(agent.data[usage.CACHE_KEY]) == 3
+
+
+def test_rendered_history_fallback_preserves_system_prompt_bucket(monkeypatch):
+    data = {}
+    output = [{"ai": False, "content": "short message"}]
+    agent = SimpleNamespace(
+        DATA_NAME_CTX_WINDOW="ctx_window",
+        data=data,
+        loop_data=LoopData(),
+        history=SimpleNamespace(get_tokens=lambda: 10_000),
+        _build_context_message=lambda *args, **kwargs: [],
+        get_data=lambda key: data.get(key),
+        set_data=lambda key, value: data.__setitem__(key, value),
+    )
+    loop_data = SimpleNamespace(
+        history_output=output,
+        protocol_persistent={},
+        protocol_temporary={},
+        extras_persistent={},
+        extras_temporary={},
+    )
+    monkeypatch.setattr(
+        usage.tokens,
+        "approximate_prompt_tokens",
+        lambda text: len(text),
+    )
+
+    usage.reset(agent)
+    usage.capture_context(agent, loop_data)
+    data[agent.DATA_NAME_CTX_WINDOW] = {"tokens": 100}
+    usage.finalize(agent)
+
+    breakdown = data[agent.DATA_NAME_CTX_WINDOW]["usage"]
+    assert breakdown["messages"] == len("user: short message")
+    assert breakdown["system_prompt"] > 0
+    assert sum(breakdown.values()) == 100
+
+
+def test_provider_usage_is_optional():
+    data = {}
+    agent = SimpleNamespace(
+        data=data,
+        history=SimpleNamespace(all_messages=lambda: []),
+        set_data=lambda key, value: data.__setitem__(key, value),
+    )
+    result = LLMResult.from_chat(
+        response="done",
+        usage={
+            "prompt_tokens": 12_000,
+            "prompt_tokens_details": {"cached_tokens": 9_000},
+            "completion_tokens": 80,
+            "cost": 0.0123,
+        },
+    )
+
+    usage.capture_provider_usage(agent, result)
+
+    assert usage.latest_provider_usage(agent) == {
+        "input_tokens": 12_000,
+        "cached_tokens": 9_000,
+        "output_tokens": 80,
+        "cost": 0.0123,
+    }
+
+    usage.capture_provider_usage(agent, LLMResult.from_chat(response="no usage"))
+    assert usage.latest_provider_usage(agent) == {}
+    assert usage.provider_usage_snapshot(
+        {"input_tokens": 100, "cached_tokens": None, "cost": None}
+    ) == {"input_tokens": 100}

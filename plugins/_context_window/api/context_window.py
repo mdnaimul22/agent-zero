@@ -1,5 +1,8 @@
 from helpers.api import ApiHandler, Input, Output, Request
-from plugins._context_window.helpers.usage import usage_snapshot
+from plugins._context_window.helpers.usage import (
+    latest_provider_usage,
+    usage_snapshot,
+)
 from plugins._model_config.helpers.model_config import get_chat_model_config
 
 
@@ -15,4 +18,5 @@ class ContextWindow(ApiHandler):
             "tokens": max(int(window.get("tokens") or 0), 0),
             "context_window": max(int(config.get("ctx_length") or 0), 0),
             "usage": usage_snapshot(window.get("usage")),
+            "provider_usage": latest_provider_usage(agent),
         }

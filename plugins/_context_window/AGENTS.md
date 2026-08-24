@@ -8,7 +8,8 @@
 ## Ownership
 
 - `helpers/usage.py` owns per-prompt bucket measurement and reconciliation.
-- `extensions/python/` records prompt parts at their source extension points.
+- `extensions/python/` records prompt parts at their source extension points,
+  preserves terminal streamed usage, and captures optional provider usage.
 - `api/context_window.py` exposes the active chat's token usage and effective
   model limit without returning prompt content.
 - `webui/` and `extensions/webui/` own the Alpine store, indicator, popover,
@@ -26,6 +27,19 @@
   fragments use a bounded, content-addressed, runtime-only cache.
 - Bucket totals reconcile to the already-stored prompt token total; the
   unclaimed remainder belongs to System prompt.
+- If the history ledger would consume the whole prompt estimate, recompute only
+  the rendered message portion before reconciliation; ordinary prompt builds
+  keep the fast ledger path.
+- The prompt estimate never guesses provider-specific image token costs or
+  counts embedded image bytes as text.
+- Provider price, cache hit, and input/output tokens form a flat summary without
+  diagnostic detail rows.
+- Provider rows are exposed only when the provider or transport reports their
+  values; unavailable price and cache data render no row.
+- Streamed OpenRouter main turns request LiteLLM's terminal usage event. The
+  response callback still runs normally; only an actual Chat Completions result
+  restores the accepted response after the accounting tail is drained.
+- Responses API turns keep their native result and callback behavior unchanged.
 - Older chats without a stored breakdown show the explanatory empty state.
 - `_model_config` supplies the effective model limit and the
   `model-context-strip-end` WebUI slot; it does not own this feature's state.
@@ -35,6 +49,7 @@
 ## Work Guidance
 
 - Keep prompt accounting out of rendered-text heuristics.
+- Keep provider-reported usage separate from the six estimated context buckets.
 - Keep the API response limited to counts needed by the UI.
 - Preserve the upward, right-aligned popover geometry used beside the model and
   profile selectors.

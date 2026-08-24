@@ -5,13 +5,18 @@ import { store as preferencesStore } from "/components/sidebar/bottom/preference
 
 const API_PATH = "/plugins/_context_window/context_window";
 const ROWS = [
-  { key: "messages", label: "Messages", opacity: 1 },
-  { key: "system_tools", label: "System tools", opacity: 0.88 },
-  { key: "skills", label: "Skills", opacity: 0.76 },
-  { key: "mcp_tools", label: "MCP tools", opacity: 0.64 },
-  { key: "system_prompt", label: "System prompt", opacity: 0.52 },
-  { key: "extras", label: "Extras", opacity: 0.4 },
+  { key: "messages", label: "Messages" },
+  { key: "system_tools", label: "System tools" },
+  { key: "skills", label: "Skills" },
+  { key: "mcp_tools", label: "MCP tools" },
+  { key: "system_prompt", label: "System prompt" },
+  { key: "extras", label: "Extras" },
 ];
+const COST_FORMATTER = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumSignificantDigits: 3,
+});
 
 preferencesStore.registerUiControlVisibility("contextWindowUsage", {
   mobile: true,
@@ -31,6 +36,44 @@ function formatPercent(value) {
   return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}%`;
 }
 
+function optionalNumber(value, key) {
+  if (!value || !Object.prototype.hasOwnProperty.call(value, key)) return null;
+  const number = Number(value[key]);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function formatCost(value) {
+  if (value === 0) return "$0";
+  return value < 0.001 ? "<$0.001" : COST_FORMATTER.format(value);
+}
+
+function buildProviderUsage(value = {}) {
+  const input = optionalNumber(value, "input_tokens");
+  const cached = optionalNumber(value, "cached_tokens");
+  const output = optionalNumber(value, "output_tokens");
+  const cost = optionalNumber(value, "cost");
+
+  const tokenSummary = input === null && output === null
+    ? ""
+    : `${input === null ? "–" : formatTokens(input)} → ${output === null ? "–" : formatTokens(output)}`;
+
+  const cachePercent = input > 0 && cached !== null
+    ? Math.min((cached / input) * 100, 100)
+    : null;
+  return {
+    hasData: cost !== null || cachePercent !== null || Boolean(tokenSummary),
+    price: {
+      hasData: cost !== null,
+      label: cost === null ? "" : formatCost(cost),
+    },
+    cache: {
+      hasData: cachePercent !== null,
+      label: cachePercent === null ? "" : `${Math.round(cachePercent)}%`,
+    },
+    tokens: tokenSummary,
+  };
+}
+
 function buildUsage(data = {}) {
   const tokens = Math.max(Number(data.tokens) || 0, 0);
   const contextWindow = Math.max(Number(data.context_window) || 0, 0);
@@ -43,7 +86,6 @@ function buildUsage(data = {}) {
       ...row,
       tokensLabel: formatTokens(rowTokens),
       percentLabel: formatPercent(rowPercent),
-      dotStyle: `opacity:${row.opacity}`,
     };
   });
   const hasBreakdown = rows.some(row => Number(breakdown[row.key]) > 0);
@@ -55,7 +97,6 @@ function buildUsage(data = {}) {
       label: "Free space",
       tokensLabel: formatTokens(freeTokens),
       percentLabel: formatPercent(freePercent),
-      dotStyle: "opacity:0.24",
     });
   }
   const percentLabel = formatPercent(percent);
@@ -66,8 +107,10 @@ function buildUsage(data = {}) {
     ariaLabel: `Context window ${percentLabel} used`,
     ringLabel: contextWindow ? `${Math.round(percent)}%` : "–",
     ringDasharray: `${Math.min(percent, 100)} 100`,
-    summary: `${formatTokens(tokens)}/${contextWindow ? formatTokens(contextWindow) : "–"} (${percentLabel})`,
+    summaryTokens: `${formatTokens(tokens)}/${contextWindow ? formatTokens(contextWindow) : "–"} tokens`,
+    summaryPercent: `${percentLabel} used`,
     meterStyle: `width:${Math.min(percent, 100)}%`,
+    provider: buildProviderUsage(data.provider_usage),
   };
 }
 

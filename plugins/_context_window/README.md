@@ -7,3 +7,11 @@ Extras, and Free space.
 
 Older chats gain the detailed breakdown after their next model turn. Mobile and
 desktop visibility can be changed under **Settings > Interface**.
+
+When a model provider reports usage, the popover shows price, cache-hit rate,
+and input/output tokens. Unreported price and cache data are omitted. The
+context breakdown does not guess model-specific image token costs.
+
+For streamed OpenRouter chat calls, the plugin requests and drains LiteLLM's
+terminal usage event after Agent Zero has accepted the response. Price remains
+hidden when LiteLLM does not report a cost or map the selected model.
