@@ -53,14 +53,8 @@ def test_empty_result_skips_default_processing():
 
     assert _run(agent)["skip_default_processing"] is True
     assert agent.history == [""]
-    assert agent.warnings == ["empty"]
-    assert agent.logs == [
-        {
-            "type": "warning",
-            "content": "A0: empty",
-            "id": "warning",
-        }
-    ]
+    assert agent.warnings == []
+    assert agent.logs == [{"type": "warning", "content": "A0: empty"}]
 
 
 def test_repeat_skips_default_processing():
