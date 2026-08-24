@@ -129,6 +129,37 @@ def test_history_migrates_legacy_ai_metadata_and_preserves_tool_inputs():
     assert old.sequence == 0
 
 
+@pytest.mark.asyncio
+async def test_chat_completion_transport_preserves_reported_usage(monkeypatch):
+    async def fake_acompletion(**kwargs):
+        return {
+            "choices": [{"message": {"content": "done"}}],
+            "usage": {
+                "prompt_tokens": 120,
+                "completion_tokens": 8,
+                "total_tokens": 128,
+            },
+            "_hidden_params": {"response_cost": 0.0042},
+        }
+
+    monkeypatch.setattr(litellm_transport, "acompletion", fake_acompletion)
+    transport = litellm_transport.LiteLLMTransport(
+        model="custom/model",
+        messages=[{"role": "user", "content": "question"}],
+        kwargs={"a0_api_mode": "chat_completions"},
+    )
+
+    await transport.acomplete()
+
+    assert transport.last_result is not None
+    assert transport.last_result.usage == {
+        "prompt_tokens": 120,
+        "completion_tokens": 8,
+        "total_tokens": 128,
+        "cost": 0.0042,
+    }
+
+
 def test_responses_provider_state_uses_previous_response_and_new_items():
     new_items = [{"type": "function_call_output", "call_id": "call_1", "output": "done"}]
     local_items = [{"role": "user", "content": "full replay"}]
@@ -362,6 +393,7 @@ async def test_unified_turn_waits_for_completed_native_responses_calls(monkeypat
                     "id": "resp_parallel",
                     "output": calls,
                     "usage": {"input_tokens": 10, "output_tokens": 5},
+                    "_hidden_params": {"response_cost": 0.0012},
                 },
             },
         ]
@@ -394,7 +426,11 @@ async def test_unified_turn_waits_for_completed_native_responses_calls(monkeypat
     assert stream.closed is False
     assert result.mode == "responses"
     assert result.response_id == "resp_parallel"
-    assert result.usage == {"input_tokens": 10, "output_tokens": 5}
+    assert result.usage == {
+        "input_tokens": 10,
+        "output_tokens": 5,
+        "cost": 0.0012,
+    }
     assert [call.name for call in result.function_calls] == ["lookup", "summarize"]
     assert json.loads(result.response) == {
         "tool_name": "parallel_tool_calls",

@@ -1527,6 +1527,38 @@ def test_chat_completions_stream_parser_reads_dumped_tool_calls():
     }
 
 
+def test_chat_completions_stream_parser_preserves_optional_usage():
+    parser = litellm_transport.ChatCompletionsStreamParser()
+    parser.parse(
+        {
+            "choices": [],
+            "usage": {"prompt_tokens": 240},
+            "_hidden_params": {"response_cost": 0.0084},
+        }
+    )
+    parser.parse(
+        {
+            "choices": [],
+            "usage": {"completion_tokens": 16, "total_tokens": 256},
+        }
+    )
+    transport = litellm_transport.LiteLLMTransport(
+        model="custom/model",
+        messages=[{"role": "user", "content": "question"}],
+        kwargs={"a0_api_mode": "chat_completions"},
+    )
+
+    result = transport._stream_result_from_chat_parser(parser)
+
+    assert result is not None
+    assert result.usage == {
+        "prompt_tokens": 240,
+        "completion_tokens": 16,
+        "total_tokens": 256,
+        "cost": 0.0084,
+    }
+
+
 @pytest.mark.asyncio
 async def test_unified_turn_preserves_chat_streaming_tool_calls(monkeypatch):
     async def fake_acompletion(*args, **kwargs):

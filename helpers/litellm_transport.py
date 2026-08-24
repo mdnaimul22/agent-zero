@@ -214,10 +214,11 @@ class LiteLLMTransport:
         while True:
             try:
                 if self.policy.mode is TransportMode.CHAT_COMPLETIONS:
-                    parsed = ChatCompletionsTransport.parse(
-                        completion(**self._chat_request(stream=False))
+                    raw_response = completion(**self._chat_request(stream=False))
+                    parsed = ChatCompletionsTransport.parse(raw_response)
+                    self.last_result = self._llm_result_from_chat(
+                        parsed, raw_response
                     )
-                    self.last_result = self._llm_result_from_chat(parsed)
                     return parsed
                 request = self._responses_request(stream=False)
                 raw_response = responses(**request)
@@ -235,10 +236,13 @@ class LiteLLMTransport:
         while True:
             try:
                 if self.policy.mode is TransportMode.CHAT_COMPLETIONS:
-                    parsed = ChatCompletionsTransport.parse(
-                        await acompletion(**self._chat_request(stream=False))
+                    raw_response = await acompletion(
+                        **self._chat_request(stream=False)
                     )
-                    self.last_result = self._llm_result_from_chat(parsed)
+                    parsed = ChatCompletionsTransport.parse(raw_response)
+                    self.last_result = self._llm_result_from_chat(
+                        parsed, raw_response
+                    )
                     return parsed
                 request = self._responses_request(stream=False)
                 raw_response = await aresponses(**request)
@@ -400,10 +404,13 @@ class LiteLLMTransport:
             **response_kwargs,
         }
 
-    def _llm_result_from_chat(self, parsed: ChatChunk) -> LLMResult:
+    def _llm_result_from_chat(
+        self, parsed: ChatChunk, response: Any = None
+    ) -> LLMResult:
         return LLMResult.from_chat(
             response=parsed["response_delta"],
             reasoning=parsed["reasoning_delta"],
+            usage=_reported_usage(response),
             input_items=ResponsesTransport.input_from_messages(self.messages),
             output_items=parsed.get("_output_items"),
             provider_model_key=self.model,
@@ -413,7 +420,7 @@ class LiteLLMTransport:
     def _llm_result_from_response(
         self, response: Any, request: dict[str, Any]
     ) -> LLMResult:
-        return LLMResult.from_response(
+        result = LLMResult.from_response(
             response,
             input_items=_as_list(request.get("input")),
             previous_response_id=str(request.get("previous_response_id") or ""),
@@ -422,6 +429,8 @@ class LiteLLMTransport:
             state=self.last_request_state,
             capability=self._capability_metadata(),
         )
+        result.usage = _reported_usage(response)
+        return result
 
     def _stream_result_from_parser(
         self, parser: "ResponsesEventParser", request: dict[str, Any]
@@ -440,10 +449,11 @@ class LiteLLMTransport:
         self, parser: "ChatCompletionsStreamParser"
     ) -> LLMResult | None:
         output_items = parser.output_items()
-        if not output_items:
+        if not output_items and not parser.usage:
             return None
         return LLMResult.from_chat(
             response=parser.function_calls_text(),
+            usage=parser.usage,
             input_items=ResponsesTransport.input_from_messages(self.messages),
             output_items=output_items,
             provider_model_key=self.model,
@@ -589,8 +599,11 @@ class ChatCompletionsStreamParser:
         self.tool_calls: dict[str, dict[str, Any]] = {}
         self.order: list[str] = []
         self.emitted = False
+        self.usage: dict[str, Any] = {}
 
     def parse(self, chunk: Any) -> ChatChunk:
+        if usage := _reported_usage(chunk):
+            self.usage.update(usage)
         parsed = ChatCompletionsTransport.parse(chunk)
         choice = _first_choice(chunk)
         delta = _get_value(choice, "delta") or {}
@@ -1697,6 +1710,16 @@ def _object_to_dict(obj: Any) -> dict[str, Any]:
         dumped = obj.dict()
         return dict(dumped) if isinstance(dumped, dict) else {}
     return {}
+
+
+def _reported_usage(response: Any) -> dict[str, Any]:
+    usage = _object_to_dict(_get_value(response, "usage"))
+    hidden = _object_to_dict(_get_value(response, "_hidden_params"))
+    if usage.get("cost") is None:
+        usage.pop("cost", None)
+        if hidden.get("response_cost") is not None:
+            usage["cost"] = hidden["response_cost"]
+    return usage
 
 
 def _normalize_reasoning_effort(effort: Any) -> str | None:

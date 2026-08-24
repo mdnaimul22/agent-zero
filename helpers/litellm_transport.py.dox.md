@@ -33,6 +33,7 @@
 - Fall back to Chat Completions when a Responses endpoint fails before output with an endpoint-specific server error, proxy path-unavailable error, or LiteLLM proxy-extra import error.
 - Fall back to Chat Completions when LiteLLM's Responses mock streaming path tries to JSON-decode a real SSE stream before any output.
 - Preserve Chat Completions tool calls from both non-streaming responses and streaming deltas as canonical `LLMResult` function-call items.
+- Preserve provider usage and LiteLLM response cost for both transports only when the response or stream actually supplies them; do not synthesize unavailable provider accounting.
 - Preserve Responses function calls collected from stream events when a terminal completed event omits them.
 - Preserve provider-state metadata when Responses API calls succeed, and fall back to local replay when provider state is unsupported.
 - Keep prompt-cache markers only for providers that accept them.
