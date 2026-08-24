@@ -540,9 +540,10 @@ class ChatCompletionsTransport:
         if not calls:
             return ""
         if len(calls) == 1:
-            return json.dumps(calls[0])
+            return json.dumps(calls[0], ensure_ascii=False)
         return json.dumps(
-            {"tool_name": "parallel_tool_calls", "tool_args": {"calls": calls}}
+            {"tool_name": "parallel_tool_calls", "tool_args": {"calls": calls}},
+            ensure_ascii=False,
         )
 
     @classmethod
@@ -1118,7 +1119,7 @@ class ResponsesTransport:
         call = cls.function_call_object(item)
         if not call:
             return ""
-        return json.dumps(call)
+        return json.dumps(call, ensure_ascii=False)
 
     @staticmethod
     def function_call_object(item: Any) -> dict[str, Any]:

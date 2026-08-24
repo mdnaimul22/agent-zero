@@ -9,7 +9,11 @@ class FakeAgent:
             last_response=last_response,
             params_temporary={},
         )
-        self.context = SimpleNamespace(log=SimpleNamespace(log=lambda **kwargs: None))
+        self.logs = []
+        self.context = SimpleNamespace(
+            log=SimpleNamespace(log=lambda **entry: self.logs.append(entry))
+        )
+        self.agent_name = "A0"
         self.response = response
         self.reasoning = reasoning
         self.warnings = []
@@ -54,6 +58,13 @@ def test_repeat_skips_default_processing():
 
     assert _run(agent)["skip_default_processing"] is True
     assert agent.warnings == ["repeat"]
+    assert agent.logs == [
+        {
+            "type": "warning",
+            "content": "A0: Repeated response detected. Retrying.",
+            "id": "warning",
+        }
+    ]
 
 
 def test_result_with_reasoning_uses_default_processing():

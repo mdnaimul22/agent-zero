@@ -37,7 +37,10 @@ class LoopControl(Extension):
         self.agent._remember_llm_result_state(llm_result, assistant_message)
         warning_message = self.agent.hist_add_warning(message=warning)
         PrintStyle(font_color="orange", padding=True).print(warning)
+        log_content = warning
+        if response:
+            log_content = f"{self.agent.agent_name}: Repeated response detected. Retrying."
         self.agent.context.log.log(
-            type="warning", content=warning, id=warning_message.id
+            type="warning", content=log_content, id=warning_message.id
         )
         result_data["skip_default_processing"] = True

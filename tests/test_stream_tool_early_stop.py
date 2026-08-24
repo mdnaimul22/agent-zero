@@ -1715,3 +1715,30 @@ def test_responses_response_parser_groups_parallel_function_calls():
             ]
         },
     }
+
+
+def test_responses_stream_parser_preserves_non_ascii_function_call_arguments():
+    parser = litellm_transport.ResponsesEventParser()
+
+    parser.parse(
+        {
+            "type": "response.output_item.added",
+            "output_index": 0,
+            "item": {
+                "type": "function_call",
+                "id": "fc_1",
+                "name": "response",
+                "arguments": "",
+            },
+        }
+    )
+    parsed = parser.parse(
+        {
+            "type": "response.function_call_arguments.done",
+            "item_id": "fc_1",
+            "name": "response",
+            "arguments": '{"text":"привет"}',
+        }
+    )
+
+    assert parsed["response_delta"] == '{"tool_name": "response", "tool_args": {"text": "привет"}}'
