@@ -1,4 +1,4 @@
-"""Handle completed model turns that should retry instead of dispatching tools."""
+"""Retry completed model turns with neither response nor reasoning."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from helpers.extension import Extension
 from helpers.print_style import PrintStyle
 
 
-class LoopControl(Extension):
+class EmptyResponse(Extension):
     def execute(self, result_data: dict[str, Any] | None = None, **kwargs: Any) -> None:
         if not self.agent or not isinstance(result_data, dict):
             return
@@ -18,16 +18,10 @@ class LoopControl(Extension):
         reasoning = getattr(llm_result, "reasoning", "")
         if not isinstance(response, str) or not isinstance(reasoning, str):
             return
-
-        if not response.strip():
-            if reasoning.strip():
-                return
-            warning = self.agent.read_prompt("fw.msg_empty_response.md")
-        elif response != self.agent.loop_data.last_response:
+        if response.strip() or reasoning.strip():
             return
-        else:
-            warning = self.agent.read_prompt("fw.msg_repeat.md")
 
+        warning = self.agent.read_prompt("fw.msg_empty_response.md")
         log_item = self.agent.loop_data.params_temporary.get("log_item_generating")
         assistant_message = self.agent.hist_add_ai_response(
             response,
@@ -37,10 +31,9 @@ class LoopControl(Extension):
         self.agent._remember_llm_result_state(llm_result, assistant_message)
         warning_message = self.agent.hist_add_warning(message=warning)
         PrintStyle(font_color="orange", padding=True).print(warning)
-        log_content = warning
-        if response:
-            log_content = f"{self.agent.agent_name}: Repeated response detected. Retrying."
         self.agent.context.log.log(
-            type="warning", content=log_content, id=warning_message.id
+            type="warning",
+            content=f"{self.agent.agent_name}: {warning}",
+            id=warning_message.id,
         )
         result_data["skip_default_processing"] = True

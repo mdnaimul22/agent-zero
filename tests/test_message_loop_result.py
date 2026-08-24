@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
-from extensions.python.message_loop_result._20_loop_control import LoopControl
+from extensions.python.message_loop_result._20_empty_response import EmptyResponse
+from extensions.python.message_loop_result._30_repeat_response import RepeatResponse
 
 
 class FakeAgent:
@@ -23,6 +24,7 @@ class FakeAgent:
         return {
             "fw.msg_empty_response.md": "empty",
             "fw.msg_repeat.md": "repeat",
+            "fw.msg_repeat_response.md": "Repeated response detected. Retrying.",
         }[name]
 
     def hist_add_ai_response(self, response, **kwargs):
@@ -41,7 +43,8 @@ def _run(agent):
     result_data = {
         "llm_result": SimpleNamespace(response=agent.response, reasoning=agent.reasoning)
     }
-    LoopControl(agent).execute(result_data)
+    EmptyResponse(agent).execute(result_data)
+    RepeatResponse(agent).execute(result_data)
     return result_data
 
 
@@ -51,6 +54,13 @@ def test_empty_result_skips_default_processing():
     assert _run(agent)["skip_default_processing"] is True
     assert agent.history == [""]
     assert agent.warnings == ["empty"]
+    assert agent.logs == [
+        {
+            "type": "warning",
+            "content": "A0: empty",
+            "id": "warning",
+        }
+    ]
 
 
 def test_repeat_skips_default_processing():
@@ -65,6 +75,14 @@ def test_repeat_skips_default_processing():
             "id": "warning",
         }
     ]
+
+
+def test_repeat_ignores_reasoning():
+    response = '{"tool_name":"response"}'
+    agent = FakeAgent(response, reasoning="thinking", last_response=response)
+
+    assert _run(agent)["skip_default_processing"] is True
+    assert agent.warnings == ["repeat"]
 
 
 def test_result_with_reasoning_uses_default_processing():
