@@ -613,7 +613,7 @@ class Agent:
             False,
             content=self.read_prompt(
                 prompt_file,
-                **{variable_name: dirty_json.stringify(values)},
+                **{variable_name: dirty_json.stringify(values, separators=(",", ":"))},
             ),
         ).output()
 
