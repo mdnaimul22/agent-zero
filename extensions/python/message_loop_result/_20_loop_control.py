@@ -1,0 +1,43 @@
+"""Handle completed model turns that should retry instead of dispatching tools."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from helpers.extension import Extension
+from helpers.print_style import PrintStyle
+
+
+class LoopControl(Extension):
+    def execute(self, result_data: dict[str, Any] | None = None, **kwargs: Any) -> None:
+        if not self.agent or not isinstance(result_data, dict):
+            return
+
+        llm_result = result_data.get("llm_result")
+        response = getattr(llm_result, "response", "")
+        reasoning = getattr(llm_result, "reasoning", "")
+        if not isinstance(response, str) or not isinstance(reasoning, str):
+            return
+
+        if not response.strip():
+            if reasoning.strip():
+                return
+            warning = self.agent.read_prompt("fw.msg_empty_response.md")
+        elif response != self.agent.loop_data.last_response:
+            return
+        else:
+            warning = self.agent.read_prompt("fw.msg_repeat.md")
+
+        log_item = self.agent.loop_data.params_temporary.get("log_item_generating")
+        assistant_message = self.agent.hist_add_ai_response(
+            response,
+            id=log_item.id if log_item else "",
+            llm_result=llm_result,
+        )
+        self.agent._remember_llm_result_state(llm_result, assistant_message)
+        warning_message = self.agent.hist_add_warning(message=warning)
+        PrintStyle(font_color="orange", padding=True).print(warning)
+        self.agent.context.log.log(
+            type="warning", content=warning, id=warning_message.id
+        )
+        result_data["skip_default_processing"] = True

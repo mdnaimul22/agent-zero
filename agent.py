@@ -491,40 +491,27 @@ class Agent:
 
                         await self.handle_intervention(agent_response)
 
-                        if (
-                            self.loop_data.last_response == agent_response
-                        ):  # if assistant_response is the same as last message in history, let him know
-                            # Append the assistant's response to the history
-                            log_item = self.loop_data.params_temporary.get("log_item_generating")
-                            assistant_message = self.hist_add_ai_response(
-                                agent_response,
-                                id=log_item.id if log_item else "",
-                                llm_result=llm_result,
-                            )
-                            self._remember_llm_result_state(llm_result, assistant_message)
-                            # Append warning message to the history
-                            warning_msg = self.read_prompt("fw.msg_repeat.md")
-                            wmsg = self.hist_add_warning(message=warning_msg)
-                            PrintStyle(font_color="orange", padding=True).print(
-                                warning_msg
-                            )
-                            self.context.log.log(type="warning", content=warning_msg, id=wmsg.id)
+                        result_data = {"llm_result": llm_result}
+                        await extension.call_extensions_async(
+                            "message_loop_result",
+                            self,
+                            loop_data=self.loop_data,
+                            result_data=result_data,
+                        )
+                        if result_data.get("skip_default_processing"):
+                            continue
 
-                        else:  # otherwise proceed with tool
-                            # Append the assistant's response to the history
-                            log_item = self.loop_data.params_temporary.get("log_item_generating")
-                            assistant_message = self.hist_add_ai_response(
-                                agent_response,
-                                id=log_item.id if log_item else "",
-                                llm_result=llm_result,
-                            )
-                            self._remember_llm_result_state(llm_result, assistant_message)
-                            # process tools requested in agent message
-                            tools_result = await self.process_llm_result_tools(
-                                llm_result
-                            )
-                            if tools_result:  # final response of message loop available
-                                return tools_result  # break the execution if the task is done
+                        agent_response = llm_result.response
+                        log_item = self.loop_data.params_temporary.get("log_item_generating")
+                        assistant_message = self.hist_add_ai_response(
+                            agent_response,
+                            id=log_item.id if log_item else "",
+                            llm_result=llm_result,
+                        )
+                        self._remember_llm_result_state(llm_result, assistant_message)
+                        tools_result = await self.process_llm_result_tools(llm_result)
+                        if tools_result:  # final response of message loop available
+                            return tools_result  # break the execution if the task is done
 
                     # exceptions inside message loop:
                     except Exception as e:

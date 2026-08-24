@@ -1,0 +1,28 @@
+# Message Loop Result Extensions DOX
+
+## Purpose
+
+- Own normalization and policy handling after a model turn completes, before default assistant-history and tool-dispatch processing.
+
+## Ownership
+
+- Extensions receive mutable `result_data` with `llm_result` and may set `skip_default_processing` after fully handling the turn.
+
+## Local Contracts
+
+- Files run in deterministic filename order.
+- A handler that sets `skip_default_processing` owns needed history and UI side effects for that turn.
+- Do not use this point to mutate streamed partial content.
+
+## Work Guidance
+
+- Normalize a completed result before policy extensions compare or persist it.
+- Keep loop-control policy independent from optional plugins.
+
+## Verification
+
+- Run message-loop and unusable-response regression tests.
+
+## Child DOX Index
+
+No child DOX files.
