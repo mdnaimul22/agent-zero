@@ -364,7 +364,7 @@ def format_started_jobs(jobs: list[ParallelJob]) -> str:
         "jobs": [_job_snapshot(job, include_result=False) for job in jobs],
         "instruction": "Use the parallel tool with job_ids to await or cancel these background jobs.",
     }
-    return json.dumps(payload, indent=2, ensure_ascii=False)
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
 def format_parallel_results(results: list[dict[str, Any]]) -> str:
@@ -393,7 +393,7 @@ def format_parallel_results(results: list[dict[str, Any]]) -> str:
             "Some jobs are still running. Call `parallel` with `action: \"await\"` "
             "and the listed `job_ids` to wait again, or `action: \"cancel\"` to stop them."
         )
-    return json.dumps(payload, indent=2, ensure_ascii=False)
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
 async def _run_parallel_job(parent_context_id: str, job_id: str) -> None:

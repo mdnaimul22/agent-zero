@@ -1071,3 +1071,11 @@ def test_chats_sidebar_projects_parallel_children_as_indented_accordion() -> Non
     assert "left: 2px" in html
     assert "padding-left: 24px" in html
     assert "color: var(--color-text-muted)" in html
+
+
+def test_parallel_result_json_is_compact() -> None:
+    result = parallel_tools.format_parallel_results(
+        [{"job_id": "wait-1", "tool_name": "wait", "state": "success"}]
+    )
+
+    assert result == '{"status":"success","jobs":[{"job_id":"wait-1","tool_name":"wait","state":"success"}]}'
