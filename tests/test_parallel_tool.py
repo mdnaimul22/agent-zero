@@ -348,6 +348,50 @@ async def test_parallel_remove_context_deletes_persisted_worker_chat(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_direct_parallel_worker_inherits_chat_model_override(monkeypatch) -> None:
+    from agent import AgentConfig, AgentContext
+
+    parent_id = "ctx-parallel-model-override"
+    AgentContext.remove(parent_id)
+    parent = AgentContext(
+        AgentConfig(mcp_servers="", profile="agent0"),
+        id=parent_id,
+        set_current=False,
+    )
+    override = {"preset_name": "Text only"}
+    parent.set_data("chat_model_override", override)
+    current_user_message = object()
+    parent.agent0.last_user_message = current_user_message
+    observed = {}
+
+    async def fake_execute_tool_call(agent, *_args, **_kwargs):
+        observed["override"] = agent.context.get_data("chat_model_override")
+        observed["last_user_message"] = agent.last_user_message
+        return "done"
+
+    async def remove_context(context_id):
+        AgentContext.remove(context_id)
+
+    monkeypatch.setattr(parallel_tools, "execute_tool_call", fake_execute_tool_call)
+    monkeypatch.setattr(parallel_tools, "_remove_context", remove_context)
+    job = parallel_tools.ParallelJob(
+        id="vision-load-override",
+        parent_context_id=parent_id,
+        index=0,
+        tool_name="vision_load",
+        tool_args={"paths": ["/tmp/example.png"]},
+        kind="tool",
+    )
+
+    try:
+        assert await parallel_tools._run_direct_tool_job(parent_id, job) == "done"
+        assert observed["override"] == override
+        assert observed["last_user_message"] is current_user_message
+    finally:
+        AgentContext.remove(parent_id)
+
+
+@pytest.mark.asyncio
 async def test_parallel_recursion_guard_allows_subordinate_children_but_blocks_tool_workers() -> None:
     from extensions.python.tool_execute_before._20_block_parallel_recursion import (
         BlockParallelRecursion,

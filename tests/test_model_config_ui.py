@@ -85,6 +85,49 @@ def test_preset_editor_uses_standard_modal_footer_buttons() -> None:
     assert "preset-editor-footer" not in preset_modal
 
 
+def test_preset_editor_nests_one_conditional_vision_selector_in_main() -> None:
+    preset_modal = read("plugins", "_model_config", "webui", "main.html")
+    model_field = read("plugins", "_model_config", "webui", "model-field.html")
+    preset_overview = read("plugins", "_model_config", "webui", "preset-overview.html")
+    preset_store = read("plugins", "_model_config", "webui", "model-config-store.js")
+
+    main_start = preset_modal.index('<div class="section-title">Main Model</div>')
+    utility_start = preset_modal.index('<div class="section-title">Utility Model</div>')
+    selector_start = preset_modal.index('class="vision-sidecar-selector"')
+    supports_start = model_field.index('<div class="field-title">Supports Vision</div>')
+    override_start = model_field.index('<div class="field-title">Use separate Vision Model</div>')
+    context_start = model_field.index('<div class="field-title">Context window size</div>')
+    advanced_start = model_field.index('<!-- Advanced Settings (collapsed by default) -->')
+
+    assert '<div class="section-title">Vision Model</div>' not in preset_modal
+    assert preset_modal.count('class="vision-sidecar-selector"') == 1
+    assert main_start < selector_start < utility_start
+    assert '!selectedPreset.chat.vision || selectedPreset.vision.override_main' in preset_modal
+    assert "get visionModel() { return selectedPreset.vision; }" in preset_modal
+    assert "modelType: 'vision'" in preset_modal
+    assert preset_modal.count("apiKeyMode: 'store'") == 4
+    assert "margin: 0.75rem 0 0;" in preset_modal
+    assert "padding: 0.25rem 0 0;" in preset_modal
+    assert "border-left: 2px solid var(--color-border);" not in preset_modal
+    assert "Use separate Vision Model" in model_field
+    assert supports_start < override_start < context_start < advanced_start
+    assert "When disabled, vision_load uses this model's native vision." in model_field
+    assert "When enabled, vision_load uses the preset's Vision Model" not in model_field
+    assert 'x-model="visionModel.override_main"' in model_field
+    assert '<div class="advanced-section" x-data="{ advOpen: false }">' in model_field
+    assert "model-preset-row-nested" in preset_overview
+    assert "model.title === 'Vision'" in preset_overview
+    assert preset_overview.count("model.title !== 'Vision'") == 2
+    assert '<span class="model-preset-role">Vision override</span>' in preset_overview
+    assert "'model-preset-identity-vision': model.title === 'Vision'" in preset_overview
+    assert "grid-column: 3;" in preset_overview
+    assert "padding-top: var(--spacing-xs);" in preset_overview
+    assert "margin-left: 2rem;" not in preset_overview
+    assert "border-left: 1px solid var(--color-border);" not in preset_overview
+    assert "if (slotKey === 'vision') config[sectionKey] = {};" in preset_store
+    assert "['chat', 'vision', 'utility']" in preset_store
+
+
 def test_plugin_settings_reset_is_explicit_and_does_not_capture_toast_early() -> None:
     settings_modal = read("webui", "components", "plugins", "plugin-settings.html")
     settings_store = read("webui", "components", "plugins", "plugin-settings-store.js")

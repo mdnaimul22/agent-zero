@@ -14,7 +14,7 @@
 
 ## Local Contracts
 
-- `Default` is the first global preset and cannot be deleted or renamed. It owns the complete main, utility, and embedding baseline.
+- `Default` is the first global preset and cannot be deleted or renamed. It owns the complete main, utility, and embedding baseline; its Vision Model slot is optional.
 - Preset definitions are global. Global, project, agent-profile, and project/profile plugin configs persist only `model_preset`; chats may persist a preset reference as their explicit override.
 - Preserve scoped plugin resolution order and fall back invalid or missing scope/chat references to `Default`.
 - Project Settings `llm` payloads are owned here through the generic `helpers.projects` project extension-data hooks; keep project helper code agnostic to `_model_config` paths, presets, and inheritance rules.
@@ -22,7 +22,12 @@
 - Check API-key readiness only for the effective model configuration; unused global presets must not produce Welcome-screen warnings.
 - Coordinate OAuth-backed providers with `_oauth` instead of hardcoding provider-specific auth here.
 - `model_config_get` exposes `model_configured` as a derived chat-model readiness flag from provider, model name, and API-key availability.
-- Non-default presets may inherit omitted slots or durable tuning from `Default`, but must replace or clear per-slot `kwargs` so provider-specific extra params never leak across model providers.
+- Non-default presets may inherit omitted main, utility, or embedding slots and durable tuning from `Default`, but must replace or clear per-slot `kwargs` so provider-specific extra params never leak across model providers.
+- The optional `vision` slot is strictly per preset and never inherited from `Default`; an empty slot disables the separate Vision Model for that preset.
+- Main native vision wins by default. A configured Vision Model handles `vision_load` when Main lacks vision, or when that preset explicitly enables `override_main`.
+- Keep the optional Vision provider/model selector inside the Main Model card and flush with Main's field alignment, without a nested left inset. Show it only while Main vision is disabled or `override_main` is enabled; do not render a standalone Vision Model card.
+- Show `Use separate Vision Model` immediately below `Supports Vision` while Main vision is enabled, not inside Advanced Settings; describe the disabled state as using Main's native vision.
+- In model overviews, render the effective Vision Model as a text-only `Vision override / Provider / Model` child aligned with Main's provider column, not as an icon-bearing peer row.
 - Changing a model provider in the settings UI must clear `api_base` and `kwargs` because both may be provider-specific.
 - Repair provider-specific model-config aliases at the model-config read/build boundary; keep provider-specific repairs out of provider-agnostic core wrappers such as `models.py`.
 - `modelConfig.createPresetEditor()` owns local preset drafts, row actions, and stable UI-only row keys so deletion or renaming cannot rebind nested model fields.

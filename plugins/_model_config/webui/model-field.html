@@ -10,13 +10,14 @@
     Reusable model configuration field set.
     Parent x-data scope must provide:
       model       — reactive object with provider, name, api_key, api_base, ctx_length, ctx_history, ctx_input, vision, max_embeds, rl_requests, rl_input, rl_output, kwargs, _kwargs_text
-      modelType   — 'chat' | 'utility' | 'embedding'
+      modelType   — 'chat' | 'vision' | 'utility' | 'embedding'
       providers   — array of { value, label }
       searchType  — 'chat' | 'embedding'
       apiKeyMode  — 'store' (key lives in $store.modelConfig.apiKeyValues), 'inline' (key lives in model.api_key), or 'none'
     Optional:
       providerFallback — fallback provider string for search/API key status (e.g. preset.chat.provider for utility slot)
       apiBaseFallback  — fallback api_base string for search (e.g. preset.chat.api_base for utility slot)
+      visionModel      — vision slot object, required by the chat model's sidecar switch
   -->
   <div x-data="{ get _prov() { return model.provider || (typeof providerFallback !== 'undefined' ? providerFallback : ''); }, get _apiBase() { return model.api_base || (typeof apiBaseFallback !== 'undefined' ? apiBaseFallback : ''); } }">
     <!-- Provider -->
@@ -146,8 +147,23 @@
       </div>
     </template>
 
+    <template x-if="modelType === 'chat' && model.vision">
+      <div class="field">
+        <div class="field-label">
+          <div class="field-title">Use separate Vision Model</div>
+          <div class="field-description">When disabled, vision_load uses this model's native vision.</div>
+        </div>
+        <div class="field-control">
+          <label class="toggle">
+            <input type="checkbox" x-model="visionModel.override_main" />
+            <span class="toggler"></span>
+          </label>
+        </div>
+      </div>
+    </template>
+
     <!-- Context window size (main and utility only) -->
-    <template x-if="modelType !== 'embedding'">
+    <template x-if="modelType === 'chat' || modelType === 'utility'">
       <div class="field">
         <div class="field-label">
           <div class="field-title">Context window size</div>
@@ -204,6 +220,18 @@
                 </div>
               </div>
             </template>
+          </div>
+        </template>
+
+        <template x-if="modelType === 'vision'">
+          <div class="field">
+            <div class="field-label">
+              <div class="field-title">Max embeds</div>
+              <div class="field-description">Maximum number of images sent to the Vision Model in one call. Set to 0 for unlimited.</div>
+            </div>
+            <div class="field-control">
+              <input type="number" min="0" x-model.number="model.max_embeds" />
+            </div>
           </div>
         </template>
 

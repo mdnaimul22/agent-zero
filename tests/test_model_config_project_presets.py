@@ -1092,6 +1092,44 @@ def test_preset_application_inherits_optional_slots(monkeypatch, tmp_path):
     assert config["embedding_model"] == base_config["embedding_model"]
 
 
+def test_preset_vision_slot_is_optional_and_never_inherited(monkeypatch, tmp_path):
+    _prepare_a0_tree(monkeypatch, tmp_path)
+
+    from plugins._model_config.helpers import model_config
+
+    base_config = {
+        "chat_model": {"provider": "openrouter", "name": "main", "vision": False},
+        "vision_model": {
+            "provider": "openrouter",
+            "name": "default-vision",
+            "max_embeds": 2,
+        },
+    }
+
+    without_sidecar = model_config.build_config_from_preset(
+        {"name": "Text only", "chat": {"provider": "openrouter", "name": "text"}},
+        base_config,
+    )
+    with_sidecar = model_config.build_config_from_preset(
+        {
+            "name": "Visual",
+            "chat": {"provider": "openrouter", "name": "text"},
+            "vision": {
+                "provider": "anthropic",
+                "name": "visual",
+                "max_embeds": 5,
+            },
+        },
+        base_config,
+    )
+
+    assert without_sidecar["vision_model"] == {}
+    assert with_sidecar["vision_model"]["provider"] == "anthropic"
+    assert with_sidecar["vision_model"]["name"] == "visual"
+    assert with_sidecar["vision_model"]["max_embeds"] == 5
+    assert "default-vision" not in str(with_sidecar["vision_model"])
+
+
 def test_legacy_utility_preset_defaults_preserve_tuning_but_clear_kwargs(
     monkeypatch,
     tmp_path,
