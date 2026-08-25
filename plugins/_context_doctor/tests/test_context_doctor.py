@@ -31,6 +31,24 @@ def test_wraps_raw_text_in_thoughts():
     )
 
 
+def test_does_not_wrap_json_with_thoughts_or_headline():
+    response = '{"thoughts":["Reasoning"],"headline":"A title"}'
+
+    assert transform_response(response, suppress_xml=True) == response
+
+
+def test_does_not_wrap_json_with_only_headline():
+    response = '{"headline":"Just a headline"}'
+
+    assert transform_response(response, suppress_xml=True) == response
+
+
+def test_does_not_wrap_json_with_only_thoughts():
+    response = '{"thoughts":["only thoughts"]}'
+
+    assert transform_response(response, suppress_xml=True) == response
+
+
 def test_suppresses_xml_when_enabled():
     assert transform_response("<tool>response</tool>", suppress_xml=True) == "{}"
     assert transform_response("<tool>response</tool>", suppress_xml=False) == (
