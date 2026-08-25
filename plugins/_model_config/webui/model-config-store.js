@@ -63,6 +63,8 @@ const IMPLICIT_PRESET_SLOT_DEFAULTS = {
   vision: {
     vision: true,
     max_embeds: 10,
+    timeout: 300,
+    max_tokens: 2000,
     override_main: false,
     rl_requests: 0,
     rl_input: 0,
@@ -222,7 +224,23 @@ export const store = createStore("modelConfig", {
     const source = (rawPresets || []).filter(p => p && typeof p === 'object');
     const rawDefault = source.find(p => String(p.name || '').toLowerCase() === 'default') || {};
     const slot = value => ({ provider: '', name: '', api_key: '', api_base: '', kwargs: {}, ...(value || {}) });
-    const visionSlot = value => ({ ...slot(value), vision: true, max_embeds: Number(value?.max_embeds ?? 10), override_main: !!value?.override_main });
+    const visionSlot = value => {
+      const normalized = slot(value);
+      const kwargs = { ...(normalized.kwargs || {}) };
+      const timeout = Number(value?.timeout ?? kwargs.timeout ?? 300);
+      const maxTokens = Number(value?.max_tokens ?? kwargs.max_tokens ?? 2000);
+      delete kwargs.timeout;
+      delete kwargs.max_tokens;
+      return {
+        ...normalized,
+        vision: true,
+        max_embeds: Number(value?.max_embeds ?? 10),
+        timeout,
+        max_tokens: maxTokens,
+        override_main: !!value?.override_main,
+        kwargs,
+      };
+    };
     const defaultConfig = {
       chat_model: slot(rawDefault.chat),
       vision_model: hasModelIdentity(rawDefault.vision) ? visionSlot(rawDefault.vision) : {},
@@ -234,10 +252,11 @@ export const store = createStore("modelConfig", {
       const effective = String(p.name || '').toLowerCase() === 'default'
         ? defaultConfig
         : configFromPreset(p, defaultConfig, true);
+      const vision = visionSlot(effective.vision_model);
       return {
         name: p.name || '',
         chat: { ...slot(effective.chat_model), _kwargs_text: kwargsToText(effective.chat_model?.kwargs) },
-        vision: { ...visionSlot(effective.vision_model), _kwargs_text: kwargsToText(effective.vision_model?.kwargs) },
+        vision: { ...vision, _kwargs_text: kwargsToText(vision.kwargs) },
         utility: { ...slot(effective.utility_model), _kwargs_text: kwargsToText(effective.utility_model?.kwargs) },
         embedding: { ...slot(effective.embedding_model), _kwargs_text: kwargsToText(effective.embedding_model?.kwargs) },
       };
@@ -360,7 +379,7 @@ export const store = createStore("modelConfig", {
           || this.presets[0]
           || {
             chat: { provider: '', name: '', api_base: '', kwargs: {}, _kwargs_text: '' },
-            vision: { provider: '', name: '', api_base: '', vision: true, max_embeds: 10, override_main: false, kwargs: {}, _kwargs_text: '' },
+            vision: { provider: '', name: '', api_base: '', vision: true, max_embeds: 10, timeout: 300, max_tokens: 2000, override_main: false, kwargs: {}, _kwargs_text: '' },
             utility: { provider: '', name: '', api_base: '', kwargs: {}, _kwargs_text: '' },
             embedding: { provider: '', name: '', api_base: '', kwargs: {}, _kwargs_text: '' },
           }

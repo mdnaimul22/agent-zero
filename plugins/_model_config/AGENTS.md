@@ -26,6 +26,7 @@
 - The optional `vision` slot is strictly per preset and never inherited from `Default`; an empty slot disables the separate Vision Model for that preset.
 - Main native vision wins by default. A configured Vision Model handles `vision_load` when Main lacks vision, or when that preset explicitly enables `override_main`.
 - Keep the optional Vision provider/model selector inside the Main Model card and flush with Main's field alignment, without a nested left inset. Show it only while Main vision is disabled or `override_main` is enabled; do not render a standalone Vision Model card.
+- Keep Vision timeout and maximum-output-token controls, plus the Agent Editor prompt-customization note, inside the visible Vision sidecar's Advanced Settings only. The Vision call limits belong to the preset/model builder, not to `vision_load` call-site constants.
 - Show `Use separate Vision Model` immediately below `Supports Vision` while Main vision is enabled, not inside Advanced Settings; describe the disabled state as using Main's native vision.
 - In model overviews, render the effective Vision Model as a text-only `Vision override / Provider / Model` child aligned with Main's provider column, not as an icon-bearing peer row.
 - Changing a model provider in the settings UI must clear `api_base` and `kwargs` because both may be provider-specific.

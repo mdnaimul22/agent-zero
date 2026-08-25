@@ -98,6 +98,9 @@ def test_preset_editor_nests_one_conditional_vision_selector_in_main() -> None:
     override_start = model_field.index('<div class="field-title">Use separate Vision Model</div>')
     context_start = model_field.index('<div class="field-title">Context window size</div>')
     advanced_start = model_field.index('<!-- Advanced Settings (collapsed by default) -->')
+    vision_advanced_start = model_field.index('<template x-if="modelType === \'vision\'">')
+    vision_advanced_end = model_field.index('<!-- Utility-specific: ctx_input slider -->')
+    vision_advanced = model_field[vision_advanced_start:vision_advanced_end]
 
     assert '<div class="section-title">Vision Model</div>' not in preset_modal
     assert preset_modal.count('class="vision-sidecar-selector"') == 1
@@ -115,6 +118,24 @@ def test_preset_editor_nests_one_conditional_vision_selector_in_main() -> None:
     assert "When enabled, vision_load uses the preset's Vision Model" not in model_field
     assert 'x-model="visionModel.override_main"' in model_field
     assert '<div class="advanced-section" x-data="{ advOpen: false }">' in model_field
+    assert advanced_start < vision_advanced_start
+    assert model_field.count('<div class="field-title">Timeout (seconds)</div>') == 1
+    assert model_field.count('<div class="field-title">Max tokens</div>') == 1
+    assert 'x-model.number="model.timeout"' in vision_advanced
+    assert 'x-model.number="model.max_tokens"' in vision_advanced
+    assert "How long to wait for the Vision Model." in vision_advanced
+    assert "Maximum output tokens for each delegated vision call." in vision_advanced
+    assert "Agent Editor &gt; Advanced &gt; Prompt files" in vision_advanced
+    assert "fw.vision_load.md" in vision_advanced
+    assert "delegated_system" not in model_field
+    assert "vision prompt" not in model_field[:vision_advanced_start].lower()
+    assert "timeout: 300" in preset_store
+    assert "max_tokens: 2000" in preset_store
+    assert "value?.timeout ?? kwargs.timeout ?? 300" in preset_store
+    assert "value?.max_tokens ?? kwargs.max_tokens ?? 2000" in preset_store
+    assert "delete kwargs.timeout;" in preset_store
+    assert "delete kwargs.max_tokens;" in preset_store
+    assert "_kwargs_text: kwargsToText(vision.kwargs)" in preset_store
     assert "model-preset-row-nested" in preset_overview
     assert "model.title === 'Vision'" in preset_overview
     assert preset_overview.count("model.title !== 'Vision'") == 2

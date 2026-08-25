@@ -11,6 +11,8 @@ PRESETS_FILE = "presets.yaml"
 FALLBACK_PRESETS_FILE = "mode_presets_fallback.yaml"
 PROVIDER_METADATA_FILE = "provider_metadata.yaml"
 DEFAULT_PRESET_NAME = "Default"
+DEFAULT_VISION_TIMEOUT_SECONDS = 300
+DEFAULT_VISION_MAX_TOKENS = 2000
 MODEL_PRESET_CONFIG_KEY = "model_preset"
 PRESET_SCOPE_GLOBAL = "global"
 PRESET_SCOPE_PROJECT = "project"
@@ -25,6 +27,8 @@ IMPLICIT_PRESET_SLOT_DEFAULTS = {
     "vision": {
         "vision": True,
         "max_embeds": 10,
+        "timeout": DEFAULT_VISION_TIMEOUT_SECONDS,
+        "max_tokens": DEFAULT_VISION_MAX_TOKENS,
         "override_main": False,
         "rl_requests": 0,
         "rl_input": 0,
@@ -873,8 +877,18 @@ def build_vision_model(agent=None):
     cfg = get_vision_model_config(agent)
     mc = build_model_config(cfg, models.ModelType.CHAT)
     mc.vision = True
+    kwargs = mc.build_kwargs()
+    for key, default in (
+        ("timeout", DEFAULT_VISION_TIMEOUT_SECONDS),
+        ("max_tokens", DEFAULT_VISION_MAX_TOKENS),
+    ):
+        value = cfg.get(key)
+        if value not in (None, ""):
+            kwargs[key] = _normalize_kwargs({key: value})[key]
+        else:
+            kwargs.setdefault(key, default)
     return models.get_chat_model(
-        mc.provider, mc.name, model_config=mc, **mc.build_kwargs()
+        mc.provider, mc.name, model_config=mc, **kwargs
     )
 
 

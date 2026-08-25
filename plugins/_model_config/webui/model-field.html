@@ -9,7 +9,7 @@
   <!--
     Reusable model configuration field set.
     Parent x-data scope must provide:
-      model       — reactive object with provider, name, api_key, api_base, ctx_length, ctx_history, ctx_input, vision, max_embeds, rl_requests, rl_input, rl_output, kwargs, _kwargs_text
+      model       — reactive object with provider, name, api_key, api_base, ctx_length, ctx_history, ctx_input, vision, max_embeds, timeout, max_tokens, rl_requests, rl_input, rl_output, kwargs, _kwargs_text
       modelType   — 'chat' | 'vision' | 'utility' | 'embedding'
       providers   — array of { value, label }
       searchType  — 'chat' | 'embedding'
@@ -224,14 +224,38 @@
         </template>
 
         <template x-if="modelType === 'vision'">
-          <div class="field">
-            <div class="field-label">
-              <div class="field-title">Max embeds</div>
-              <div class="field-description">Maximum number of images sent to the Vision Model in one call. Set to 0 for unlimited.</div>
+          <div>
+            <div class="field">
+              <div class="field-label">
+                <div class="field-title">Max embeds</div>
+                <div class="field-description">Maximum number of images sent to the Vision Model in one call. Set to 0 for unlimited.</div>
+              </div>
+              <div class="field-control">
+                <input type="number" min="0" x-model.number="model.max_embeds" />
+              </div>
             </div>
-            <div class="field-control">
-              <input type="number" min="0" x-model.number="model.max_embeds" />
+
+            <div class="field">
+              <div class="field-label">
+                <div class="field-title">Timeout (seconds)</div>
+                <div class="field-description">How long to wait for the Vision Model.</div>
+              </div>
+              <div class="field-control">
+                <input type="number" min="1" x-model.number="model.timeout" />
+              </div>
             </div>
+
+            <div class="field">
+              <div class="field-label">
+                <div class="field-title">Max tokens</div>
+                <div class="field-description">Maximum output tokens for each delegated vision call.</div>
+              </div>
+              <div class="field-control">
+                <input type="number" min="1" x-model.number="model.max_tokens" />
+              </div>
+            </div>
+
+            <p class="field-description">To customize the vision prompt, use Agent Editor &gt; Advanced &gt; Prompt files and edit <code>fw.vision_load.md</code>.</p>
           </div>
         </template>
 
