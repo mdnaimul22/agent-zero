@@ -24,6 +24,7 @@
 - The public tool contract is route-agnostic. A Vision Model receives the current user request through `fw.vision_load.md`; direct parallel workers inherit that request from their parent.
 - Delegation completes during `execute(...)` so native Responses function output contains the real capsule before `after_execution(...)` persists it.
 - Delegated history contains the text capsule only. Native history contains the tool result followed by one raw message holding all loaded image blocks.
+- In a direct parallel worker, native image content is queued for the parent and promoted immediately after the outer `parallel` result; the disposable worker never owns the only copy of model-visible pixels.
 - Direct parallel workers inherit the parent's model override generically. This tool uses their recorded parent context only to resolve ephemeral refs and durable chat media.
 - `max_embeds` comes from the model that actually receives the images.
 - Vision Model calls use the selected model's Advanced `kwargs`; this tool does not impose a separate timeout or output-token limit.

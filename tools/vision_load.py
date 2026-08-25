@@ -2,8 +2,15 @@ from mimetypes import guess_type
 
 from langchain_core.messages import HumanMessage
 
-from helpers import chat_media, ephemeral_images, files, history, images, runtime
-from helpers.parallel_tools import PARALLEL_WORKER_PARENT_CONTEXT_KEY
+from helpers import (
+    chat_media,
+    ephemeral_images,
+    files,
+    history,
+    images,
+    parallel_tools,
+    runtime,
+)
 from helpers.tool import Response, Tool
 from plugins._model_config.helpers.model_config import (
     build_vision_model,
@@ -96,7 +103,11 @@ class VisionLoad(Tool):
     def _context_id(self) -> str:
         context = getattr(self.agent, "context", None)
         get_data = getattr(context, "get_data", None)
-        parent_id = get_data(PARALLEL_WORKER_PARENT_CONTEXT_KEY) if get_data else ""
+        parent_id = (
+            get_data(parallel_tools.PARALLEL_WORKER_PARENT_CONTEXT_KEY)
+            if get_data
+            else ""
+        )
         return str(parent_id or getattr(context, "id", "") or "").strip()
 
     async def _call_vision_model(self, image_paths: list[str]) -> str:
@@ -191,11 +202,18 @@ class VisionLoad(Tool):
                 {"type": "image_url", "image_url": {"url": image_path}}
                 for image_path in self.images_dict.values()
             ]
-            self.agent.hist_add_message(
-                False,
-                content=history.RawMessage(
-                    raw_content=content,
-                    preview="<Image attachments loaded by path>",
-                ),
-                tokens=TOKENS_ESTIMATE * len(content),
+            raw_message = history.RawMessage(
+                raw_content=content,
+                preview="<Image attachments loaded by path>",
             )
+            tokens = TOKENS_ESTIMATE * len(content)
+            if not parallel_tools.queue_parallel_parent_history(
+                self.agent,
+                content=raw_message,
+                tokens=tokens,
+            ):
+                self.agent.hist_add_message(
+                    False,
+                    content=raw_message,
+                    tokens=tokens,
+                )

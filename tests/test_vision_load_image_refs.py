@@ -108,7 +108,7 @@ async def test_vision_load_materializes_local_image_to_chat_artifact(monkeypatch
     messages = []
     updates = []
     agent = SimpleNamespace(
-        context=SimpleNamespace(id="ctx-vision"),
+        context=SimpleNamespace(id="ctx-vision", get_data=lambda *_args, **_kwargs: None),
         agent_name="Agent 0",
         hist_add_tool_result=lambda *args, **kwargs: tool_results.append((args, kwargs)),
         hist_add_message=lambda *args, **kwargs: messages.append((args, kwargs)),
@@ -303,6 +303,12 @@ async def test_parallel_worker_consumes_parent_ephemeral_image(monkeypatch, tmp_
         lambda _agent: {"vision": True, "max_embeds": 10},
     )
     monkeypatch.setattr(vision_load_module, "get_vision_model_config", lambda _agent: {})
+    queued = []
+    monkeypatch.setattr(
+        vision_load_module.parallel_tools,
+        "queue_parallel_parent_history",
+        lambda _agent, **message: queued.append(message) or True,
+    )
 
     ref = vision_load_module.ephemeral_images.put_image_bytes(
         context_id=parent_id,
@@ -313,10 +319,17 @@ async def test_parallel_worker_consumes_parent_ephemeral_image(monkeypatch, tmp_
     context = SimpleNamespace(
         id="parallel-worker",
         get_data=lambda key: parent_id
-        if key == vision_load_module.PARALLEL_WORKER_PARENT_CONTEXT_KEY
+        if key == vision_load_module.parallel_tools.PARALLEL_WORKER_PARENT_CONTEXT_KEY
         else None,
     )
-    agent = SimpleNamespace(context=context, agent_name="Agent 0")
+    tool_results = []
+    local_messages = []
+    agent = SimpleNamespace(
+        context=context,
+        agent_name="Agent 0",
+        hist_add_tool_result=lambda *args, **kwargs: tool_results.append((args, kwargs)),
+        hist_add_message=lambda *args, **kwargs: local_messages.append((args, kwargs)),
+    )
     tool = vision_load_module.VisionLoad(
         agent=agent,
         name="vision_load",
@@ -325,14 +338,22 @@ async def test_parallel_worker_consumes_parent_ephemeral_image(monkeypatch, tmp_
         message="",
         loop_data=None,
     )
+    tool.log = SimpleNamespace(id="vision-log", update=lambda **kwargs: None)
 
-    await tool.execute(paths=[ref])
+    response = await tool.execute(paths=[ref])
+    await tool.after_execution(response)
 
     assert tool._context_id() == parent_id
     assert tool.loaded_paths == ["shot.png"]
     assert vision_load_module.ephemeral_images.get_image(ref, context_id=parent_id) is None
     stored_ref = tool.images_dict["shot.png"]
     assert stored_ref.startswith("/a0/usr/chats/parent-vision/images/vision-load/shot-")
+    assert local_messages == []
+    assert queued[0]["tokens"] == vision_load_module.TOKENS_ESTIMATE
+    raw_content = queued[0]["content"]["raw_content"]
+    assert raw_content == [
+        {"type": "image_url", "image_url": {"url": stored_ref}}
+    ]
 
 
 @pytest.mark.anyio

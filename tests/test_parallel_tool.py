@@ -1047,6 +1047,61 @@ async def test_parallel_tool_keeps_wrapper_out_of_visible_log() -> None:
 
 
 @pytest.mark.asyncio
+async def test_parallel_collect_promotes_history_after_wrapper_result() -> None:
+    from tools.parallel import ParallelTool
+
+    class HistoryAgent(_FakeAgent):
+        def __init__(self) -> None:
+            super().__init__()
+            self.history_events = []
+
+        def hist_add_tool_result(self, tool_name, tool_result, **kwargs):
+            self.history_events.append(("tool", tool_name, tool_result, kwargs))
+
+        def hist_add_message(self, ai, content, tokens=0, **kwargs):
+            self.history_events.append(("message", ai, content, tokens, kwargs))
+
+    agent = HistoryAgent()
+    job = parallel_tools.ParallelJob(
+        id="vision-ready",
+        parent_context_id=agent.context.id,
+        index=0,
+        tool_name="vision_load",
+        tool_args={"paths": ["/image.png"]},
+        kind="tool",
+        state="success",
+        result="Loaded images (1)",
+        parent_history=[("raw-image-message", 1500)],
+    )
+    agent.context.set_data(parallel_tools.PARALLEL_JOBS_KEY, {job.id: job})
+    tool = ParallelTool(
+        agent,  # type: ignore[arg-type]
+        "parallel",
+        None,
+        {"action": "collect", "job_ids": [job.id]},
+        "",
+        None,
+    )
+
+    response = await tool.execute(**tool.args)
+
+    assert job.id in agent.context.get_data(parallel_tools.PARALLEL_JOBS_KEY)
+    assert agent.history_events == []
+
+    await tool.after_execution(response)
+
+    assert agent.history_events[0][0] == "tool"
+    assert agent.history_events[1] == (
+        "message",
+        False,
+        "raw-image-message",
+        1500,
+        {},
+    )
+    assert job.id not in agent.context.get_data(parallel_tools.PARALLEL_JOBS_KEY)
+
+
+@pytest.mark.asyncio
 async def test_parallel_child_contexts_are_chats_not_tasks(monkeypatch) -> None:
     from agent import AgentContext
     from initialize import initialize_agent
