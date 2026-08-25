@@ -44,6 +44,22 @@ class _AsyncEventStream:
         self.closed = True
 
 
+def test_responses_function_call_text_preserves_non_ascii_tool_args():
+    result = LLMResult.from_response(
+        {
+            "output": [
+                {
+                    "type": "function_call",
+                    "name": "response",
+                    "arguments": '{"text":"привет"}',
+                }
+            ]
+        }
+    )
+
+    assert result.function_calls_text() == '{"tool_name": "response", "tool_args": {"text": "привет"}}'
+
+
 def test_llm_result_persists_only_durable_responses_metadata():
     result = LLMResult.from_response(
         {
@@ -105,7 +121,9 @@ def test_history_migrates_legacy_ai_metadata_and_preserves_tool_inputs():
         "done",
         metadata={"responses": {"input_items": [tool_item]}},
     )
-    restored = history.deserialize_history(hist.serialize(), DummyAgent())
+    serialized = hist.serialize()
+    assert '"input_items":[{"type":"function_call_output"' in serialized
+    restored = history.deserialize_history(serialized, DummyAgent())
 
     restored_message = restored.all_messages()[0]
     assert restored_message.sequence == message.sequence
