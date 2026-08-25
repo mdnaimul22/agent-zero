@@ -57,9 +57,10 @@ async def build_prompt(agent: Agent) -> str:
     )
 
     chat_cfg = get_chat_model_config(agent)
-    if use_vision_sidecar(agent):
-        prompt += "\n\n" + agent.read_prompt("agent.system.tools_vision_sidecar.md")
-    elif chat_cfg.get("vision", False):
-        prompt += "\n\n" + agent.read_prompt("agent.system.tools_vision.md")
+    sidecar = use_vision_sidecar(agent)
+    if sidecar or chat_cfg.get("vision", False):
+        prompt += "\n\n" + agent.read_prompt(
+            "agent.system.tools_vision.md", sidecar=sidecar
+        )
 
     return prompt

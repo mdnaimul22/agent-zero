@@ -12,7 +12,7 @@
 
 ## Local Contracts
 
-- Build local function tools from enabled `agent.system.tool.*.md` prompt files and include `vision_load` when either Main native vision or the effective preset's Vision Model enables the matching prompt.
+- Build local function tools from enabled `agent.system.tool.*.md` prompt files and include `vision_load` when either Main native vision or the effective preset's Vision Model enables the canonical vision prompt.
 - Discover local prompt files through `helpers.subagents.get_paths`; this module
   owns the Responses-specific prompt-name compatibility rules.
 - Local prompt-derived function names use existing bullet declarations that pair a backticked name with `arg` or `args` for multi-tool prompt files, otherwise prefer explicit `"tool_name"` examples, then the first prompt heading, and finally the prompt filename.

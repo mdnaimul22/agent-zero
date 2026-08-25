@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from extensions.python.system_prompt import _11_tools_prompt, _13_skills_prompt
-from helpers import mcp_handler, responses_tools, tool_policy
+from helpers import files, mcp_handler, responses_tools, tool_policy
 from helpers.errors import RepairableException
 from plugins._tool_access.extensions.python.tool_execute_before._10_enforce_tool_policy import (
     EnforceToolPolicy,
@@ -547,19 +547,14 @@ async def test_vision_tool_follows_chat_config_not_profile_policy(
 
 
 @pytest.mark.asyncio
-async def test_vision_sidecar_prompt_replaces_native_vision_prompt(
+async def test_vision_sidecar_uses_canonical_vision_prompt(
     monkeypatch, tmp_path: Path
 ) -> None:
     _write_prompt(tmp_path, "agent.system.tools.md", "TOOLS\n{{tools}}")
     _write_prompt(
         tmp_path,
         "agent.system.tools_vision.md",
-        "### vision_load\nnative pixels\nargs: `paths`",
-    )
-    _write_prompt(
-        tmp_path,
-        "agent.system.tools_vision_sidecar.md",
-        "### vision_load\nsidecar capsule\nargs: `paths`, `query`",
+        "### vision_load\ncanonical vision\nargs: `paths`, `query`",
     )
     monkeypatch.setattr(tool_policy.subagents, "get_paths", _prompt_paths(tmp_path))
     monkeypatch.setattr(
@@ -576,19 +571,20 @@ async def test_vision_sidecar_prompt_replaces_native_vision_prompt(
     prompt = await _11_tools_prompt.build_prompt(agent)
     schemas, _name_map = responses_tools.build_responses_function_tools(agent)
 
-    assert "sidecar capsule" in prompt
-    assert "native pixels" not in prompt
+    assert prompt.count("canonical vision") == 1
     assert schemas[0]["name"] == "vision_load"
-    assert schemas[0]["description"] == "sidecar capsule"
+    assert schemas[0]["description"] == "canonical vision"
 
 
-def test_vision_sidecar_prompt_declares_multi_image_native_schema() -> None:
-    prompt = (
+def test_vision_prompt_declares_multi_image_native_schema() -> None:
+    source = (
         Path(__file__).resolve().parents[1]
         / "prompts"
-        / "agent.system.tools_vision_sidecar.md"
+        / "agent.system.tools_vision.md"
     ).read_text(encoding="utf-8")
-    schema = responses_tools._schema_from_prompt(prompt)
+    sidecar_prompt = files.evaluate_text_conditions(source, sidecar=True)
+    native_prompt = files.evaluate_text_conditions(source, sidecar=False)
+    schema = responses_tools._schema_from_prompt(sidecar_prompt)
 
     assert schema["required"] == ["paths"]
     assert schema["properties"]["paths"] == {
@@ -597,6 +593,13 @@ def test_vision_sidecar_prompt_declares_multi_image_native_schema() -> None:
         "description": "Absolute image paths or ephemeral image refs.",
     }
     assert {"query", "raw"} <= schema["properties"].keys()
+    assert "separate Vision Model" in sidecar_prompt
+    assert "separate Vision Model" not in native_prompt
+    assert responses_tools._schema_from_prompt(native_prompt) == {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": True,
+    }
 
 
 def test_mcp_prompt_and_native_schema_omit_blocked_tool(

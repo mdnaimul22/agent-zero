@@ -119,11 +119,10 @@ def _vision_tool_prompt(agent: Any) -> str:
             use_vision_sidecar,
         )
 
-        if use_vision_sidecar(agent):
-            return agent.read_prompt("agent.system.tools_vision_sidecar.md")
-        if not get_chat_model_config(agent).get("vision", False):
+        sidecar = use_vision_sidecar(agent)
+        if not (sidecar or get_chat_model_config(agent).get("vision", False)):
             return ""
-        return agent.read_prompt("agent.system.tools_vision.md")
+        return agent.read_prompt("agent.system.tools_vision.md", sidecar=sidecar)
     except Exception:
         return ""
 
