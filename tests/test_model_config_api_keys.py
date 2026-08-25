@@ -93,7 +93,7 @@ def test_missing_api_key_checks_only_the_active_vision_model(monkeypatch):
     from plugins._model_config.helpers import model_config
 
     config = {
-        "chat_model": {"provider": "ollama", "name": "text-main"},
+        "chat_model": {"provider": "ollama", "name": "text-main", "vision": True},
         "vision_model": {"provider": "openai", "name": "vision"},
         "utility_model": {"provider": "ollama", "name": "utility"},
         "embedding_model": {
@@ -101,19 +101,17 @@ def test_missing_api_key_checks_only_the_active_vision_model(monkeypatch):
             "name": "sentence-transformers/all-MiniLM-L6-v2",
         },
     }
-    active = False
     monkeypatch.setattr(model_config, "get_effective_config", lambda _agent=None: config)
     monkeypatch.setattr(
         model_config,
         "get_embedding_model_config",
         lambda _agent=None: config["embedding_model"],
     )
-    monkeypatch.setattr(model_config, "use_vision_sidecar", lambda _agent=None: active)
     monkeypatch.setattr(model_config, "has_provider_api_key", lambda *args: False)
 
     assert model_config.get_missing_api_key_providers() == []
 
-    active = True
+    config["chat_model"]["vision"] = False
     assert model_config.get_missing_api_key_providers() == [
         {"model_type": "Vision Model", "provider": "openai"}
     ]

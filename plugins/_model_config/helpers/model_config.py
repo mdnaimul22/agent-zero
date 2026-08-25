@@ -759,20 +759,17 @@ def get_chat_model_config(agent=None) -> dict:
 
 
 def get_vision_model_config(agent=None) -> dict:
-    """Get the optional, strictly per-preset Vision Model config."""
-    return get_effective_config(agent).get("vision_model", {})
-
-
-def use_vision_sidecar(agent=None) -> bool:
-    """Return whether vision_load should delegate to the preset's Vision Model."""
-    vision_cfg = get_vision_model_config(agent)
-    if not (
-        str(vision_cfg.get("provider") or "").strip()
-        and str(vision_cfg.get("name") or "").strip()
-    ):
-        return False
-    chat_cfg = get_chat_model_config(agent)
-    return not bool(chat_cfg.get("vision")) or bool(vision_cfg.get("override_main"))
+    """Get the active Vision Model config after applying Main-first routing."""
+    cfg = get_effective_config(agent)
+    vision_cfg = cfg.get("vision_model", {})
+    if not _slot_has_identity(vision_cfg):
+        return {}
+    chat_cfg = cfg.get("chat_model", {})
+    return (
+        vision_cfg
+        if not chat_cfg.get("vision") or vision_cfg.get("override_main")
+        else {}
+    )
 
 
 def get_utility_model_config(agent=None) -> dict:
@@ -928,8 +925,9 @@ def get_missing_api_key_providers(agent=None) -> list[dict]:
         ("Utility Model", cfg.get("utility_model", {})),
         ("Embedding Model", get_embedding_model_config(agent)),
     ]
-    if use_vision_sidecar(agent):
-        checks.insert(1, ("Vision Model", cfg.get("vision_model", {})))
+    vision_cfg = get_vision_model_config(agent)
+    if vision_cfg:
+        checks.insert(1, ("Vision Model", vision_cfg))
 
     for label, model_cfg in checks:
         provider = model_cfg.get("provider", "")

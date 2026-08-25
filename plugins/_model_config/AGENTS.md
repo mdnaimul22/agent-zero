@@ -23,7 +23,7 @@
 - Coordinate OAuth-backed providers with `_oauth` instead of hardcoding provider-specific auth here.
 - `model_config_get` exposes `model_configured` as a derived chat-model readiness flag from provider, model name, and API-key availability.
 - Non-default presets may inherit omitted main, utility, or embedding slots and durable tuning from `Default`, but must replace or clear per-slot `kwargs` so provider-specific extra params never leak across model providers.
-- The optional `vision` slot is strictly per preset and never inherited from `Default`; an empty slot disables sidecar vision for that preset.
+- The optional `vision` slot is strictly per preset and never inherited from `Default`; an empty slot disables the separate Vision Model for that preset.
 - Main native vision wins by default. A configured Vision Model handles `vision_load` when Main lacks vision, or when that preset explicitly enables `override_main`.
 - Keep the optional Vision provider/model selector inside the Main Model card and flush with Main's field alignment, without a nested left inset. Show it only while Main vision is disabled or `override_main` is enabled; do not render a standalone Vision Model card.
 - Show `Use separate Vision Model` immediately below `Supports Vision` while Main vision is enabled, not inside Advanced Settings; describe the disabled state as using Main's native vision.

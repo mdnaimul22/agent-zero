@@ -63,6 +63,15 @@ class _TestTool:
         self.message = message
         self.loop_data = loop_data
 
+    async def after_execution(self, response, **kwargs):
+        self.agent.hist_add_tool_result(
+            self.name,
+            response.message.strip(),
+            id=self.log.id,
+            **(response.additional or {}),
+        )
+        self.log.update(content=response.message.strip())
+
 
 class _TestWsHandler:
     def __init__(self, *args, **kwargs):
@@ -102,7 +111,6 @@ _model_config_stub.get_presets = lambda: []
 _model_config_stub.get_preset_by_name = lambda name: None
 _model_config_stub.get_chat_model_config = lambda agent=None: {}
 _model_config_stub.get_vision_model_config = lambda agent=None: {}
-_model_config_stub.use_vision_sidecar = lambda agent=None: False
 _model_config_stub.build_vision_model = lambda agent=None: None
 sys.modules.setdefault("plugins._model_config.helpers.model_config", _model_config_stub)
 
@@ -4307,7 +4315,6 @@ async def test_vision_load_materializes_ephemeral_browser_refs(monkeypatch, tmp_
     monkeypatch.setattr(vision_load_module.chat_media.files, "normalize_a0_path", fake_normalize_a0_path)
     monkeypatch.setattr(vision_load_module, "get_chat_model_config", lambda _agent: {"vision": True, "max_embeds": 10})
     monkeypatch.setattr(vision_load_module, "get_vision_model_config", lambda _agent: {})
-    monkeypatch.setattr(vision_load_module, "use_vision_sidecar", lambda _agent: False)
 
     tool_results = []
     messages = []
@@ -4344,7 +4351,7 @@ async def test_vision_load_materializes_ephemeral_browser_refs(monkeypatch, tmp_
     assert stored_ref.startswith("/a0/usr/chats/ctx-vision/screenshots/browser/browser-shot-")
     stored_path = tmp_path / stored_ref.removeprefix("/a0/")
     assert stored_path.read_bytes() == __import__("base64").b64decode(SMALL_JPEG_10X10)
-    assert updates[-1]["result"] == "1 images loaded, 0 skipped"
+    assert updates[-1]["content"] == response.message
 
 
 @pytest.mark.anyio

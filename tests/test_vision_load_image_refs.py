@@ -41,6 +41,15 @@ class _TestTool:
         self.message = message
         self.loop_data = loop_data
 
+    async def after_execution(self, response, **kwargs):
+        self.agent.hist_add_tool_result(
+            self.name,
+            response.message.strip(),
+            id=self.log.id,
+            **(response.additional or {}),
+        )
+        self.log.update(content=response.message.strip())
+
 
 def _install_tool_stub(monkeypatch):
     tool_stub = types.ModuleType("helpers.tool")
@@ -82,7 +91,6 @@ async def test_vision_load_materializes_local_image_to_chat_artifact(monkeypatch
     monkeypatch.setattr(vision_load_module.chat_media.files, "normalize_a0_path", fake_normalize_a0_path)
     monkeypatch.setattr(vision_load_module, "get_chat_model_config", lambda _agent: {"vision": True, "max_embeds": 10})
     monkeypatch.setattr(vision_load_module, "get_vision_model_config", lambda _agent: {})
-    monkeypatch.setattr(vision_load_module, "use_vision_sidecar", lambda _agent: False)
 
     async def direct_call(func, *args, **kwargs):
         return func(*args, **kwargs)
@@ -115,6 +123,9 @@ async def test_vision_load_materializes_local_image_to_chat_artifact(monkeypatch
     )
     tool.log = SimpleNamespace(id="vision-log", update=lambda **kwargs: updates.append(kwargs))
 
+    invalid = await tool.execute(paths=None)
+    assert invalid.message == "vision_load error: `paths` must be an array."
+
     response = await tool.execute(paths=[str(image_path)])
     image_path.unlink()
     await tool.after_execution(response)
@@ -124,10 +135,10 @@ async def test_vision_load_materializes_local_image_to_chat_artifact(monkeypatch
     assert stored_ref.startswith("/a0/usr/chats/ctx-vision/images/vision-load/sample-image-")
     stored_path = tmp_path / stored_ref.removeprefix("/a0/")
     assert stored_path.read_bytes() == b"png-data"
-    assert updates[-1]["result"] == "1 images loaded, 0 skipped"
+    assert updates[-1]["content"] == response.message
 
 
-def test_vision_sidecar_route_matrix_prefers_main_native_vision(monkeypatch):
+def test_active_vision_model_route_prefers_main_native_vision(monkeypatch):
     from plugins._model_config.helpers import model_config
 
     cases = [
@@ -149,11 +160,11 @@ def test_vision_sidecar_route_matrix_prefers_main_native_vision(monkeypatch):
                 "vision_model": vision,
             },
         )
-        assert model_config.use_vision_sidecar() is expected
+        assert bool(model_config.get_vision_model_config()) is expected
 
 
 @pytest.mark.anyio
-async def test_vision_sidecar_sends_multiple_images_once_and_keeps_history_text_only(
+async def test_vision_model_sends_multiple_images_once_and_keeps_history_text_only(
     monkeypatch,
     tmp_path,
 ):
@@ -182,7 +193,6 @@ async def test_vision_sidecar_sends_multiple_images_once_and_keeps_history_text_
         "get_vision_model_config",
         lambda _agent: {"provider": "test", "name": "vision", "max_embeds": 5},
     )
-    monkeypatch.setattr(vision_load_module, "use_vision_sidecar", lambda _agent: True)
 
     image_paths = [tmp_path / "before.png", tmp_path / "after.png"]
     for path in image_paths:
@@ -214,7 +224,7 @@ async def test_vision_sidecar_sends_multiple_images_once_and_keeps_history_text_
     await tool.after_execution(response)
 
     assert len(calls) == 1
-    content = calls[0]["messages"][1].content
+    content = calls[0]["messages"][0].content
     assert content[0] == {"type": "text", "text": "Compare the login errors."}
     assert [item["type"] for item in content].count("image_url") == 2
     assert "max_tokens" not in calls[0]
@@ -240,29 +250,12 @@ async def test_parallel_worker_consumes_parent_ephemeral_image(monkeypatch, tmp_
     monkeypatch.setattr(vision_load_module.chat_media.files, "get_abs_path", fake_get_abs_path)
     monkeypatch.setattr(vision_load_module.chat_media.files, "normalize_a0_path", fake_normalize_a0_path)
     parent_id = "parent-vision"
-    parent_agent = SimpleNamespace(
-        context=SimpleNamespace(id=parent_id),
-        agent_name="Parent Agent",
-    )
-    parent_context = SimpleNamespace(agent0=parent_agent)
-    agent_stub = types.ModuleType("agent")
-    agent_stub.AgentContext = SimpleNamespace(
-        get=lambda context_id: parent_context if context_id == parent_id else None
-    )
-    monkeypatch.setitem(sys.modules, "agent", agent_stub)
-    config_owners = []
-
-    def get_chat_config(owner):
-        config_owners.append(owner)
-        return {"vision": True, "max_embeds": 10}
-
     monkeypatch.setattr(
         vision_load_module,
         "get_chat_model_config",
-        get_chat_config,
+        lambda _agent: {"vision": True, "max_embeds": 10},
     )
     monkeypatch.setattr(vision_load_module, "get_vision_model_config", lambda _agent: {})
-    monkeypatch.setattr(vision_load_module, "use_vision_sidecar", lambda _agent: False)
 
     ref = vision_load_module.ephemeral_images.put_image_bytes(
         context_id=parent_id,
@@ -288,8 +281,6 @@ async def test_parallel_worker_consumes_parent_ephemeral_image(monkeypatch, tmp_
 
     await tool.execute(paths=[ref])
 
-    assert tool._config_owner is parent_agent
-    assert config_owners and all(owner is parent_agent for owner in config_owners)
     assert tool._context_id() == parent_id
     assert tool.loaded_paths == ["shot.png"]
     assert vision_load_module.ephemeral_images.get_image(ref, context_id=parent_id) is None
@@ -298,7 +289,7 @@ async def test_parallel_worker_consumes_parent_ephemeral_image(monkeypatch, tmp_
 
 
 @pytest.mark.anyio
-async def test_independent_vision_sidecar_calls_can_run_concurrently(monkeypatch, tmp_path):
+async def test_independent_vision_model_calls_can_run_concurrently(monkeypatch, tmp_path):
     _install_tool_stub(monkeypatch)
     import tools.vision_load as vision_load_module
 
@@ -327,7 +318,6 @@ async def test_independent_vision_sidecar_calls_can_run_concurrently(monkeypatch
         "get_vision_model_config",
         lambda _agent: {"provider": "test", "name": "vision", "max_embeds": 10},
     )
-    monkeypatch.setattr(vision_load_module, "use_vision_sidecar", lambda _agent: True)
 
     image_paths = [tmp_path / "one.png", tmp_path / "two.png"]
     for path in image_paths:

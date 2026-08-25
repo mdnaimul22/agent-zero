@@ -53,14 +53,11 @@ async def build_prompt(agent: Agent) -> str:
     # vision support
     from plugins._model_config.helpers.model_config import (
         get_chat_model_config,
-        use_vision_sidecar,
+        get_vision_model_config,
     )
 
     chat_cfg = get_chat_model_config(agent)
-    sidecar = use_vision_sidecar(agent)
-    if sidecar or chat_cfg.get("vision", False):
-        prompt += "\n\n" + agent.read_prompt(
-            "agent.system.tools_vision.md", sidecar=sidecar
-        )
+    if get_vision_model_config(agent) or chat_cfg.get("vision", False):
+        prompt += "\n\n" + agent.read_prompt("agent.system.tools_vision.md")
 
     return prompt

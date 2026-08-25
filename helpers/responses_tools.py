@@ -116,13 +116,15 @@ def _vision_tool_prompt(agent: Any) -> str:
     try:
         from plugins._model_config.helpers.model_config import (
             get_chat_model_config,
-            use_vision_sidecar,
+            get_vision_model_config,
         )
 
-        sidecar = use_vision_sidecar(agent)
-        if not (sidecar or get_chat_model_config(agent).get("vision", False)):
+        if not (
+            get_vision_model_config(agent)
+            or get_chat_model_config(agent).get("vision", False)
+        ):
             return ""
-        return agent.read_prompt("agent.system.tools_vision.md", sidecar=sidecar)
+        return agent.read_prompt("agent.system.tools_vision.md")
     except Exception:
         return ""
 

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from extensions.python.system_prompt import _11_tools_prompt, _13_skills_prompt
-from helpers import files, mcp_handler, responses_tools, tool_policy
+from helpers import mcp_handler, responses_tools, tool_policy
 from helpers.errors import RepairableException
 from plugins._tool_access.extensions.python.tool_execute_before._10_enforce_tool_policy import (
     EnforceToolPolicy,
@@ -529,6 +529,10 @@ async def test_vision_tool_follows_chat_config_not_profile_policy(
         lambda agent: {"vision": True},
     )
     monkeypatch.setattr(
+        "plugins._model_config.helpers.model_config.get_vision_model_config",
+        lambda agent: {},
+    )
+    monkeypatch.setattr(
         tool_policy,
         "get_policy",
         lambda agent: _custom_policy(
@@ -547,7 +551,7 @@ async def test_vision_tool_follows_chat_config_not_profile_policy(
 
 
 @pytest.mark.asyncio
-async def test_vision_sidecar_uses_canonical_vision_prompt(
+async def test_active_vision_model_uses_canonical_vision_prompt(
     monkeypatch, tmp_path: Path
 ) -> None:
     _write_prompt(tmp_path, "agent.system.tools.md", "TOOLS\n{{tools}}")
@@ -559,11 +563,11 @@ async def test_vision_sidecar_uses_canonical_vision_prompt(
     monkeypatch.setattr(tool_policy.subagents, "get_paths", _prompt_paths(tmp_path))
     monkeypatch.setattr(
         "plugins._model_config.helpers.model_config.get_chat_model_config",
-        lambda agent: {"vision": True},
+        lambda agent: {"vision": False},
     )
     monkeypatch.setattr(
-        "plugins._model_config.helpers.model_config.use_vision_sidecar",
-        lambda agent: True,
+        "plugins._model_config.helpers.model_config.get_vision_model_config",
+        lambda agent: {"provider": "test", "name": "vision"},
     )
     monkeypatch.setattr(responses_tools, "_mcp_tools", lambda agent: [])
     agent = _Agent(tmp_path)
@@ -582,24 +586,16 @@ def test_vision_prompt_declares_multi_image_native_schema() -> None:
         / "prompts"
         / "agent.system.tools_vision.md"
     ).read_text(encoding="utf-8")
-    sidecar_prompt = files.evaluate_text_conditions(source, sidecar=True)
-    native_prompt = files.evaluate_text_conditions(source, sidecar=False)
-    schema = responses_tools._schema_from_prompt(sidecar_prompt)
+    schema = responses_tools._schema_from_prompt(source)
 
     assert schema["required"] == ["paths"]
     assert schema["properties"]["paths"] == {
         "type": "array",
         "items": {"type": "string"},
-        "description": "Absolute image paths or ephemeral image refs.",
     }
-    assert {"query", "raw"} <= schema["properties"].keys()
-    assert "separate Vision Model" in sidecar_prompt
-    assert "separate Vision Model" not in native_prompt
-    assert responses_tools._schema_from_prompt(native_prompt) == {
-        "type": "object",
-        "properties": {},
-        "additionalProperties": True,
-    }
+    assert "query" in schema["properties"]
+    assert "raw" not in schema["properties"]
+    assert "Vision Model" in source
 
 
 def test_mcp_prompt_and_native_schema_omit_blocked_tool(
