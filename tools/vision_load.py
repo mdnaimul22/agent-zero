@@ -1,4 +1,3 @@
-import asyncio
 import json
 from mimetypes import guess_type
 
@@ -16,7 +15,6 @@ from plugins._model_config.helpers.model_config import (
 )
 
 TOKENS_ESTIMATE = 1500
-VISION_TIMEOUT_SECONDS = 300
 VISION_SYSTEM_PROMPT = (
     "You are a precise vision analyst. Answer only what was asked about the images. "
     "Be concise and factual. Preserve exact visible text when asked to read it."
@@ -93,7 +91,8 @@ class VisionLoad(Tool):
         if self._delegated and self.images_dict:
             try:
                 capsule = await self._call_vision_model(
-                    list(self.images_dict.values()), self._query(query, kwargs)
+                    list(self.images_dict.values()),
+                    str(query or "").strip() or DEFAULT_VISION_QUERY,
                 )
                 message = (
                     f"Vision Model analyzed {len(self.images_dict)} image(s)"
@@ -163,12 +162,8 @@ class VisionLoad(Tool):
             return 10
 
     def _context_id(self) -> str:
-        context = getattr(self.agent, "context", None)
-        if not context:
-            return ""
-        get_data = getattr(context, "get_data", None)
-        parent_id = get_data(PARALLEL_WORKER_PARENT_CONTEXT_KEY) if get_data else ""
-        return str(parent_id or getattr(context, "id", "") or "").strip()
+        context = getattr(self._config_owner, "context", None)
+        return str(getattr(context, "id", "") or "").strip()
 
     def _config_agent(self):
         context = getattr(self.agent, "context", None)
@@ -189,16 +184,11 @@ class VisionLoad(Tool):
             {"type": "image_url", "image_url": {"url": path}}
             for path in image_paths
         )
-        response, _ = await asyncio.wait_for(
-            model.unified_call(
-                messages=[
-                    SystemMessage(content=VISION_SYSTEM_PROMPT),
-                    HumanMessage(content=content),
-                ],
-                explicit_caching=False,
-                max_tokens=2000,
-            ),
-            timeout=VISION_TIMEOUT_SECONDS,
+        response, _ = await model.unified_call(
+            messages=[
+                SystemMessage(content=VISION_SYSTEM_PROMPT),
+                HumanMessage(content=content),
+            ],
         )
         if not str(response or "").strip():
             raise RuntimeError("Vision Model returned an empty response.")
@@ -265,15 +255,6 @@ class VisionLoad(Tool):
         if not isinstance(paths, (list, tuple)):
             return "vision_load error: `paths` must be an array of image paths."
         return [str(path or "").strip() for path in paths]
-
-    @staticmethod
-    def _query(query: str, kwargs: dict) -> str:
-        if str(query or "").strip():
-            return str(query).strip()
-        for key in ("prompt", "question", "instruction", "focus", "request"):
-            if str(kwargs.get(key) or "").strip():
-                return str(kwargs[key]).strip()
-        return DEFAULT_VISION_QUERY
 
     @staticmethod
     def _is_data_image_url(value: str) -> bool:

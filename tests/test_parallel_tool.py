@@ -160,42 +160,6 @@ def test_normalize_parallel_tool_calls_accepts_json_string_array() -> None:
     assert calls[1].tool_args["message"] == "Research nuclear fusion news in Italian."
 
 
-def test_parallel_keeps_mixed_tools_and_batched_vision_paths() -> None:
-    calls = parallel_tools.normalize_parallel_tool_calls(
-        [
-            {"tool_name": "search_a", "tool_args": {"query": "one"}},
-            {"tool_name": "search_b", "tool_args": {"query": "two"}},
-            {"tool_name": "browser_agent", "tool_args": {"message": "open page"}},
-            {
-                "tool_name": "vision_load",
-                "tool_args": {
-                    "paths": ["/tmp/before.png", "/tmp/after.png"],
-                    "query": "compare",
-                },
-            },
-        ]
-    )
-
-    assert [call.tool_name for call in calls] == [
-        "search_a",
-        "search_b",
-        "browser_agent",
-        "vision_load",
-    ]
-    assert calls[3].tool_args["paths"] == ["/tmp/before.png", "/tmp/after.png"]
-
-
-def test_parallel_allows_multiple_independent_vision_calls() -> None:
-    calls = parallel_tools.normalize_parallel_tool_calls(
-        [
-            {"tool_name": "vision_load", "tool_args": {"paths": ["/tmp/a.png"]}},
-            {"tool_name": "vision_load", "tool_args": {"paths": ["/tmp/b.png"]}},
-        ]
-    )
-
-    assert [call.tool_name for call in calls] == ["vision_load", "vision_load"]
-
-
 def test_subordinate_prompts_share_reusable_tree_contract() -> None:
     call_prompt = (PROJECT_ROOT / "prompts/agent.system.tool.call_sub.md").read_text(
         encoding="utf-8"

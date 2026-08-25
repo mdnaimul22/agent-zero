@@ -25,6 +25,7 @@
 - Delegated history contains the text capsule only. Native history contains the tool result followed by one raw message holding all loaded image blocks.
 - Direct parallel workers resolve ephemeral refs, model routing, and durable chat-media storage against their recorded parent context; independent vision jobs remain generic parallel jobs.
 - `max_embeds` comes from the model that actually receives the images.
+- Vision Model calls use the selected model's Advanced `kwargs`; this tool does not impose a separate timeout or output-token limit.
 - Update this file whenever tool arguments, output shape, `break_loop` behavior, intervention handling, prompt instructions, or side effects change.
 - `VisionLoad` is a `Tool`.
 - `VisionLoad` defines `execute(...)`.
@@ -33,7 +34,7 @@
 
 ## Key Concepts
 
-- Important called helpers/classes observed in the source: `build_vision_model`, `use_vision_sidecar`, `self._get_max_embeds`, `Response`, `self._context_id`, `chat_media.save_image_base64`, `chat_media.save_image_data_url`, `chat_media.materialize_image_ref`, `ephemeral_images.consume_image`, `images.to_data_url`, `self.agent.hist_add_tool_result`, `history.RawMessage`.
+- Important called helpers/classes observed in the source: `build_vision_model`, `use_vision_sidecar`, `self._get_max_embeds`, `Response`, `self._context_id`, `chat_media.save_image_base64`, `chat_media.save_image_data_url`, `chat_media.materialize_image_ref`, `ephemeral_images.consume_image`, `images.to_data_url`, `self.agent.hist_add_tool_result`, `history.RawMessage`, `model.unified_call`.
 - Keep request/response, tool, or helper semantics documented here at the same time as source changes.
 
 ## Work Guidance

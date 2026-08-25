@@ -217,6 +217,8 @@ async def test_vision_sidecar_sends_multiple_images_once_and_keeps_history_text_
     content = calls[0]["messages"][1].content
     assert content[0] == {"type": "text", "text": "Compare the login errors."}
     assert [item["type"] for item in content].count("image_url") == 2
+    assert "max_tokens" not in calls[0]
+    assert "explicit_caching" not in calls[0]
     assert "fixes the red login error" in response.message
     assert response.message != "dummy"
     assert raw_messages == []
@@ -237,16 +239,31 @@ async def test_parallel_worker_consumes_parent_ephemeral_image(monkeypatch, tmp_
 
     monkeypatch.setattr(vision_load_module.chat_media.files, "get_abs_path", fake_get_abs_path)
     monkeypatch.setattr(vision_load_module.chat_media.files, "normalize_a0_path", fake_normalize_a0_path)
-    monkeypatch.setattr(vision_load_module.VisionLoad, "_config_agent", lambda self: self.agent)
+    parent_id = "parent-vision"
+    parent_agent = SimpleNamespace(
+        context=SimpleNamespace(id=parent_id),
+        agent_name="Parent Agent",
+    )
+    parent_context = SimpleNamespace(agent0=parent_agent)
+    agent_stub = types.ModuleType("agent")
+    agent_stub.AgentContext = SimpleNamespace(
+        get=lambda context_id: parent_context if context_id == parent_id else None
+    )
+    monkeypatch.setitem(sys.modules, "agent", agent_stub)
+    config_owners = []
+
+    def get_chat_config(owner):
+        config_owners.append(owner)
+        return {"vision": True, "max_embeds": 10}
+
     monkeypatch.setattr(
         vision_load_module,
         "get_chat_model_config",
-        lambda _agent: {"vision": True, "max_embeds": 10},
+        get_chat_config,
     )
     monkeypatch.setattr(vision_load_module, "get_vision_model_config", lambda _agent: {})
     monkeypatch.setattr(vision_load_module, "use_vision_sidecar", lambda _agent: False)
 
-    parent_id = "parent-vision"
     ref = vision_load_module.ephemeral_images.put_image_bytes(
         context_id=parent_id,
         mime="image/png",
@@ -271,6 +288,9 @@ async def test_parallel_worker_consumes_parent_ephemeral_image(monkeypatch, tmp_
 
     await tool.execute(paths=[ref])
 
+    assert tool._config_owner is parent_agent
+    assert config_owners and all(owner is parent_agent for owner in config_owners)
+    assert tool._context_id() == parent_id
     assert tool.loaded_paths == ["shot.png"]
     assert vision_load_module.ephemeral_images.get_image(ref, context_id=parent_id) is None
     stored_ref = tool.images_dict["shot.png"]
