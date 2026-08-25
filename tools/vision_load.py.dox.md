@@ -3,7 +3,7 @@
 ## Purpose
 
 - Own the `vision_load.py` agent tool.
-- This module loads images into model-visible content for vision-capable models.
+- This module routes images either into Main model-visible content or through the preset's optional Vision Model.
 - Keep this file-level DOX profile synchronized with `vision_load.py` because this directory is intentionally flat.
 
 ## Ownership
@@ -12,13 +12,19 @@
 - `vision_load.py.dox.md` owns durable notes about responsibilities, contracts, side effects, and verification for that implementation.
 - Classes:
 - `VisionLoad` (`Tool`)
-  - `async execute(self, paths: list[str]=..., **kwargs) -> Response`
+  - `async execute(self, paths, query="", raw=False, **kwargs) -> Response`
   - `async after_execution(self, response: Response, **kwargs)`
 - Notable constants/configuration names: `TOKENS_ESTIMATE`.
 
 ## Runtime Contracts
 
 - Tool modules must define `helpers.tool.Tool` subclasses and return `helpers.tool.Response` from `execute(...)`.
+- One call may contain multiple paths. The delegated route sends every selected path in one Vision Model request and returns one textual capsule.
+- Main native vision wins unless the effective preset selects the sidecar route; `raw=true` returns to Main native vision only when Main supports it.
+- Delegation completes during `execute(...)` so native Responses function output contains the real capsule before `after_execution(...)` persists it.
+- Delegated history contains the text capsule only. Native history contains the tool result followed by one raw message holding all loaded image blocks.
+- Direct parallel workers resolve ephemeral refs, model routing, and durable chat-media storage against their recorded parent context; independent vision jobs remain generic parallel jobs.
+- `max_embeds` comes from the model that actually receives the images.
 - Update this file whenever tool arguments, output shape, `break_loop` behavior, intervention handling, prompt instructions, or side effects change.
 - `VisionLoad` is a `Tool`.
 - `VisionLoad` defines `execute(...)`.
@@ -27,7 +33,7 @@
 
 ## Key Concepts
 
-- Important called helpers/classes observed in the source: `self._get_max_embeds`, `Response`, `str.strip`, `self._context_id`, `chat_media.infer_source`, `chat_media.category_for_source`, `chat_media.save_image_base64`, `chat_media.save_image_data_url`, `chat_media.materialize_image_ref`, `str.strip.lower`, `ephemeral_images.is_ref`, `cls._is_data_image_url`, `self._is_data_image_url`, `plugins.get_plugin_config`, `images.to_data_url`, `normalized.startswith`, `ephemeral_images.display_ref`, `join`, `self.agent.hist_add_tool_result`, `history.RawMessage`.
+- Important called helpers/classes observed in the source: `build_vision_model`, `use_vision_sidecar`, `self._get_max_embeds`, `Response`, `self._context_id`, `chat_media.save_image_base64`, `chat_media.save_image_data_url`, `chat_media.materialize_image_ref`, `ephemeral_images.consume_image`, `images.to_data_url`, `self.agent.hist_add_tool_result`, `history.RawMessage`.
 - Keep request/response, tool, or helper semantics documented here at the same time as source changes.
 
 ## Work Guidance

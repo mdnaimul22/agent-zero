@@ -546,6 +546,59 @@ async def test_vision_tool_follows_chat_config_not_profile_policy(
     assert tool_policy.resolve_tool(agent, "vision_load").source == "runtime-config"
 
 
+@pytest.mark.asyncio
+async def test_vision_sidecar_prompt_replaces_native_vision_prompt(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _write_prompt(tmp_path, "agent.system.tools.md", "TOOLS\n{{tools}}")
+    _write_prompt(
+        tmp_path,
+        "agent.system.tools_vision.md",
+        "### vision_load\nnative pixels\nargs: `paths`",
+    )
+    _write_prompt(
+        tmp_path,
+        "agent.system.tools_vision_sidecar.md",
+        "### vision_load\nsidecar capsule\nargs: `paths`, `query`",
+    )
+    monkeypatch.setattr(tool_policy.subagents, "get_paths", _prompt_paths(tmp_path))
+    monkeypatch.setattr(
+        "plugins._model_config.helpers.model_config.get_chat_model_config",
+        lambda agent: {"vision": True},
+    )
+    monkeypatch.setattr(
+        "plugins._model_config.helpers.model_config.use_vision_sidecar",
+        lambda agent: True,
+    )
+    monkeypatch.setattr(responses_tools, "_mcp_tools", lambda agent: [])
+    agent = _Agent(tmp_path)
+
+    prompt = await _11_tools_prompt.build_prompt(agent)
+    schemas, _name_map = responses_tools.build_responses_function_tools(agent)
+
+    assert "sidecar capsule" in prompt
+    assert "native pixels" not in prompt
+    assert schemas[0]["name"] == "vision_load"
+    assert schemas[0]["description"] == "sidecar capsule"
+
+
+def test_vision_sidecar_prompt_declares_multi_image_native_schema() -> None:
+    prompt = (
+        Path(__file__).resolve().parents[1]
+        / "prompts"
+        / "agent.system.tools_vision_sidecar.md"
+    ).read_text(encoding="utf-8")
+    schema = responses_tools._schema_from_prompt(prompt)
+
+    assert schema["required"] == ["paths"]
+    assert schema["properties"]["paths"] == {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Absolute image paths or ephemeral image refs.",
+    }
+    assert {"query", "raw"} <= schema["properties"].keys()
+
+
 def test_mcp_prompt_and_native_schema_omit_blocked_tool(
     monkeypatch, tmp_path: Path
 ) -> None:

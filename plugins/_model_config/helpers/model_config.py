@@ -16,11 +16,21 @@ PRESET_SCOPE_GLOBAL = "global"
 PRESET_SCOPE_PROJECT = "project"
 PRESET_SLOT_CONFIG_SECTIONS = {
     "chat": "chat_model",
+    "vision": "vision_model",
     "utility": "utility_model",
     "embedding": "embedding_model",
 }
 MODEL_SLOT_PRESET_REPLACE_FIELDS = {"kwargs"}
 IMPLICIT_PRESET_SLOT_DEFAULTS = {
+    "vision": {
+        "vision": True,
+        "max_embeds": 10,
+        "override_main": False,
+        "rl_requests": 0,
+        "rl_input": 0,
+        "rl_output": 0,
+        "kwargs": {},
+    },
     "utility": {
         "ctx_length": 128000,
         "ctx_input": 0.7,
@@ -267,6 +277,9 @@ def _clean_preset_for_file(preset: dict) -> dict:
         slot_config = preset.get(slot)
         if isinstance(slot_config, dict):
             slot_clean = _strip_ui_fields(slot_config, strip_api_key=True)
+            if slot == "vision" and _slot_has_identity(slot_clean):
+                slot_clean["vision"] = True
+                slot_clean.setdefault("max_embeds", 10)
             cleaned[slot] = (
                 slot_clean
                 if name == DEFAULT_PRESET_NAME
@@ -339,7 +352,12 @@ def validate_presets(presets: list, *, require_default: bool = True) -> list:
 def normalize_config_for_save(config: dict) -> dict:
     """Remove UI-only fields and inline API keys before storing scoped config."""
     cleaned = deepcopy(config or {})
-    for section_name in ("chat_model", "utility_model", "embedding_model"):
+    for section_name in (
+        "chat_model",
+        "vision_model",
+        "utility_model",
+        "embedding_model",
+    ):
         section = cleaned.get(section_name)
         if isinstance(section, dict):
             cleaned[section_name] = _strip_ui_fields(section, strip_api_key=True)
@@ -659,10 +677,12 @@ def build_config_from_preset(
             continue
         slot_config = _get_preset_slot_config(preset, slot)
         if not _should_apply_preset_slot(slot, slot_config):
+            if slot == "vision":
+                config[section] = {}
             continue
         config[section] = _merge_model_slot(
             slot,
-            config.get(section, {}),
+            {} if slot == "vision" else config.get(section, {}),
             slot_config,
             strip_api_key=strip_api_key,
         )
@@ -736,6 +756,23 @@ def get_effective_config(agent=None) -> dict:
 def get_chat_model_config(agent=None) -> dict:
     """Get chat model config, with per-chat override if active."""
     return get_effective_config(agent).get("chat_model", {})
+
+
+def get_vision_model_config(agent=None) -> dict:
+    """Get the optional, strictly per-preset Vision Model config."""
+    return get_effective_config(agent).get("vision_model", {})
+
+
+def use_vision_sidecar(agent=None) -> bool:
+    """Return whether vision_load should delegate to the preset's Vision Model."""
+    vision_cfg = get_vision_model_config(agent)
+    if not (
+        str(vision_cfg.get("provider") or "").strip()
+        and str(vision_cfg.get("name") or "").strip()
+    ):
+        return False
+    chat_cfg = get_chat_model_config(agent)
+    return not bool(chat_cfg.get("vision")) or bool(vision_cfg.get("override_main"))
 
 
 def get_utility_model_config(agent=None) -> dict:
@@ -835,6 +872,16 @@ def build_utility_model(agent=None):
     )
 
 
+def build_vision_model(agent=None):
+    """Build the optional Vision Model selected by the effective preset."""
+    cfg = get_vision_model_config(agent)
+    mc = build_model_config(cfg, models.ModelType.CHAT)
+    mc.vision = True
+    return models.get_chat_model(
+        mc.provider, mc.name, model_config=mc, **mc.build_kwargs()
+    )
+
+
 def build_embedding_model(agent=None):
     """Build and return an embedding model wrapper."""
     cfg = get_embedding_model_config(agent)
@@ -881,6 +928,8 @@ def get_missing_api_key_providers(agent=None) -> list[dict]:
         ("Utility Model", cfg.get("utility_model", {})),
         ("Embedding Model", get_embedding_model_config(agent)),
     ]
+    if use_vision_sidecar(agent):
+        checks.insert(1, ("Vision Model", cfg.get("vision_model", {})))
 
     for label, model_cfg in checks:
         provider = model_cfg.get("provider", "")

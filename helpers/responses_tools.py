@@ -114,8 +114,13 @@ def _local_tool_prompts(agent: Any) -> list[tuple[str, str]]:
 
 def _vision_tool_prompt(agent: Any) -> str:
     try:
-        from plugins._model_config.helpers.model_config import get_chat_model_config
+        from plugins._model_config.helpers.model_config import (
+            get_chat_model_config,
+            use_vision_sidecar,
+        )
 
+        if use_vision_sidecar(agent):
+            return agent.read_prompt("agent.system.tools_vision_sidecar.md")
         if not get_chat_model_config(agent).get("vision", False):
             return ""
         return agent.read_prompt("agent.system.tools_vision.md")

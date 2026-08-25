@@ -36,8 +36,13 @@ class _TestAgentContextType:
 
 
 class _TestResponse(SimpleNamespace):
-    def __init__(self, message="", break_loop=False, **kwargs):
-        super().__init__(message=message, break_loop=break_loop, **kwargs)
+    def __init__(self, message="", break_loop=False, additional=None, **kwargs):
+        super().__init__(
+            message=message,
+            break_loop=break_loop,
+            additional=additional,
+            **kwargs,
+        )
 
 
 class _TestTool:
@@ -96,6 +101,9 @@ _model_config_stub = ModuleType("plugins._model_config.helpers.model_config")
 _model_config_stub.get_presets = lambda: []
 _model_config_stub.get_preset_by_name = lambda name: None
 _model_config_stub.get_chat_model_config = lambda agent=None: {}
+_model_config_stub.get_vision_model_config = lambda agent=None: {}
+_model_config_stub.use_vision_sidecar = lambda agent=None: False
+_model_config_stub.build_vision_model = lambda agent=None: None
 sys.modules.setdefault("plugins._model_config.helpers.model_config", _model_config_stub)
 
 
@@ -4297,11 +4305,9 @@ async def test_vision_load_materializes_ephemeral_browser_refs(monkeypatch, tmp_
 
     monkeypatch.setattr(vision_load_module.chat_media.files, "get_abs_path", fake_get_abs_path)
     monkeypatch.setattr(vision_load_module.chat_media.files, "normalize_a0_path", fake_normalize_a0_path)
-    monkeypatch.setattr(
-        vision_load_module.plugins,
-        "get_plugin_config",
-        lambda *args, **kwargs: {"chat_model": {"max_embeds": 10}},
-    )
+    monkeypatch.setattr(vision_load_module, "get_chat_model_config", lambda _agent: {"vision": True, "max_embeds": 10})
+    monkeypatch.setattr(vision_load_module, "get_vision_model_config", lambda _agent: {})
+    monkeypatch.setattr(vision_load_module, "use_vision_sidecar", lambda _agent: False)
 
     tool_results = []
     messages = []

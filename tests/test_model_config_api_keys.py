@@ -149,7 +149,7 @@ def test_model_config_frontend_tracks_provider_api_key_edits():
     assert "/plugins/_model_config/missing_api_key_status" not in model_gate_content
     assert '@input="$store.modelConfig.setApiKeyValue(_prov, $el.value)"' in config_content
     assert "apiKeyMode: 'none'" not in preset_modal_content
-    assert preset_modal_content.count("apiKeyMode: 'store'") == 3
+    assert preset_modal_content.count("apiKeyMode: 'store'") == 4
     assert "$store.modelConfig.resetApiKeyDrafts();" in preset_modal_content
     assert "await $store.modelConfig.refreshApiKeyStatus();" in preset_modal_content
     assert "await store.persistAllDirtyApiKeys();" in store_content
