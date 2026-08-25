@@ -2908,10 +2908,11 @@ const model = {
     if (this.annotating) return;
     const contextId = this.normalizeContextId(this.activeBrowserContextId || this.contextId);
     if (!contextId || !this.activeBrowserId) return;
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const printable = event.key && event.key.length === 1;
+    const altGrText = printable && event.altKey && !event.metaKey;
+    if ((event.ctrlKey || event.metaKey || event.altKey) && !altGrText) return;
     if (isLocalEditableTarget(event?.target)) return;
     event.preventDefault();
-    const printable = event.key && event.key.length === 1;
     await websocket.emit("browser_viewer_input", {
       context_id: contextId,
       browser_id: this.activeBrowserId,
