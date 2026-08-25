@@ -187,11 +187,13 @@ class VisionLoad(Tool):
 
     def _summary(self) -> str:
         loaded = "\n".join(self.loaded_paths) if self.loaded_paths else "none"
-        skipped = "\n".join(self.skipped_paths) if self.skipped_paths else "none"
-        return (
-            f"Loaded images ({len(self.loaded_paths)}):\n{loaded}\n\n"
-            f"Skipped images ({len(self.skipped_paths)}, max {self._get_max_embeds()}):\n{skipped}"
-        )
+        summary = f"Loaded images ({len(self.loaded_paths)}):\n{loaded}"
+        if self.skipped_paths:
+            summary += (
+                f"\n\nSkipped images ({len(self.skipped_paths)}, max {self._get_max_embeds()}):\n"
+                + "\n".join(self.skipped_paths)
+            )
+        return summary
 
     @staticmethod
     def _is_data_image_url(value: str) -> bool:

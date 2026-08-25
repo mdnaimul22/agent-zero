@@ -169,6 +169,24 @@ def test_active_vision_model_route_prefers_main_native_vision(monkeypatch):
         assert bool(model_config.get_vision_model_config()) is expected
 
 
+def test_vision_summary_only_shows_skipped_section_when_needed(monkeypatch):
+    _install_tool_stub(monkeypatch)
+    import tools.vision_load as vision_load_module
+
+    tool = vision_load_module.VisionLoad(agent=None)
+    tool.vision_config = {"max_embeds": 10}
+    tool.loaded_paths = ["loaded.png"]
+    tool.skipped_paths = []
+
+    assert tool._summary() == "Loaded images (1):\nloaded.png"
+
+    tool.skipped_paths = ["skipped.png"]
+    assert tool._summary() == (
+        "Loaded images (1):\nloaded.png\n\n"
+        "Skipped images (1, max 10):\nskipped.png"
+    )
+
+
 @pytest.mark.anyio
 async def test_vision_model_sends_multiple_images_once_and_keeps_history_text_only(
     monkeypatch,

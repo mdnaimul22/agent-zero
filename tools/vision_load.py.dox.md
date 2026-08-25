@@ -28,6 +28,7 @@
 - In a direct parallel worker, native image content is queued for the parent and promoted immediately after the outer `parallel` result; the disposable worker never owns the only copy of model-visible pixels.
 - Direct parallel workers inherit the parent's model override generically. This tool uses their recorded parent context only to resolve ephemeral refs and durable chat media.
 - `max_embeds` comes from the model that actually receives the images.
+- Native tool-result summaries omit the skipped-images section when no images were skipped; when the limit drops inputs, the section reports the skipped paths and active maximum.
 - Vision Model calls use the selected model's Advanced `kwargs`; this tool does not impose a separate timeout or output-token limit.
 - An empty Vision Model response is reported as an image-analysis error instead of a successful empty capsule.
 - Update this file whenever tool arguments, output shape, `break_loop` behavior, intervention handling, prompt instructions, or side effects change.
