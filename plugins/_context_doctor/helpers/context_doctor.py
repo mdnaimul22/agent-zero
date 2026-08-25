@@ -49,23 +49,29 @@ def transform_response(response: str, *, suppress_xml: bool) -> str:
 
             apply_patch()
             try:
-                repaired = repair_json(
+                salvage_repaired = repair_json(
                     response,
                     return_objects=True,
                     schema=_A0_SALVAGE_SCHEMA,
                     schema_repair_mode="salvage",
                 )
             except Exception:
-                repaired = repair_json(response, return_objects=True)
+                salvage_repaired = repair_json(response, return_objects=True)
 
-            candidates = repaired if isinstance(repaired, list) else [repaired]
+            candidates = (
+                salvage_repaired
+                if isinstance(salvage_repaired, list)
+                else [salvage_repaired]
+            )
             try:
                 no_schema = repair_json(response, return_objects=True)
             except Exception:
                 no_schema = None
             if isinstance(no_schema, list):
                 valid = [item for item in no_schema if _is_tool_call(item)]
-                if len(valid) > 1 or (len(valid) == 1 and not _is_tool_call(repaired)):
+                if len(valid) > 1 or (
+                    len(valid) == 1 and not _is_tool_call(salvage_repaired)
+                ):
                     candidates = no_schema
             repaired = max(
                 (item for item in candidates if _is_tool_call(item)),
@@ -74,9 +80,18 @@ def transform_response(response: str, *, suppress_xml: bool) -> str:
             )
         except Exception:
             repaired = None
+            salvage_repaired = None
 
         if _is_tool_call(repaired):
             return json.dumps(repaired, ensure_ascii=False, separators=(",", ":"))
+
+        for candidate in (repaired, salvage_repaired):
+            if isinstance(candidate, dict) and (
+                "thoughts" in candidate or "headline" in candidate
+            ):
+                return json.dumps(
+                    candidate, ensure_ascii=False, separators=(",", ":")
+                )
 
     if suppress_xml and "<" in response and ">" in response:
         return "{}"
