@@ -13,23 +13,20 @@ from plugins._model_config.helpers.model_config import (
 
 # image token estimation for context window
 TOKENS_ESTIMATE = 1500
-DEFAULT_VISION_QUERY = (
-    "Describe the images precisely, including the key objects, visible text, and layout."
-)
 
 
 class VisionLoad(Tool):
-    async def execute(
-        self, paths: list[str] = [], query: str = "", **kwargs
-    ) -> Response:
+    async def execute(self, paths: list[str] | str = [], **kwargs) -> Response:
 
         self.images_dict = {}
         self.loaded_paths: list[str] = []
         self.skipped_paths: list[str] = []
         self.vision_config = get_vision_model_config(self.agent)
+        if isinstance(paths, str):
+            paths = [paths]
         if not isinstance(paths, list):
             return Response(
-                message="vision_load error: `paths` must be an array.",
+                message="vision_load error: `paths` must be a string or an array.",
                 break_loop=False,
             )
 
@@ -83,15 +80,13 @@ class VisionLoad(Tool):
         message = self._summary() if self.images_dict or self.skipped_paths else "No images processed"
         if self.vision_config and self.images_dict:
             try:
-                capsule = await self._call_vision_model(
-                    list(self.images_dict.values()), query
-                )
+                capsule = await self._call_vision_model(list(self.images_dict.values()))
                 message = (
-                    f"Vision Model analyzed {len(self.images_dict)} image(s)"
+                    f"Analyzed {len(self.images_dict)} image(s)"
                     f"; {len(self.skipped_paths)} skipped.\n\n{capsule.strip()}"
                 )
             except Exception as exc:
-                message = f"Vision Model error: {str(exc)[:1000]}"
+                message = f"Image analysis error: {str(exc)[:1000]}"
         return Response(message=message, break_loop=False)
 
     def _get_max_embeds(self) -> int:
@@ -104,8 +99,16 @@ class VisionLoad(Tool):
         parent_id = get_data(PARALLEL_WORKER_PARENT_CONTEXT_KEY) if get_data else ""
         return str(parent_id or getattr(context, "id", "") or "").strip()
 
-    async def _call_vision_model(self, image_paths: list[str], query: str) -> str:
-        content = [{"type": "text", "text": str(query or "").strip() or DEFAULT_VISION_QUERY}]
+    async def _call_vision_model(self, image_paths: list[str]) -> str:
+        user_message = getattr(self.agent, "last_user_message", None)
+        output_text = getattr(user_message, "output_text", None)
+        request = str(output_text() if callable(output_text) else "").strip()
+        content = [
+            {
+                "type": "text",
+                "text": self.agent.read_prompt("fw.vision_load.md", request=request),
+            }
+        ]
         content.extend(
             {"type": "image_url", "image_url": {"url": path}}
             for path in image_paths

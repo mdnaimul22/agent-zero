@@ -580,7 +580,7 @@ async def test_active_vision_model_uses_canonical_vision_prompt(
     assert schemas[0]["description"] == "canonical vision"
 
 
-def test_vision_prompt_declares_multi_image_native_schema() -> None:
+def test_vision_prompt_stays_route_agnostic_and_batches_paths() -> None:
     source = (
         Path(__file__).resolve().parents[1]
         / "prompts"
@@ -588,14 +588,15 @@ def test_vision_prompt_declares_multi_image_native_schema() -> None:
     ).read_text(encoding="utf-8")
     schema = responses_tools._schema_from_prompt(source)
 
-    assert schema["required"] == ["paths"]
-    assert schema["properties"]["paths"] == {
-        "type": "array",
-        "items": {"type": "string"},
+    assert schema == {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": True,
     }
-    assert "query" in schema["properties"]
-    assert "raw" not in schema["properties"]
-    assert "Vision Model" in source
+    assert "load all relevant images in one call" in source
+    assert "Input schema for tool_args" not in source
+    assert "Vision Model" not in source
+    assert "query" not in source
 
 
 def test_mcp_prompt_and_native_schema_omit_blocked_tool(

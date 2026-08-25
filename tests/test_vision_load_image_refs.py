@@ -124,9 +124,9 @@ async def test_vision_load_materializes_local_image_to_chat_artifact(monkeypatch
     tool.log = SimpleNamespace(id="vision-log", update=lambda **kwargs: updates.append(kwargs))
 
     invalid = await tool.execute(paths=None)
-    assert invalid.message == "vision_load error: `paths` must be an array."
+    assert invalid.message == "vision_load error: `paths` must be a string or an array."
 
-    response = await tool.execute(paths=[str(image_path)])
+    response = await tool.execute(paths=str(image_path))
     image_path.unlink()
     await tool.after_execution(response)
 
@@ -205,6 +205,10 @@ async def test_vision_model_sends_multiple_images_once_and_keeps_history_text_on
     agent = SimpleNamespace(
         context=SimpleNamespace(id=""),
         agent_name="Agent 0",
+        last_user_message=SimpleNamespace(
+            output_text=lambda: "Compare the login errors."
+        ),
+        read_prompt=lambda _name, request: f"Analyze: {request}",
         hist_add_tool_result=lambda *args, **kwargs: tool_results.append((args, kwargs)),
         hist_add_message=lambda *args, **kwargs: raw_messages.append((args, kwargs)),
     )
@@ -218,16 +222,16 @@ async def test_vision_model_sends_multiple_images_once_and_keeps_history_text_on
     )
     tool.log = SimpleNamespace(id="vision-log", update=lambda **kwargs: None)
 
-    response = await tool.execute(
-        paths=[str(path) for path in image_paths],
-        query="Compare the login errors.",
-    )
+    response = await tool.execute(paths=[str(path) for path in image_paths])
     response.additional = {"_responses_output_item": {"output": response.message}}
     await tool.after_execution(response)
 
     assert len(calls) == 1
     content = calls[0]["messages"][0].content
-    assert content[0] == {"type": "text", "text": "Compare the login errors."}
+    assert content[0] == {
+        "type": "text",
+        "text": "Analyze: Compare the login errors.",
+    }
     assert [item["type"] for item in content].count("image_url") == 2
     assert "max_tokens" not in calls[0]
     assert "explicit_caching" not in calls[0]
@@ -326,7 +330,14 @@ async def test_independent_vision_model_calls_can_run_concurrently(monkeypatch, 
         path.write_bytes(b"png-data")
 
     def make_tool(index):
-        agent = SimpleNamespace(context=SimpleNamespace(id=""), agent_name=f"Agent {index}")
+        agent = SimpleNamespace(
+            context=SimpleNamespace(id=""),
+            agent_name=f"Agent {index}",
+            last_user_message=SimpleNamespace(
+                output_text=lambda: f"inspection {index}"
+            ),
+            read_prompt=lambda _name, request: request,
+        )
         return vision_load_module.VisionLoad(
             agent=agent,
             name="vision_load",
@@ -338,10 +349,7 @@ async def test_independent_vision_model_calls_can_run_concurrently(monkeypatch, 
 
     responses = await asyncio.gather(
         *(
-            make_tool(index).execute(
-                paths=[str(path) for path in image_paths],
-                query=f"inspection {index}",
-            )
+            make_tool(index).execute(paths=[str(path) for path in image_paths])
             for index in range(4)
         )
     )

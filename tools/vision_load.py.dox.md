@@ -12,15 +12,16 @@
 - `vision_load.py.dox.md` owns durable notes about responsibilities, contracts, side effects, and verification for that implementation.
 - Classes:
 - `VisionLoad` (`Tool`)
-  - `async execute(self, paths, query="", **kwargs) -> Response`
+  - `async execute(self, paths, **kwargs) -> Response`
   - `async after_execution(self, response: Response, **kwargs)`
 - Notable constants/configuration names: `TOKENS_ESTIMATE`.
 
 ## Runtime Contracts
 
 - Tool modules must define `helpers.tool.Tool` subclasses and return `helpers.tool.Response` from `execute(...)`.
-- One call may contain multiple paths. The Vision Model route sends every selected path in one request and returns one textual capsule.
+- One call may contain multiple paths; a bare string is treated as one path. The Vision Model route sends every selected path in one request and returns one textual capsule.
 - Model configuration exposes a Vision Model only when the effective preset selects that route; otherwise this tool follows Main's native vision path.
+- The public tool contract is route-agnostic. A Vision Model receives the current user request through `fw.vision_load.md`; direct parallel workers inherit that request from their parent.
 - Delegation completes during `execute(...)` so native Responses function output contains the real capsule before `after_execution(...)` persists it.
 - Delegated history contains the text capsule only. Native history contains the tool result followed by one raw message holding all loaded image blocks.
 - Direct parallel workers inherit the parent's model override generically. This tool uses their recorded parent context only to resolve ephemeral refs and durable chat media.

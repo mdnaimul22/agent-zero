@@ -25,7 +25,7 @@
 - Read the rendering path before changing placeholders or filenames.
 - Prefer small prompt additions over broad rewrites when fixing a specific behavior.
 - Keep document/OCR routing explicit: image files, screenshots, scans, charts, photos, and diagrams should prefer vision tools when available, while `document_query` is for documents, large text-heavy files, and fallback OCR.
-- Keep the single `vision_load` prompt accurate for both native and separate Vision Model routing: related images belong in one call, and a Vision Model result is text-only.
+- Keep the single `vision_load` tool prompt route-agnostic and preserve one-call loading for related images; internal image-analysis instructions belong in framework prompts, not Python strings.
 - Update tests or snapshots when prompt budget, required sections, or generated system content changes.
 
 ## Verification

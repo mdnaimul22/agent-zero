@@ -360,10 +360,13 @@ async def test_direct_parallel_worker_inherits_chat_model_override(monkeypatch) 
     )
     override = {"preset_name": "Text only"}
     parent.set_data("chat_model_override", override)
+    current_user_message = object()
+    parent.agent0.last_user_message = current_user_message
     observed = {}
 
     async def fake_execute_tool_call(agent, *_args, **_kwargs):
         observed["override"] = agent.context.get_data("chat_model_override")
+        observed["last_user_message"] = agent.last_user_message
         return "done"
 
     async def remove_context(context_id):
@@ -383,6 +386,7 @@ async def test_direct_parallel_worker_inherits_chat_model_override(monkeypatch) 
     try:
         assert await parallel_tools._run_direct_tool_job(parent_id, job) == "done"
         assert observed["override"] == override
+        assert observed["last_user_message"] is current_user_message
     finally:
         AgentContext.remove(parent_id)
 

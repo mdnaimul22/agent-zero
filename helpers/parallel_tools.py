@@ -485,6 +485,7 @@ async def _run_direct_tool_job(parent_context_id: str, job: ParallelJob) -> str:
         _copy_project(parent_context, worker_context)
 
         worker_agent = worker_context.agent0
+        worker_agent.last_user_message = parent_context.agent0.last_user_message
         worker_agent.loop_data = LoopData()
         return await execute_tool_call(
             worker_agent,

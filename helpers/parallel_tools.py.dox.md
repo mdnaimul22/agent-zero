@@ -32,7 +32,7 @@
 - Subordinate child chats are tagged with job metadata, remain outside the scheduler task list, and may use normal child-chat tools including `parallel`.
 - Nested parallel jobs started by a parallel subordinate are registered as child `DeferredTask` instances so stopping the ancestor also stops its descendants.
 - Direct tool jobs run in isolated background contexts and are blocked from recursively invoking `parallel`.
-- Direct tool jobs inherit the parent's active per-chat model override.
+- Direct tool jobs inherit the parent's active per-chat model override and current user message.
 - Direct tool background context cleanup removes both the in-memory context and any transient chat folder left on disk.
 - Parent-visible child log items are created for each wrapped call so the WebUI can inspect concurrent children separately while the wrapper result remains model-history-only.
 - Child tool logs mirror normal tool-call visible args; job ids remain available through wrapper results and prompt extras rather than visible process-step args.
