@@ -126,11 +126,15 @@ async def test_vision_load_materializes_local_image_to_chat_artifact(monkeypatch
     invalid = await tool.execute(paths=None)
     assert invalid.message == "vision_load error: `paths` must be a string or an array."
 
-    response = await tool.execute(paths=str(image_path))
+    response = await tool.execute(
+        paths=str(image_path),
+        query="Read the footer text.",
+    )
     image_path.unlink()
     await tool.after_execution(response)
 
     raw_message = messages[0][1]["content"]
+    assert [item["type"] for item in raw_message["raw_content"]] == ["image_url"]
     stored_ref = raw_message["raw_content"][0]["image_url"]["url"]
     assert stored_ref.startswith("/a0/usr/chats/ctx-vision/images/vision-load/sample-image-")
     stored_path = tmp_path / stored_ref.removeprefix("/a0/")
@@ -206,9 +210,11 @@ async def test_vision_model_sends_multiple_images_once_and_keeps_history_text_on
         context=SimpleNamespace(id=""),
         agent_name="Agent 0",
         last_user_message=SimpleNamespace(
-            output_text=lambda: "Compare the login errors."
+            output_text=lambda: "Review these UI screenshots."
         ),
-        read_prompt=lambda _name, request: f"Analyze: {request}",
+        read_prompt=lambda _name, request, query: (
+            f"Current request: {request}\n\nVisual query: {query}"
+        ),
         hist_add_tool_result=lambda *args, **kwargs: tool_results.append((args, kwargs)),
         hist_add_message=lambda *args, **kwargs: raw_messages.append((args, kwargs)),
     )
@@ -222,7 +228,10 @@ async def test_vision_model_sends_multiple_images_once_and_keeps_history_text_on
     )
     tool.log = SimpleNamespace(id="vision-log", update=lambda **kwargs: None)
 
-    response = await tool.execute(paths=[str(path) for path in image_paths])
+    response = await tool.execute(
+        paths=[str(path) for path in image_paths],
+        query="Compare the login error banners.",
+    )
     response.additional = {"_responses_output_item": {"output": response.message}}
     await tool.after_execution(response)
 
@@ -230,7 +239,10 @@ async def test_vision_model_sends_multiple_images_once_and_keeps_history_text_on
     content = calls[0]["messages"][0].content
     assert content[0] == {
         "type": "text",
-        "text": "Analyze: Compare the login errors.",
+        "text": (
+            "Current request: Review these UI screenshots.\n\n"
+            "Visual query: Compare the login error banners."
+        ),
     }
     assert [item["type"] for item in content].count("image_url") == 2
     assert "max_tokens" not in calls[0]
@@ -265,7 +277,7 @@ async def test_vision_model_empty_response_is_reported_as_error(monkeypatch):
     agent = SimpleNamespace(
         context=SimpleNamespace(id="", get_data=lambda _key: ""),
         last_user_message=SimpleNamespace(output_text=lambda: "Inspect the image."),
-        read_prompt=lambda _name, request: request,
+        read_prompt=lambda _name, request, query: f"{request}\n{query}",
     )
     tool = vision_load_module.VisionLoad(
         agent=agent,
@@ -398,7 +410,7 @@ async def test_independent_vision_model_calls_can_run_concurrently(monkeypatch, 
             last_user_message=SimpleNamespace(
                 output_text=lambda: f"inspection {index}"
             ),
-            read_prompt=lambda _name, request: request,
+            read_prompt=lambda _name, request, query: f"{request}\n{query}",
         )
         return vision_load_module.VisionLoad(
             agent=agent,

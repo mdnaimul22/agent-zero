@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from extensions.python.system_prompt import _11_tools_prompt, _13_skills_prompt
-from helpers import mcp_handler, responses_tools, tool_policy
+from helpers import files, mcp_handler, responses_tools, tool_policy
 from helpers.errors import RepairableException
 from plugins._tool_access.extensions.python.tool_execute_before._10_enforce_tool_policy import (
     EnforceToolPolicy,
@@ -596,7 +596,29 @@ def test_vision_prompt_stays_route_agnostic_and_batches_paths() -> None:
     assert "load all relevant images in one call" in source
     assert "Input schema for tool_args" not in source
     assert "Vision Model" not in source
-    assert "query" not in source
+    assert "sidecar" not in source.lower()
+    assert "optional `query`" in source
+
+
+def test_vision_framework_prompt_renders_optional_query() -> None:
+    prompt_dir = str(Path(__file__).resolve().parents[1] / "prompts")
+
+    without_query = files.read_prompt_file(
+        "fw.vision_load.md",
+        _directories=[prompt_dir],
+        request="Review these screenshots.",
+        query="",
+    )
+    with_query = files.read_prompt_file(
+        "fw.vision_load.md",
+        _directories=[prompt_dir],
+        request="Review these screenshots.",
+        query="Compare the error banners.",
+    )
+
+    assert "Visual query:" not in without_query
+    assert "Current request:\nReview these screenshots." in with_query
+    assert "Visual query:\nCompare the error banners." in with_query
 
 
 def test_mcp_prompt_and_native_schema_omit_blocked_tool(

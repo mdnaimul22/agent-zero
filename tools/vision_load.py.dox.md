@@ -12,7 +12,7 @@
 - `vision_load.py.dox.md` owns durable notes about responsibilities, contracts, side effects, and verification for that implementation.
 - Classes:
 - `VisionLoad` (`Tool`)
-  - `async execute(self, paths, **kwargs) -> Response`
+  - `async execute(self, paths, query="", **kwargs) -> Response`
   - `async after_execution(self, response: Response, **kwargs)`
 - Notable constants/configuration names: `TOKENS_ESTIMATE`.
 
@@ -21,7 +21,8 @@
 - Tool modules must define `helpers.tool.Tool` subclasses and return `helpers.tool.Response` from `execute(...)`.
 - One call may contain multiple paths; a bare string is treated as one path. The Vision Model route sends every selected path in one request and returns one textual capsule.
 - Model configuration exposes a Vision Model only when the effective preset selects that route; otherwise this tool follows Main's native vision path.
-- The public tool contract is route-agnostic. A Vision Model receives the current user request through `fw.vision_load.md`; direct parallel workers inherit that request from their parent.
+- The public tool contract is route-agnostic and accepts an optional focused `query`. A Vision Model receives both that query and the current user request through `fw.vision_load.md`; direct parallel workers inherit the request from their parent.
+- Native Main vision already retains the query in its authored tool-call transcript, so native raw history remains image-only and does not repeat model-authored instructions as user content.
 - Delegation completes during `execute(...)` so native Responses function output contains the real capsule before `after_execution(...)` persists it.
 - Delegated history contains the text capsule only. Native history contains the tool result followed by one raw message holding all loaded image blocks.
 - In a direct parallel worker, native image content is queued for the parent and promoted immediately after the outer `parallel` result; the disposable worker never owns the only copy of model-visible pixels.

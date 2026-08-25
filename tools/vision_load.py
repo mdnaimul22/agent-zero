@@ -23,7 +23,12 @@ TOKENS_ESTIMATE = 1500
 
 
 class VisionLoad(Tool):
-    async def execute(self, paths: list[str] | str = [], **kwargs) -> Response:
+    async def execute(
+        self,
+        paths: list[str] | str = [],
+        query: str = "",
+        **kwargs,
+    ) -> Response:
 
         self.images_dict = {}
         self.loaded_paths: list[str] = []
@@ -87,7 +92,10 @@ class VisionLoad(Tool):
         message = self._summary() if self.images_dict or self.skipped_paths else "No images processed"
         if self.vision_config and self.images_dict:
             try:
-                capsule = await self._call_vision_model(list(self.images_dict.values()))
+                capsule = await self._call_vision_model(
+                    list(self.images_dict.values()),
+                    query,
+                )
                 message = (
                     f"Analyzed {len(self.images_dict)} image(s)"
                     f"; {len(self.skipped_paths)} skipped.\n\n{capsule.strip()}"
@@ -110,14 +118,18 @@ class VisionLoad(Tool):
         )
         return str(parent_id or getattr(context, "id", "") or "").strip()
 
-    async def _call_vision_model(self, image_paths: list[str]) -> str:
+    async def _call_vision_model(self, image_paths: list[str], query: str) -> str:
         user_message = getattr(self.agent, "last_user_message", None)
         output_text = getattr(user_message, "output_text", None)
         request = str(output_text() if callable(output_text) else "").strip()
         content = [
             {
                 "type": "text",
-                "text": self.agent.read_prompt("fw.vision_load.md", request=request),
+                "text": self.agent.read_prompt(
+                    "fw.vision_load.md",
+                    request=request,
+                    query=str(query or "").strip(),
+                ),
             }
         ]
         content.extend(
