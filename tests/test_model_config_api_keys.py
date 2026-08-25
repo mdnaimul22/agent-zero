@@ -89,6 +89,36 @@ def test_chat_model_configured_requires_identity_and_key(monkeypatch):
     )
 
 
+def test_missing_api_key_checks_only_the_active_vision_model(monkeypatch):
+    from plugins._model_config.helpers import model_config
+
+    config = {
+        "chat_model": {"provider": "ollama", "name": "text-main"},
+        "vision_model": {"provider": "openai", "name": "vision"},
+        "utility_model": {"provider": "ollama", "name": "utility"},
+        "embedding_model": {
+            "provider": "huggingface",
+            "name": "sentence-transformers/all-MiniLM-L6-v2",
+        },
+    }
+    active = False
+    monkeypatch.setattr(model_config, "get_effective_config", lambda _agent=None: config)
+    monkeypatch.setattr(
+        model_config,
+        "get_embedding_model_config",
+        lambda _agent=None: config["embedding_model"],
+    )
+    monkeypatch.setattr(model_config, "use_vision_sidecar", lambda _agent=None: active)
+    monkeypatch.setattr(model_config, "has_provider_api_key", lambda *args: False)
+
+    assert model_config.get_missing_api_key_providers() == []
+
+    active = True
+    assert model_config.get_missing_api_key_providers() == [
+        {"model_type": "Vision Model", "provider": "openai"}
+    ]
+
+
 @pytest.mark.asyncio
 async def test_missing_api_key_banner_exposes_only_effective_missing_providers(monkeypatch):
     from plugins._model_config.helpers import model_config
