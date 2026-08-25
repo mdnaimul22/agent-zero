@@ -116,6 +116,8 @@ class VisionLoad(Tool):
         response, _ = await build_vision_model(self.agent).unified_call(
             messages=[HumanMessage(content=content)],
         )
+        if not str(response or "").strip():
+            raise RuntimeError("Vision Model returned an empty response.")
         return str(response)
 
     def _store_ephemeral_image(self, image: ephemeral_images.EphemeralImage) -> str:

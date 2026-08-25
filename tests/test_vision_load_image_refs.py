@@ -243,6 +243,47 @@ async def test_vision_model_sends_multiple_images_once_and_keeps_history_text_on
 
 
 @pytest.mark.anyio
+async def test_vision_model_empty_response_is_reported_as_error(monkeypatch):
+    _install_tool_stub(monkeypatch)
+    import tools.vision_load as vision_load_module
+
+    class FakeVisionModel:
+        async def unified_call(self, **kwargs):
+            return "", ""
+
+    monkeypatch.setattr(
+        vision_load_module,
+        "build_vision_model",
+        lambda _agent: FakeVisionModel(),
+    )
+    monkeypatch.setattr(
+        vision_load_module,
+        "get_vision_model_config",
+        lambda _agent: {"provider": "test", "name": "vision", "max_embeds": 10},
+    )
+
+    agent = SimpleNamespace(
+        context=SimpleNamespace(id="", get_data=lambda _key: ""),
+        last_user_message=SimpleNamespace(output_text=lambda: "Inspect the image."),
+        read_prompt=lambda _name, request: request,
+    )
+    tool = vision_load_module.VisionLoad(
+        agent=agent,
+        name="vision_load",
+        method=None,
+        args={"paths": ["data:image/png;base64,AA=="]},
+        message="",
+        loop_data=None,
+    )
+
+    response = await tool.execute(paths=["data:image/png;base64,AA=="])
+
+    assert response.message == (
+        "Image analysis error: Vision Model returned an empty response."
+    )
+
+
+@pytest.mark.anyio
 async def test_parallel_worker_consumes_parent_ephemeral_image(monkeypatch, tmp_path):
     _install_tool_stub(monkeypatch)
     import tools.vision_load as vision_load_module
