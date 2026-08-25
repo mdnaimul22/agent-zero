@@ -143,6 +143,8 @@ def test_active_vision_model_route_prefers_main_native_vision(monkeypatch):
 
     cases = [
         ({"vision": False}, {}, False),
+        ({"vision": False}, {"provider": "p"}, False),
+        ({"vision": False}, {"name": "v"}, False),
         ({"vision": True}, {"provider": "p", "name": "v"}, False),
         ({"vision": False}, {"provider": "p", "name": "v"}, True),
         (

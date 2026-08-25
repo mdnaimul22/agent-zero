@@ -277,9 +277,6 @@ def _clean_preset_for_file(preset: dict) -> dict:
         slot_config = preset.get(slot)
         if isinstance(slot_config, dict):
             slot_clean = _strip_ui_fields(slot_config, strip_api_key=True)
-            if slot == "vision" and _slot_has_identity(slot_clean):
-                slot_clean["vision"] = True
-                slot_clean.setdefault("max_embeds", 10)
             cleaned[slot] = (
                 slot_clean
                 if name == DEFAULT_PRESET_NAME
@@ -762,7 +759,9 @@ def get_vision_model_config(agent=None) -> dict:
     """Get the active Vision Model config after applying Main-first routing."""
     cfg = get_effective_config(agent)
     vision_cfg = cfg.get("vision_model", {})
-    if not _slot_has_identity(vision_cfg):
+    if not all(
+        str(vision_cfg.get(key) or "").strip() for key in ("provider", "name")
+    ):
         return {}
     chat_cfg = cfg.get("chat_model", {})
     return (
