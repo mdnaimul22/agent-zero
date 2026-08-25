@@ -12,12 +12,12 @@ class RepeatResponse(Extension):
     def execute(self, result_data: dict[str, Any] | None = None, **kwargs: Any) -> None:
         if not self.agent or not isinstance(result_data, dict):
             return
+        if result_data.get("skip_default_processing"):
+            return
 
         llm_result = result_data.get("llm_result")
         response = getattr(llm_result, "response", "")
-        if not isinstance(response, str):
-            return
-        if not response.strip() or response != self.agent.loop_data.last_response:
+        if not isinstance(response, str) or response != self.agent.loop_data.last_response:
             return
 
         warning = self.agent.read_prompt("fw.msg_repeat.md")
