@@ -86,7 +86,8 @@
           <div class="field-description">Authentication key for this provider. Shared across all model slots using the same provider.</div>
         </div>
         <div class="field-control" style="position:relative;" x-data="{ showKey: false }">
-          <input :type="showKey ? 'text' : 'password'"
+          <input type="text"
+                 :class="{ 'masked-text-input': !showKey }"
                  :value="$store.modelConfig.apiKeyValues[_prov]"
                  :placeholder="$store.modelConfig.apiKeyStatus[_prov] ? '&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;' : ''"
                  autocomplete="off"
@@ -113,7 +114,7 @@
           <div class="field-description">Authentication key for this provider. Shared across all model slots using the same provider.</div>
         </div>
         <div class="field-control" style="position:relative;" x-data="{ showKey: false, _revealed: '' }">
-          <input :type="showKey ? 'text' : 'password'" x-model="model.api_key" autocomplete="off"
+          <input type="text" :class="{ 'masked-text-input': !showKey }" x-model="model.api_key" autocomplete="off"
                  :placeholder="$store.modelConfig.apiKeyStatus[_prov] ? '&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;' : ''"
                  style="padding-right:32px;" />
           <x-icon class="eye-toggle"
