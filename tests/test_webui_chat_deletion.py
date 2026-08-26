@@ -78,10 +78,18 @@ assert(
   model.contexts === unchangedContexts,
   "unchanged snapshots must preserve the Alpine contexts array",
 );
+const unchangedFirstRow = model.contexts[0];
 model.applyContexts([{{ ...chats[0], name: "Renamed" }}, ...chats.slice(1)]);
 assert(
-  model.contexts !== unchangedContexts && model.contexts[0].name === "Renamed",
-  "changed context metadata must replace the contexts array",
+  model.contexts === unchangedContexts &&
+    model.contexts[0] === unchangedFirstRow &&
+    model.contexts[0].name === "Renamed",
+  "changed context metadata must update its existing row in place",
+);
+model.applyContexts([...chats, {{ id: "d", created_at: 40 }}]);
+assert(
+  model.contexts !== unchangedContexts && model.contexts[0].id === "d",
+  "structural context changes must replace and reorder the contexts array",
 );
 
 const tree = [

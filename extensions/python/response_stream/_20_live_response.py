@@ -41,6 +41,7 @@ class LiveResponse(Extension):
                         type="response",
                         heading=f"icon://chat {self.agent.agent_name}: Responding",
                         id=shared_id,
+                        finished=False,
                     )
                 )
 

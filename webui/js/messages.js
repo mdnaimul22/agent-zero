@@ -205,7 +205,7 @@ async function setMessagesNow(messages, generation) {
   const history = getChatHistoryEl();
   const followTail = shouldFollowMessageTail();
 
-  _messageWindow.merge(messages, { followTail });
+  const addedMessageKeys = _messageWindow.merge(messages, { followTail });
   bindMessageWindow(history);
   if (_messageWindowRenderPromise) await _messageWindowRenderPromise;
 
@@ -217,6 +217,7 @@ async function setMessagesNow(messages, generation) {
   const cappedProcessGroupUpdate = hasCappedProcessGroupUpdate(
     messages,
     windowMessages,
+    addedMessageKeys,
   );
   if (initialWindow || compactedTail || cappedProcessGroupUpdate) {
     return await renderMessageWindow({
@@ -661,7 +662,7 @@ function getProcessGroupRenderMessages(messages) {
   });
 }
 
-function hasCappedProcessGroupUpdate(messages, windowMessages) {
+function hasCappedProcessGroupUpdate(messages, windowMessages, addedMessageKeys) {
   if (!messages.length) return false;
   const groupStates = getProcessGroupPageState(windowMessages);
   return messages.some((message) => {
@@ -670,7 +671,7 @@ function hasCappedProcessGroupUpdate(messages, windowMessages) {
     const total = groupStates.get(group.key)?.steps.length || 0;
     const limit = _processGroupStepLimits.get(group.key) ||
       PROCESS_GROUP_STEP_PAGE_SIZE;
-    return total > limit;
+    return total > limit && addedMessageKeys.has(getMessageCacheKey(message));
   });
 }
 
@@ -1995,6 +1996,7 @@ export function drawMessageResponse({
   // no container or valid process group, create new container
   if (!container) container = getOrCreateMessageContainer(id, "left");
 
+  const renderMarkdown = kvps?.finished !== false;
   const messageDiv = _drawMessage({
     messageContainer: container,
     heading: undefined,
@@ -2002,8 +2004,8 @@ export function drawMessageResponse({
     kvps: undefined,
     messageClasses: [],
     contentClasses: [],
-    markdown: true,
-    latex: true,
+    markdown: renderMarkdown,
+    latex: renderMarkdown,
     mainClass: "message-agent-response",
     smoothStream: false, // smooth render disabled, not reliable yet !isMassRender(), // stream smoothly if not in mass render mode
   });

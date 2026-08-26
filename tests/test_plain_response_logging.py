@@ -23,6 +23,47 @@ def _agent_with_generating_log():
     return agent, item
 
 
+def test_log_keyword_updates_share_kvp_value_limit():
+    item = Log().log(type="agent", heading="A0: Reasoning")
+
+    item.update(reasoning="r" * 6_000, finished=True)
+
+    assert len(item.kvps["reasoning"]) <= 5_000
+    assert "Characters hidden" in item.kvps["reasoning"]
+    assert item.kvps["finished"] is True
+
+
+def test_live_log_updates_omit_unchanged_collections(monkeypatch):
+    import helpers.log as log_module
+
+    full_dirty: list[str | None] = []
+    context_dirty: list[tuple[str, str | None, bool]] = []
+    monkeypatch.setattr(
+        log_module,
+        "_MARK_DIRTY_ALL",
+        lambda *, reason=None: full_dirty.append(reason),
+    )
+    monkeypatch.setattr(
+        log_module,
+        "_MARK_DIRTY_FOR_CONTEXT",
+        lambda context_id, *, reason=None, include_collections=True: context_dirty.append(
+            (context_id, reason, include_collections)
+        ),
+    )
+
+    log = Log()
+    log.context = SimpleNamespace(id="ctx", streaming_agent=None)
+    item = log.log(type="agent", heading="Calling LLM")
+    item.update(content="stream update")
+    log.set_progress("Receiving")
+
+    assert full_dirty == ["log.Log._notify_state_monitor"]
+    assert context_dirty == [
+        ("ctx", "log.Log._update_item", False),
+        ("ctx", "log.Log.set_progress", False),
+    ]
+
+
 def test_responses_plain_text_completion_finishes_generating_log_as_response():
     agent, item = _agent_with_generating_log()
     data = {
@@ -89,7 +130,7 @@ def test_responses_plain_text_completion_does_not_replace_live_response_log():
 
 
 @pytest.mark.asyncio
-async def test_live_response_renders_single_action_wrapper():
+async def test_live_response_renders_single_unfinished_action_wrapper():
     log = Log()
     generating = log.log(type="agent", id="msg-1")
     loop_data = SimpleNamespace(params_temporary={"log_item_generating": generating})
@@ -111,6 +152,7 @@ async def test_live_response_renders_single_action_wrapper():
     assert response.type == "response"
     assert response.content == "wrapper works"
     assert response.id == "msg-1"
+    assert response.kvps["finished"] is False
 
 
 @pytest.mark.asyncio

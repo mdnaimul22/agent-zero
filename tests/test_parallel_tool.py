@@ -1154,9 +1154,9 @@ def test_chats_sidebar_projects_parallel_children_as_indented_accordion() -> Non
     )
 
     assert "parent_context_id" in store
-    assert "const nextExpandedParents = { ...this.expandedParents };" in store
-    assert "nextExpandedParents[selectedId] === undefined" in store
-    assert "nextExpandedParents[selectedId] = true;" in store
+    assert "this.expandedParents[selectedId] === undefined" in store
+    assert "...this.expandedParents," in store
+    assert "[selectedId]: true," in store
     assert "topLevelContexts()" in html
     assert "childContexts(context.id)" in html
     assert "chat-child-container" in html

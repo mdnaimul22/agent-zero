@@ -499,6 +499,7 @@ const model = {
           await this.sendStateRequest({ forceFull: true });
         },
       });
+      if (!stateSocket.isConnected()) return;
       this._setMode(SYNC_MODES.HEALTHY, "push applied");
       await this._flushPendingReconnectToast();
     }
