@@ -2,6 +2,7 @@ import asyncio
 import concurrent.futures
 import json
 import re
+import subprocess
 import sys
 import threading
 import zipfile
@@ -275,6 +276,56 @@ def test_browser_config_normalizes_host_browser_selection():
         normalize_browser_config({"runtime_backend": "host_when_available"})["runtime_backend"]
         == "host_required"
     )
+
+
+def test_browser_config_store_migrates_advertised_endpoint_to_stable_id():
+    path = PROJECT_ROOT / "plugins" / "_browser" / "webui" / "browser-config-store.js"
+    source = path.read_text(encoding="utf-8")
+    source = re.sub(r"^import .*;\n", "", source, flags=re.M)
+    source = source.replace("export const store = createStore", "const store = createStore")
+    endpoint = "ws://localhost:9222/devtools/browser/old-guid"
+    browser_status = {
+        "connectors": [
+            {
+                "browser_id": "chrome-cdp",
+                "cdp_endpoint": endpoint,
+                "available_browsers": [
+                    {
+                        "id": "chrome-cdp",
+                        "family": "chrome-cdp",
+                        "label": "Chrome (allowed)",
+                        "cdp_endpoint": endpoint,
+                    },
+                    {
+                        "id": "chrome:default",
+                        "family": "chrome",
+                        "label": "Chrome profile",
+                        "cdp_endpoint": "",
+                    },
+                ],
+            }
+        ]
+    }
+    script = (
+        "const browserStatus = "
+        + json.dumps(browser_status)
+        + ";\n"
+        + "const createStore = (_name, value) => value;\n"
+        + "const callJsonApi = async () => ({ host_browser: browserStatus });\n"
+        + "const showConfirmDialog = async () => false;\n"
+        + source
+        + f"\nstore.config = ensureConfig({{ host_browser_selection: {json.dumps(endpoint)} }});\n"
+        + "await store.loadHostBrowserStatus();\n"
+        + "if (store.config.host_browser_selection !== 'chrome-cdp') throw new Error('legacy endpoint was not migrated');\n"
+        + "const values = store.hostBrowserOptions().map((option) => option.value);\n"
+        + "if (!values.includes('chrome-cdp')) throw new Error('stable browser id is missing');\n"
+        + f"if (values.includes({json.dumps(endpoint)})) throw new Error('volatile endpoint was advertised');\n"
+        + "if (values.includes('chrome:default')) throw new Error('local profiles leaked into the dropdown');\n"
+        + "const custom = 'ws://localhost:9333/devtools/browser/custom';\n"
+        + "if (stableHostBrowserSelection(custom, browserStatus) !== custom) throw new Error('custom endpoint changed');\n"
+    )
+
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True, text=True)
 
 
 def test_browser_config_normalizes_max_open_tabs():
