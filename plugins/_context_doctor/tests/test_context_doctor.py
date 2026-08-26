@@ -3,7 +3,10 @@ from types import SimpleNamespace
 from plugins._context_doctor.extensions.python.message_loop_result._10_context_doctor import (
     ContextDoctor,
 )
-from plugins._context_doctor.helpers.context_doctor import transform_response, update_log_item
+from plugins._context_doctor.helpers.context_doctor import (
+    transform_response,
+    update_log_item,
+)
 
 
 def test_repairs_and_minifies_tool_call():
@@ -57,7 +60,10 @@ def test_suppresses_xml_when_enabled():
 
 
 def test_updates_log_kvps_and_heading_while_preserving_raw_content():
-    log_item = SimpleNamespace(update=lambda **kwargs: setattr(log_item, "data", kwargs))
+    log_item = SimpleNamespace(
+        kvps={"reasoning": "because"},
+        update=lambda **kwargs: setattr(log_item, "data", kwargs),
+    )
     raw = '{"tool_name":"response","tool_args":{"text":"ok",},}'
     repaired = '{"headline":"Done","tool_name":"response","tool_args":{"text":"ok"}}'
 
@@ -70,6 +76,7 @@ def test_updates_log_kvps_and_heading_while_preserving_raw_content():
     )
 
     assert log_item.data["content"] == raw
+    assert log_item.data["kvps"]["reasoning"] == "because"
     assert log_item.data["kvps"]["tool_name"] == "response"
     assert log_item.data["heading"] == "A0: Done"
 
@@ -85,7 +92,9 @@ def test_extension_replaces_result_refreshes_log_and_response_item(monkeypatch):
     log_item = SimpleNamespace(
         id="generating", update=lambda **kwargs: setattr(log_item, "data", kwargs)
     )
-    response_item = SimpleNamespace(update=lambda **kwargs: setattr(response_item, "data", kwargs))
+    response_item = SimpleNamespace(
+        update=lambda **kwargs: setattr(response_item, "data", kwargs)
+    )
     context = SimpleNamespace(log=SimpleNamespace(log=lambda **kwargs: response_item))
     agent = SimpleNamespace(
         agent_name="A0",
