@@ -87,6 +87,25 @@ def test_extract_json_root_string_returns_canonical_snapshot():
     assert extract_tools.extract_json_root_string('[{"tool_name":"response"}]') is None
 
 
+@pytest.mark.parametrize(
+    "content",
+    [
+        '{"tool_name":"response","tool_args":{"text":"partial"',
+        'prefix {"tool_name":"response","tool_args":{}}',
+        '[{"tool_name":"response","tool_args":{}}]',
+        '```json\n{"tool_name":"response","tool_args":{}}\n```',
+    ],
+)
+def test_extract_tool_request_skips_noncanonical_boundaries(monkeypatch, content):
+    monkeypatch.setattr(
+        extract_tools,
+        "extract_json_root_string",
+        lambda _content: pytest.fail("noncanonical content reached the root scanner"),
+    )
+
+    assert extract_tools.extract_tool_request(content) is None
+
+
 def test_json_parse_dirty_prefers_valid_tool_request_after_preamble_object():
     text = (
         'I will call the tool after this note {"note":"not the tool"}.\n'
