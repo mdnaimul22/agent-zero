@@ -446,6 +446,17 @@ def normalize_settings(settings: Settings) -> Settings:
     copy["time_format"] = _normalize_time_format(copy.get("time_format"), default["time_format"])
     copy["ui_control_visibility"] = _normalize_ui_control_visibility(copy.get("ui_control_visibility"))
 
+    # Auto-resolve /a0/... workdir_path if running on host where /a0 does not exist
+    if copy.get("workdir_path"):
+        workdir = str(copy["workdir_path"]).strip()
+        if (workdir.startswith("/a0/") or workdir == "/a0") and not os.path.exists("/a0"):
+            rel_workdir = workdir[4:] if workdir.startswith("/a0/") else ""
+            copy["workdir_path"] = files.get_abs_path(rel_workdir) or files.get_abs_path("usr/workdir")
+        try:
+            os.makedirs(copy["workdir_path"], exist_ok=True)
+        except Exception:
+            pass
+
     return copy
 
 
