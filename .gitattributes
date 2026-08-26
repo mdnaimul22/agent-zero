@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto eol=lf
+
+# Protect custom host-mode modifications from upstream merge overwrite
+helpers/files.py merge=ours
+helpers/settings.py merge=ours
+helpers/searxng.py merge=ours
