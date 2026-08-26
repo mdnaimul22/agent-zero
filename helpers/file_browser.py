@@ -365,6 +365,10 @@ class FileBrowser:
 
     def get_files(self, current_path: str = "") -> Dict:
         try:
+            # Handle /a0 container paths on host environment
+            if current_path and (current_path == "/a0" or current_path.startswith("/a0/")) and not os.path.exists("/a0"):
+                current_path = files.fix_dev_path(current_path)
+
             # Resolve the full path while preventing directory traversal
             full_path = (self.base_dir / current_path).resolve()
             if not str(full_path).startswith(str(self.base_dir)):
@@ -411,6 +415,8 @@ class FileBrowser:
 
     def get_full_path(self, file_path: str, allow_dir: bool = False) -> str:
         """Get full file path if it exists and is within base_dir"""
+        if file_path and (file_path == "/a0" or file_path.startswith("/a0/")) and not os.path.exists("/a0"):
+            file_path = files.fix_dev_path(file_path)
         full_path = files.get_abs_path(self.base_dir, file_path)
         if not files.exists(full_path):
             raise ValueError(f"File {file_path} not found")
