@@ -7,6 +7,7 @@ import { ttsService } from "/js/tts-service.js";
 import {
   createActionButton,
   copyToClipboard,
+  syncActionButtons,
 } from "/components/messages/action-buttons/simple-action-buttons.js";
 import { store as stepDetailStore } from "/components/modals/process-step-detail/step-detail-store.js";
 import { store as preferencesStore } from "/components/sidebar/bottom/preferences/preferences-store.js";
@@ -1458,10 +1459,7 @@ export function drawProcessStep({
     "step-detail-actions",
     "step-action-buttons",
   );
-  stepActionBtns.textContent = "";
-  (actionButtons || [])
-    .filter(Boolean)
-    .forEach((button) => stepActionBtns.appendChild(button));
+  syncActionButtons(stepActionBtns, actionButtons);
 
   let detailResult = {
     content: undefined,
@@ -3388,8 +3386,6 @@ function setupCollapsible(
     "div",
     "step-action-buttons",
   );
-  container.textContent = "";
-
   const btn = ensureChild(container, ".expand-btn", "button", "expand-btn");
   const syncBtn = () => {
     const exp = messageDiv.classList.contains("expanded");
@@ -3411,7 +3407,7 @@ function setupCollapsible(
   btn.onclick = () =>
     setExpanded(!messageDiv.classList.contains("expanded"));
 
-  actionButtons.filter(Boolean).forEach((b) => container.appendChild(b));
+  syncActionButtons(container, actionButtons);
 
   const refreshOverflow = () => {
     const hasOverflow = measureMessageCollapseOverflow(collapseContent, {

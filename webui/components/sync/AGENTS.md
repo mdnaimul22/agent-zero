@@ -13,6 +13,7 @@
 ## Local Contracts
 
 - Keep sync state compatible with WebSocket state-sync events.
+- Apply `state_push` snapshots sequentially because WebSocket subscribers do not await async callbacks; later pushes must not race earlier full renders.
 - A queued state push that finishes after transport loss must not overwrite the
   `DISCONNECTED` mode or flush reconnect notifications.
 - Avoid noisy user-facing alerts for transient sync state unless existing UX expects them.

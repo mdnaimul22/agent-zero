@@ -149,18 +149,12 @@ export async function sendMessage(options = {}) {
         adjustTextareaHeight();
       }
 
+      // Render immediately; the backend log reuses messageId and merges into this row.
+      const heading = hasAttachments ? "Uploading attachments..." : "";
+      await setMessages([{ id: messageId, type: "user", heading, content: message, kvps: {} }]);
+
       // Include attachments in the user message
       if (hasAttachments) {
-        const heading =
-          attachmentsWithUrls.length > 0
-            ? "Uploading attachments..."
-            : "";
-
-        // Render user message with attachments
-        await setMessages([{ id: messageId, type: "user", heading, content: message, kvps: {
-          // attachments: attachmentsWithUrls, // skip here, let the backend properly log them
-        }}]);
-
         // sleep one frame to render the message before upload starts - better UX
         sleep(0);
 

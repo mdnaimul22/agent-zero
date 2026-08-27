@@ -51,6 +51,7 @@ const model = {
   initialized: false,
   needsHandshake: false,
   handshakePromise: null,
+  _pushQueue: Promise.resolve(),
   _handshakeQueued: false,
   _queuedPayload: null,
   _inFlightPayload: null,
@@ -301,9 +302,11 @@ const model = {
       });
 
       await stateSocket.on("state_push", (envelope) => {
-        this._handlePush(envelope).catch((error) => {
-          console.error("[syncStore] state_push handler failed:", error);
-        });
+        this._pushQueue = this._pushQueue
+          .then(() => this._handlePush(envelope))
+          .catch((error) => {
+            console.error("[syncStore] state_push handler failed:", error);
+          });
       });
       debug("[syncStore] subscribed to state_push");
 

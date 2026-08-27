@@ -52,6 +52,18 @@ def test_completed_state_push_cannot_overwrite_disconnected_mode() -> None:
     assert "if (!stateSocket.isConnected()) return;" in apply_end
 
 
+def test_state_push_handlers_are_serialized() -> None:
+    source = (
+        PROJECT_ROOT / "webui" / "components" / "sync" / "sync-store.js"
+    ).read_text(encoding="utf-8")
+
+    subscription = source.split('stateSocket.on("state_push"', 1)[1].split(
+        'debug("[syncStore] subscribed to state_push")', 1
+    )[0]
+    assert "this._pushQueue = this._pushQueue" in subscription
+    assert ".then(() => this._handlePush(envelope))" in subscription
+
+
 def test_partial_snapshot_retains_sidebar_collections_and_extension_shape() -> None:
     source = (PROJECT_ROOT / "webui" / "index.js").read_text(encoding="utf-8")
     request_builder = source.split(
