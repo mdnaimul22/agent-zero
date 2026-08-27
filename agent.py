@@ -1,4 +1,4 @@
-import asyncio, json, random, re, string, threading
+import asyncio, json, random, re, string, threading, time
 
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -41,6 +41,10 @@ from helpers.llm_result import (
 )
 from helpers.litellm_transport import ResponsesTransport
 from helpers.responses_tools import build_responses_function_tools, original_tool_name
+
+_RESPONSE_STREAM_UPDATE_CHARS = 128
+_RESPONSE_STREAM_UPDATE_SECONDS = 0.05
+
 
 class AgentContextType(Enum):
     USER = "user"
@@ -403,6 +407,9 @@ class Agent:
                     self.loop_data.iteration += 1
                     self.loop_data.params_temporary = {}  # clear temporary params
                     last_response_stream_full = ""
+                    last_response_stream_chars = 0
+                    last_response_stream_at = time.monotonic()
+                    response_stream_pending = False
 
                     # call message_loop_start extensions
                     await extension.call_extensions_async(
@@ -440,7 +447,8 @@ class Agent:
                             await self.handle_reasoning_stream(stream_data["full"])
 
                         async def stream_callback(chunk: str, full: str):
-                            nonlocal last_response_stream_full
+                            nonlocal last_response_stream_full, last_response_stream_chars
+                            nonlocal last_response_stream_at, response_stream_pending
                             await self.handle_intervention()
                             # output the agent response stream
                             if chunk == full:
@@ -455,6 +463,7 @@ class Agent:
                                     pass
                                 else:
                                     await self.handle_response_stream(full)
+                                    response_stream_pending = False
                                     return full.strip()
 
                             await extension.call_extensions_async(
@@ -466,9 +475,19 @@ class Agent:
                             # Stream masked chunk after extensions processed it
                             if stream_data.get("chunk"):
                                 printer.stream(stream_data["chunk"])
-                            # Use the potentially modified full text for downstream processing
-                            await self.handle_response_stream(stream_data["full"])
                             last_response_stream_full = stream_data["full"]
+                            response_stream_pending = True
+                            now = time.monotonic()
+                            if (
+                                len(full) - last_response_stream_chars
+                                >= _RESPONSE_STREAM_UPDATE_CHARS
+                                or now - last_response_stream_at
+                                >= _RESPONSE_STREAM_UPDATE_SECONDS
+                            ):
+                                await self.handle_response_stream(last_response_stream_full)
+                                last_response_stream_chars = len(full)
+                                last_response_stream_at = time.monotonic()
+                                response_stream_pending = False
 
                         # call main LLM
                         llm_result = await self.call_chat_model_turn(
@@ -478,6 +497,9 @@ class Agent:
                         )
                         agent_response = llm_result.response
                         await self.handle_intervention(agent_response)
+
+                        if response_stream_pending:
+                            await self.handle_response_stream(last_response_stream_full)
 
                         # Notify extensions to finalize their stream filters
                         await extension.call_extensions_async(
