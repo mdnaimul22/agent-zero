@@ -1973,6 +1973,28 @@ def test_browser_visual_mode_bridges_clipboard_shortcuts():
     assert 'runtime.call(\n                    "clipboard"' in ws_browser
 
 
+def test_browser_visual_mode_only_forwards_text_producing_alt_keys():
+    browser_store = (
+        PROJECT_ROOT / "plugins" / "_browser" / "webui" / "browser-store.js"
+    ).read_text(encoding="utf-8")
+    start = browser_store.index("function isAltTextInput")
+    end = browser_store.index("\n}\n", start) + 3
+    helper = browser_store[start:end]
+    script = helper + """
+const check = (condition, message) => {
+  if (!condition) throw new Error(message);
+};
+check(isAltTextInput({ key: "@", altKey: true, ctrlKey: true }, "Windows"), "AltGr text was blocked");
+check(isAltTextInput({ key: "€", altKey: true, getModifierState: (name) => name === "AltGraph" }, "Linux"), "AltGraph text was blocked");
+check(isAltTextInput({ key: "@", altKey: true }, "MacIntel"), "Option text was blocked");
+check(!isAltTextInput({ key: "f", altKey: true }, "Windows"), "Windows Alt shortcut became text");
+check(!isAltTextInput({ key: "d", altKey: true }, "Linux"), "Linux Alt shortcut became text");
+check(!isAltTextInput({ key: "@", altKey: true, metaKey: true }, "MacIntel"), "Command shortcut became text");
+"""
+
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True, text=True)
+
+
 def test_browser_runtime_and_content_helper_expose_annotation_target():
     runtime = (
         PROJECT_ROOT / "plugins" / "_browser" / "helpers" / "runtime.py"
