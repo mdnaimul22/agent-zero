@@ -130,7 +130,7 @@ def test_responses_plain_text_completion_does_not_replace_live_response_log():
 
 
 @pytest.mark.asyncio
-async def test_live_response_renders_single_unfinished_action_wrapper():
+async def test_live_response_renders_single_action_wrapper():
     log = Log()
     generating = log.log(type="agent", id="msg-1")
     loop_data = SimpleNamespace(params_temporary={"log_item_generating": generating})
@@ -152,7 +152,6 @@ async def test_live_response_renders_single_unfinished_action_wrapper():
     assert response.type == "response"
     assert response.content == "wrapper works"
     assert response.id == "msg-1"
-    assert response.kvps["finished"] is False
 
 
 @pytest.mark.asyncio

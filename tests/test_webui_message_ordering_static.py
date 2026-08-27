@@ -19,12 +19,12 @@ def test_full_log_replays_replace_existing_message_dom():
     assert "normalized.sort(" in messages_js
 
 
-def test_unfinished_root_responses_defer_markdown_rendering():
+def test_root_responses_render_markdown_during_streaming():
     messages_js = read("webui", "js", "messages.js")
 
-    assert "const renderMarkdown = kvps?.finished !== false;" in messages_js
-    assert "markdown: renderMarkdown," in messages_js
-    assert "latex: renderMarkdown," in messages_js
+    assert "const renderMarkdown = kvps?.finished !== false;" not in messages_js
+    assert "markdown: true," in messages_js
+    assert "latex: true," in messages_js
 
 
 def test_message_ordering_uses_a_bounded_tail_first_renderer_cache():

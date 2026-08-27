@@ -1994,7 +1994,6 @@ export function drawMessageResponse({
   // no container or valid process group, create new container
   if (!container) container = getOrCreateMessageContainer(id, "left");
 
-  const renderMarkdown = kvps?.finished !== false;
   const messageDiv = _drawMessage({
     messageContainer: container,
     heading: undefined,
@@ -2002,8 +2001,8 @@ export function drawMessageResponse({
     kvps: undefined,
     messageClasses: [],
     contentClasses: [],
-    markdown: renderMarkdown,
-    latex: renderMarkdown,
+    markdown: true,
+    latex: true,
     mainClass: "message-agent-response",
     smoothStream: false, // smooth render disabled, not reliable yet !isMassRender(), // stream smoothly if not in mass render mode
   });

@@ -13,8 +13,6 @@
 - Keep streaming output synchronized with UI log items.
 - Treat parsed stream snapshots as partial data; nested tool fields may be `None`
   until their values arrive.
-- Live root responses carry `finished: false` until the response tool completes
-  them so the WebUI can defer expensive Markdown rendering while content grows.
 - Preserve include-alias replacement semantics where prompts/tools rely on them.
 - Do not expose unmasked secrets in live responses.
 
