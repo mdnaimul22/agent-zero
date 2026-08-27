@@ -41,6 +41,8 @@ function ensureConfig(config) {
   config.proxy_bypass = String(config.proxy_bypass || "").trim();
   config.proxy_username = String(config.proxy_username || "");
   config.proxy_password = String(config.proxy_password || "");
+  config.keyboard_layout = normalizeXkbToken(config.keyboard_layout);
+  config.keyboard_variant = normalizeXkbToken(config.keyboard_variant);
   config.host_browser_privacy_policy = normalizeChoice(
     config.host_browser_privacy_policy,
     HOST_PRIVACY_POLICIES,
@@ -66,6 +68,14 @@ function normalizeInt(value, fallback, minimum, maximum) {
   const number = Number.parseInt(value, 10);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(minimum, Math.min(maximum, number));
+}
+
+function normalizeXkbToken(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "")
+    .slice(0, 32);
 }
 
 function normalizeRuntimeBackend(value) {

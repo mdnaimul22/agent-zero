@@ -209,8 +209,56 @@ def test_browser_config_normalizes_extension_paths(tmp_path):
         "proxy_bypass": "",
         "proxy_username": "",
         "proxy_password": "",
+        "keyboard_layout": "",
+        "keyboard_variant": "",
         "model_preset": "",
     }
+
+
+def test_browser_config_normalizes_keyboard_layout():
+    config = normalize_browser_config(
+        {
+            "keyboard_layout": "  DE  ",
+            "keyboard_variant": "  Mac  ",
+        }
+    )
+
+    assert config["keyboard_layout"] == "de"
+    assert config["keyboard_variant"] == "mac"
+
+    cleared = normalize_browser_config(
+        {
+            "keyboard_layout": "",
+            "keyboard_variant": "mac",
+        }
+    )
+
+    assert cleared["keyboard_layout"] == ""
+    assert cleared["keyboard_variant"] == ""
+
+    unsafe = normalize_browser_config(
+        {
+            "keyboard_layout": "de; rm -rf /",
+            "keyboard_variant": "mac & echo pwned",
+        }
+    )
+
+    for token in (unsafe["keyboard_layout"], unsafe["keyboard_variant"]):
+        assert token == token.lower()
+        for forbidden in (" ", ";", "&", "|", "$", "`", "'", '"'):
+            assert forbidden not in token
+
+
+def test_browser_keyboard_layout_restarts_runtime():
+    from plugins._browser.helpers.config import browser_runtime_config
+
+    base = browser_runtime_config({"keyboard_layout": "de", "keyboard_variant": "mac"})
+
+    assert base["keyboard_layout"] == "de"
+    assert base["keyboard_variant"] == "mac"
+
+    changed = browser_runtime_config({"keyboard_layout": "us", "keyboard_variant": "mac"})
+    assert changed != base
 
 
 def test_browser_config_normalizes_model_preset():
@@ -1925,6 +1973,28 @@ def test_browser_visual_mode_bridges_clipboard_shortcuts():
     assert 'runtime.call(\n                    "clipboard"' in ws_browser
 
 
+def test_browser_visual_mode_only_forwards_text_producing_alt_keys():
+    browser_store = (
+        PROJECT_ROOT / "plugins" / "_browser" / "webui" / "browser-store.js"
+    ).read_text(encoding="utf-8")
+    start = browser_store.index("function isAltTextInput")
+    end = browser_store.index("\n}\n", start) + 3
+    helper = browser_store[start:end]
+    script = helper + """
+const check = (condition, message) => {
+  if (!condition) throw new Error(message);
+};
+check(isAltTextInput({ key: "@", altKey: true, ctrlKey: true }, "Windows"), "AltGr text was blocked");
+check(isAltTextInput({ key: "€", altKey: true, getModifierState: (name) => name === "AltGraph" }, "Linux"), "AltGraph text was blocked");
+check(isAltTextInput({ key: "@", altKey: true }, "MacIntel"), "Option text was blocked");
+check(!isAltTextInput({ key: "f", altKey: true }, "Windows"), "Windows Alt shortcut became text");
+check(!isAltTextInput({ key: "d", altKey: true }, "Linux"), "Linux Alt shortcut became text");
+check(!isAltTextInput({ key: "@", altKey: true, metaKey: true }, "MacIntel"), "Command shortcut became text");
+"""
+
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True, text=True)
+
+
 def test_browser_runtime_and_content_helper_expose_annotation_target():
     runtime = (
         PROJECT_ROOT / "plugins" / "_browser" / "helpers" / "runtime.py"
@@ -2464,6 +2534,67 @@ def test_browser_startup_migration_prepares_current_playwright_binary():
     assert "virtual_desktop_routes.install_route_hooks()" in extension
     assert "hooks.prepare_playwright_cache()" in extension
     assert "PrintStyle.warning" in extension
+
+
+
+
+def test_browser_interactive_view_keyboard_options(monkeypatch):
+    import plugins._browser.helpers.interactive_view as iv_module
+
+    view = BrowserInteractiveView("ctx-kb")
+
+    # no layout -> no xpra keyboard args
+    monkeypatch.setattr(
+        iv_module, "keyboard_options", lambda: {"layout": "", "variant": ""}
+    )
+    assert view._keyboard_xpra_args() == []
+
+    # layout + variant -> pinned server layout, sync disabled
+    monkeypatch.setattr(
+        iv_module,
+        "keyboard_options",
+        lambda: {"layout": "de", "variant": "mac"},
+    )
+    assert view._keyboard_xpra_args() == [
+        "--keyboard-sync=no",
+        "--keyboard-layout", "de",
+        "--keyboard-variant", "mac",
+    ]
+
+
+def test_browser_interactive_view_applies_keyboard_layout(monkeypatch):
+    commands = []
+
+    def fake_run(command, **kwargs):
+        commands.append(list(command))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(browser_interactive_view_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        browser_interactive_view_module.shutil,
+        "which",
+        lambda name: "/usr/bin/setxkbmap" if name == "setxkbmap" else None,
+    )
+    monkeypatch.setattr(
+        browser_interactive_view_module,
+        "keyboard_options",
+        lambda: {"layout": "de", "variant": "mac"},
+    )
+
+    view = BrowserInteractiveView("ctx-kb-apply")
+    view.display = 42
+    view._apply_keyboard_layout()
+
+    assert commands == [["/usr/bin/setxkbmap", "-display", ":42", "-layout", "de", "-variant", "mac"]]
+
+    # no configured layout -> no setxkbmap call
+    monkeypatch.setattr(
+        browser_interactive_view_module,
+        "keyboard_options",
+        lambda: {"layout": "", "variant": ""},
+    )
+    view._apply_keyboard_layout()
+    assert len(commands) == 1
 
 
 def test_browser_interactive_views_use_isolated_loopback_sessions(monkeypatch, tmp_path):
