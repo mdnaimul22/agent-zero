@@ -35,14 +35,7 @@ class TransportRecovery(Enum):
     FALLBACK_TO_CHAT = "fallback_to_chat"
 
 
-CHAT_COMPLETIONS_ALIASES = {
-    "chat",
-    "chat_completion",
-    "chat_completions",
-    "completion",
-    "completions",
-}
-RESPONSES_ALIASES = {"", "auto", "default", "response", "responses", "responses_api"}
+RESPONSES_ALIASES = {"response", "responses", "responses_api"}
 RESPONSES_REASONING_EFFORTS = {"minimal", "low", "medium", "high"}
 RESPONSES_REASONING_FALLBACK_EFFORT = "high"
 NO_REASONING_EFFORT_ALIASES = {"", "0", "false", "no", "none", "off", "disabled"}
@@ -146,12 +139,10 @@ class TransportPolicy:
 
     @staticmethod
     def _pop_mode(kwargs: dict[str, Any]) -> TransportMode:
-        value = str(kwargs.pop("a0_api_mode", "responses") or "").lower().strip()
-        if value in CHAT_COMPLETIONS_ALIASES:
-            return TransportMode.CHAT_COMPLETIONS
+        value = str(kwargs.pop("a0_api_mode", "") or "").lower().strip()
         if value in RESPONSES_ALIASES:
             return TransportMode.RESPONSES
-        return TransportMode.RESPONSES
+        return TransportMode.CHAT_COMPLETIONS
 
     @property
     def using_responses(self) -> bool:

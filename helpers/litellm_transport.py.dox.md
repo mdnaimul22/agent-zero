@@ -27,7 +27,7 @@
 - Do not send orphan tool controls when no tools are present; strict OpenAI-compatible servers can reject empty `tools` arrays.
 - When Agent Zero function tools are present, default Responses requests to one required native call; explicit request-level `tool_choice` and `parallel_tool_calls` values still win.
 - Normalize function tool parameter schemas with an explicit object `properties` field before Responses requests so OpenAI-compatible chat backends reached through LiteLLM can validate them.
-- Prefer Responses API when configured, but fallback to Chat Completions when the provider does not support Responses.
+- Default to Chat Completions; use Responses only when `a0_api_mode` explicitly selects it, with fallback to Chat Completions when unsupported.
 - Fall back to Chat Completions when a Responses request is rejected before any output by an endpoint-specific or shape-specific Bad Request indicating the provider cannot parse Responses payloads.
 - Treat opaque type-discrimination errors such as `cannot determine type` from OpenAI-compatible Responses endpoints as shape-specific rejections.
 - Fall back to Chat Completions when a Responses endpoint fails before output with an endpoint-specific server error, proxy path-unavailable error, or LiteLLM proxy-extra import error.

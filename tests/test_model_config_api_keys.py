@@ -531,39 +531,19 @@ def test_provider_api_mode_defaults_use_intended_transport():
         ).read_text(encoding="utf-8")
     )
 
-    chat_providers = (
-        "anthropic",
-        "cometapi",
-        "deepseek",
-        "google",
-        "groq",
-        "huggingface",
-        "mistral",
-        "moonshot",
-        "nebius",
-        "nvidia_nim",
-        "bedrock",
-        "openrouter",
-        "sambanova",
-        "xai",
-        "zai",
-        "zai_coding",
-    )
-    responses_providers = ("azure", "github_copilot", "openai")
+    for provider in provider_config["chat"].values():
+        assert provider.get("kwargs", {}).get("a0_api_mode", "chat") == "chat"
 
-    for provider in chat_providers:
-        assert provider_config["chat"][provider]["kwargs"]["a0_api_mode"] == "chat"
+    responses_providers = {
+        provider
+        for provider, config in oauth_provider_config["chat"].items()
+        if config.get("kwargs", {}).get("a0_api_mode") == "responses"
+    }
+    assert responses_providers == {"codex_oauth", "xai_grok_oauth"}
 
-    for provider in responses_providers:
-        assert "a0_api_mode" not in provider_config["chat"][provider].get("kwargs", {})
-
-    assert (
-        oauth_provider_config["chat"]["gemini_api_oauth"]["kwargs"]["a0_api_mode"]
-        == "chat"
-    )
-
-    for provider in ("codex_oauth", "github_copilot_oauth", "xai_grok_oauth"):
-        assert "a0_api_mode" not in oauth_provider_config["chat"][provider]["kwargs"]
+    for provider, config in oauth_provider_config["chat"].items():
+        if provider not in responses_providers:
+            assert config.get("kwargs", {}).get("a0_api_mode", "chat") == "chat"
 
 
 def test_missing_api_key_banner_does_not_include_auto_modal_metadata(monkeypatch):

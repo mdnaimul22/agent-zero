@@ -386,6 +386,7 @@ async def test_unified_call_closes_responses_stream_when_callback_raises(monkeyp
         model="test-model",
         provider="openai",
         model_config=None,
+        a0_api_mode="responses",
     )
 
     async def response_callback(chunk: str, full: str):
@@ -401,7 +402,7 @@ async def test_unified_call_closes_responses_stream_when_callback_raises(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_chat_completions_escape_hatch_still_uses_acompletion(monkeypatch):
+async def test_chat_completions_default_uses_acompletion(monkeypatch):
     stream = _AsyncChunkStream([_chunk("hello")])
     calls: list[str] = []
 
@@ -425,7 +426,6 @@ async def test_chat_completions_escape_hatch_still_uses_acompletion(monkeypatch)
         model="test-model",
         provider="openai",
         model_config=None,
-        a0_api_mode="chat_completions",
     )
 
     async def response_callback(chunk: str, full: str):
@@ -508,6 +508,7 @@ async def test_unified_call_retries_responses_with_high_reasoning(monkeypatch):
         model="gpt-5.4",
         provider="openai",
         model_config=None,
+        a0_api_mode="responses",
     )
 
     async def response_callback(chunk: str, full: str):
@@ -558,6 +559,7 @@ async def test_unified_call_falls_back_to_chat_when_responses_endpoint_missing(
         model="claude-opus-4.7",
         provider="openai",
         model_config=None,
+        a0_api_mode="responses",
         tool_choice="auto",
         parallel_tool_calls=True,
     )
@@ -616,6 +618,7 @@ async def test_unified_call_falls_back_when_litellm_hides_responses_404_url(
         model="claude-opus-4.7",
         provider="openai",
         model_config=None,
+        a0_api_mode="responses",
     )
 
     async def response_callback(chunk: str, full: str):
@@ -672,6 +675,7 @@ async def test_unified_call_falls_back_for_proxy_responses_failures(
         model="test-model",
         provider="openai",
         model_config=None,
+        a0_api_mode="responses",
     )
 
     async def response_callback(chunk: str, full: str):
@@ -720,6 +724,7 @@ async def test_unified_call_falls_back_when_responses_mock_reads_sse_as_json(
         model="omniroute/test-model",
         provider="openai",
         model_config=None,
+        a0_api_mode="responses",
     )
 
     async def response_callback(chunk: str, full: str):
@@ -769,6 +774,7 @@ async def test_unified_call_falls_back_when_responses_bad_request_rejects_shape(
         model="venice-model",
         provider="openai",
         model_config=None,
+        a0_api_mode="responses",
     )
 
     async def response_callback(chunk: str, full: str):
@@ -822,6 +828,7 @@ async def test_unified_call_raises_generic_responses_bad_request(monkeypatch):
         model="test-model",
         provider="openai",
         model_config=None,
+        a0_api_mode="responses",
     )
 
     async def response_callback(chunk: str, full: str):
@@ -873,6 +880,7 @@ async def test_unified_call_preserves_cache_control_with_chat_for_non_native_res
         model="claude-sonnet-4-5",
         provider="anthropic",
         model_config=None,
+        a0_api_mode="responses",
     )
 
     async def response_callback(chunk: str, full: str):
@@ -1157,6 +1165,7 @@ def test_complete_falls_back_to_chat_when_responses_shim_sends_empty_tools(
         model="hosted_vllm/qwen",
         messages=[{"role": "user", "content": "hi"}],
         kwargs={
+            "a0_api_mode": "responses",
             "tools": [],
             "tool_choice": "auto",
             "parallel_tool_calls": True,
@@ -1358,12 +1367,12 @@ def test_cache_control_policy_keeps_native_responses_first():
 
     openai_policy = litellm_transport.TransportPolicy.from_request(
         "openai/gpt-5.4",
-        {},
+        {"a0_api_mode": "responses"},
         messages=messages,
     )
     anthropic_policy = litellm_transport.TransportPolicy.from_request(
         "anthropic/claude-sonnet-4-5",
-        {},
+        {"a0_api_mode": "responses"},
         messages=messages,
     )
 

@@ -236,6 +236,7 @@ async def test_transport_retries_provider_state_as_local_replay(monkeypatch):
         model="openai/gpt-5.4",
         messages=[{"role": "user", "content": "new"}],
         kwargs={
+            "a0_api_mode": "responses",
             "previous_response_id": "resp_1",
             "responses_input_items": [{"role": "user", "content": "new"}],
             "responses_local_input_items": [{"role": "user", "content": "full"}],
@@ -276,7 +277,10 @@ async def test_transport_downgrades_unsupported_builtin_tools(monkeypatch):
     transport = litellm_transport.LiteLLMTransport(
         model="openai/gpt-5.4",
         messages=[{"role": "user", "content": "new"}],
-        kwargs={"responses_builtin_tools": [{"type": "web_search"}]},
+        kwargs={
+            "a0_api_mode": "responses",
+            "responses_builtin_tools": [{"type": "web_search"}],
+        },
     )
 
     parsed = await transport.acomplete()
@@ -291,7 +295,10 @@ async def test_transport_downgrades_unsupported_builtin_tools(monkeypatch):
     next_transport = litellm_transport.LiteLLMTransport(
         model="openai/gpt-5.4",
         messages=[{"role": "user", "content": "again"}],
-        kwargs={"responses_builtin_tools": [{"type": "web_search"}]},
+        kwargs={
+            "a0_api_mode": "responses",
+            "responses_builtin_tools": [{"type": "web_search"}],
+        },
     )
     request = next_transport._responses_request(stream=False)
     assert "tools" not in request
@@ -344,6 +351,7 @@ async def test_unified_turn_keeps_streamed_call_when_completion_omits_output(
         model="test-model",
         provider="openai",
         model_config=None,
+        a0_api_mode="responses",
     )
 
     async def response_callback(chunk: str, full: str):
@@ -430,6 +438,7 @@ async def test_unified_turn_waits_for_completed_native_responses_calls(monkeypat
         model="test-model",
         provider="openai",
         model_config=None,
+        a0_api_mode="responses",
     )
 
     async def response_callback(chunk: str, full: str):
