@@ -1166,6 +1166,7 @@ class ResponsesEventParser:
         self.function_calls: dict[str, dict[str, Any]] = {}
         self.output_index_keys: dict[str, str] = {}
         self.emitted_function_calls: set[str] = set()
+        self.streamed_response_calls: dict[str, str] = {}
         self.seen_response_delta = False
         self.seen_reasoning_delta = False
         self.completed_response: Any = None
@@ -1189,7 +1190,7 @@ class ResponsesEventParser:
         elif event_type == "response.output_item.added":
             self._remember_function_call(_get_value(event, "item"), event)
         elif event_type == "response.function_call_arguments.delta":
-            self._append_function_call_arguments(event)
+            response_delta = self._append_function_call_arguments(event)
         elif event_type == "response.function_call_arguments.done":
             response_delta = self._complete_function_call(event)
         elif event_type == "response.output_item.done":
@@ -1224,14 +1225,22 @@ class ResponsesEventParser:
             self.output_index_keys[str(output_index)] = key
         return key
 
-    def _append_function_call_arguments(self, event: Any) -> None:
+    def _append_function_call_arguments(self, event: Any) -> str:
         key = self._event_key(event)
         if not key:
-            return
+            return ""
         current = self.function_calls.setdefault(key, {"type": "function_call"})
-        current["arguments"] = str(current.get("arguments") or "") + str(
-            _get_value(event, "delta") or ""
-        )
+        delta = str(_get_value(event, "delta") or "")
+        current["arguments"] = str(current.get("arguments") or "") + delta
+        if current.get("name") != "response":
+            return ""
+        if key not in self.streamed_response_calls:
+            self.streamed_response_calls[key] = str(current["arguments"])
+            return '{"tool_name":"response","tool_args":' + str(
+                current["arguments"]
+            )
+        self.streamed_response_calls[key] += delta
+        return delta
 
     def _complete_function_call(self, event: Any) -> str:
         key = self._event_key(event)
@@ -1242,13 +1251,24 @@ class ResponsesEventParser:
             current["arguments"] = _get_value(event, "arguments")
         if _get_value(event, "name"):
             current["name"] = _get_value(event, "name")
+        if key in self.streamed_response_calls:
+            return self._finish_response_call(key, current)
         return self._emit_function_call(key, current)
 
     def _complete_output_item(self, item: Any, event: Any) -> str:
         key = self._remember_function_call(item, event)
         if not key:
             return ""
+        if key in self.streamed_response_calls:
+            return self._finish_response_call(key, self.function_calls[key])
         return self._emit_function_call(key, self.function_calls[key])
+
+    def _finish_response_call(self, key: str, item: Any) -> str:
+        streamed = self.streamed_response_calls.pop(key)
+        arguments = str(_get_value(item, "arguments") or "")
+        self.emitted_function_calls.add(key)
+        tail = arguments[len(streamed) :] if arguments.startswith(streamed) else ""
+        return tail + "}"
 
     def _complete_response(self, event: Any) -> tuple[str, str]:
         self.completed_response = _get_value(event, "response")

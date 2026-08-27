@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import models
 from helpers import extract_tools
 from helpers import litellm_transport
+from helpers.dirty_json import DirtyJson
 
 
 @pytest.fixture(autouse=True)
@@ -1699,6 +1700,69 @@ def test_responses_stream_parser_accumulates_function_call_arguments():
                 "call_id": "call_1",
                 "name": "lookup",
                 "arguments": '{"q":"a0"}',
+            },
+        }
+    ) == {"reasoning_delta": "", "response_delta": ""}
+
+
+def test_responses_stream_parser_streams_response_function_arguments():
+    parser = litellm_transport.ResponsesEventParser()
+
+    parser.parse(
+        {
+            "type": "response.output_item.added",
+            "output_index": 0,
+            "item": {
+                "type": "function_call",
+                "id": "fc_1",
+                "name": "response",
+                "arguments": "",
+            },
+        }
+    )
+    chunks = [
+        parser.parse(
+            {
+                "type": "response.function_call_arguments.delta",
+                "item_id": "fc_1",
+                "delta": '{"text":"Hello',
+            }
+        )["response_delta"],
+        parser.parse(
+            {
+                "type": "response.function_call_arguments.delta",
+                "item_id": "fc_1",
+                "delta": ' world"}',
+            }
+        )["response_delta"],
+        parser.parse(
+            {
+                "type": "response.function_call_arguments.done",
+                "item_id": "fc_1",
+                "name": "response",
+                "arguments": '{"text":"Hello world"}',
+            }
+        )["response_delta"],
+    ]
+
+    assert chunks[0] == '{"tool_name":"response","tool_args":{"text":"Hello'
+    assert DirtyJson.parse_string(chunks[0]) == {
+        "tool_name": "response",
+        "tool_args": {"text": "Hello"},
+    }
+    assert extract_tools.json_parse_dirty("".join(chunks)) == {
+        "tool_name": "response",
+        "tool_args": {"text": "Hello world"},
+    }
+    assert chunks[-1] == "}"
+    assert parser.parse(
+        {
+            "type": "response.output_item.done",
+            "item": {
+                "type": "function_call",
+                "id": "fc_1",
+                "name": "response",
+                "arguments": '{"text":"Hello world"}',
             },
         }
     ) == {"reasoning_delta": "", "response_delta": ""}
