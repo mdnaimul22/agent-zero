@@ -731,6 +731,52 @@ def test_local_provider_runtime_defaults_and_overrides(monkeypatch):
     assert custom_vllm_chat.kwargs["api_key"] == "real-local-key"
 
 
+def test_openai_compatible_embedding_keeps_gateway_model_string(monkeypatch):
+    """Gateway model ids must reach LiteLLM with an explicit `openai/` provider.
+
+    An OpenAI-compatible gateway owns its own model namespace, so ids such as
+    `nvidia/...` or `auto/embedding` are model names, not provider prefixes.
+    Without the prefix LiteLLM re-parses the first segment as a provider and
+    either raises "LLM Provider NOT provided" or routes to the wrong provider,
+    mangling the model id before the gateway ever sees it.
+    """
+    monkeypatch.setattr(models, "get_api_key", lambda provider: "None")
+
+    gateway = "https://gateway.example/v1"
+    for model in (
+        "nvidia/llama-nemotron-embed-vl-1b-v2:free",
+        "openrouter/openai/text-embedding-3-small",
+        "auto/embedding",
+    ):
+        embedding = models.get_embedding_model(
+            "other", model, api_base=gateway, api_key="gateway-key"
+        )
+        assert embedding.model_name == f"openai/{model}"
+        assert embedding.kwargs["api_base"] == gateway
+
+    # The bundled OpenRouter embedding provider is affected the same way: it
+    # resolves to litellm_provider `openai` against OpenRouter's api_base, so an
+    # OpenRouter-style id has to survive intact. Previously `openai/<model>` was
+    # handed to LiteLLM bare, which consumed the `openai/` segment and forwarded
+    # only `<model>` to OpenRouter.
+    for model in (
+        "openai/text-embedding-3-small",
+        "nvidia/llama-nemotron-embed-vl-1b-v2:free",
+    ):
+        openrouter_embedding = models.get_embedding_model("openrouter", model)
+        assert openrouter_embedding.model_name == f"openai/{model}"
+        assert openrouter_embedding.kwargs["api_base"] == "https://openrouter.ai/api/v1"
+
+    # Plain OpenAI behaviour is unchanged: LiteLLM strips the `openai/` prefix
+    # and forwards the bare model id, exactly as it did without a prefix.
+    openai_embedding = models.get_embedding_model("openai", "text-embedding-3-small")
+    assert openai_embedding.model_name == "openai/text-embedding-3-small"
+
+    # Providers that do not resolve to `openai` keep their existing prefix.
+    ollama_embedding = models.get_embedding_model("ollama", "nomic-embed-text")
+    assert ollama_embedding.model_name == "ollama/nomic-embed-text"
+
+
 def test_embedding_config_repairs_sentence_transformer_aliases(monkeypatch):
     from plugins._model_config.helpers import model_config
 
