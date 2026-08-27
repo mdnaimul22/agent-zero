@@ -126,8 +126,12 @@ def update_log_item(
 
         current_kvps = getattr(log_item, "kvps", None)
         kvps = (
-            {"reasoning": current_kvps["reasoning"]}
-            if isinstance(current_kvps, dict) and "reasoning" in current_kvps
+            {
+                key: current_kvps[key]
+                for key in ("reasoning", "thoughts")
+                if key in current_kvps
+            }
+            if isinstance(current_kvps, dict)
             else {}
         )
         kvps.update(parsed)
