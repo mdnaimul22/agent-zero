@@ -41,6 +41,8 @@
   restores the accepted response after the accounting tail is drained.
 - Responses API turns keep their native result and callback behavior unchanged.
 - Older chats without a stored breakdown show the explanatory empty state.
+- The indicator refreshes once per new Agent 0 generation and again when the
+  run completes; streamed updates to the same generation do not refetch it.
 - `_model_config` supplies the effective model limit and the
   `model-context-strip-end` WebUI slot; it does not own this feature's state.
 - The `contextWindowUsage` Interface setting defaults to visible on mobile and

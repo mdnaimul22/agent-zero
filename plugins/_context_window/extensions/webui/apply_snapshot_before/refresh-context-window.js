@@ -3,6 +3,17 @@ import { store as contextWindowStore } from "/plugins/_context_window/webui/cont
 const OVERRIDE_REVISION_KEY = "_model_config_override_revision";
 let lastContextId = "";
 let lastRevision = null;
+let lastGenerationKey = "";
+
+function latestGenerationKey(logs) {
+  if (!Array.isArray(logs)) return "";
+  for (let index = logs.length - 1; index >= 0; index--) {
+    const item = logs[index];
+    if (item?.type !== "agent" || Number(item.agentno || 0) !== 0) continue;
+    return `${item.no ?? ""}:${item.id ?? ""}`;
+  }
+  return "";
+}
 
 export default async function refreshContextWindow(ctx) {
   const snapshot = ctx?.snapshot;
@@ -10,15 +21,22 @@ export default async function refreshContextWindow(ctx) {
   if (!contextId) {
     lastContextId = "";
     lastRevision = null;
+    lastGenerationKey = "";
     return;
   }
 
   const contexts = Array.isArray(snapshot?.contexts) ? snapshot.contexts : [];
   const active = contexts.find(item => item?.id === contextId) || null;
   const revision = active?.[OVERRIDE_REVISION_KEY] || null;
-  if (contextId === lastContextId && revision === lastRevision) return;
+  const generationKey = latestGenerationKey(snapshot?.logs);
+  if (
+    contextId === lastContextId
+    && revision === lastRevision
+    && (!generationKey || generationKey === lastGenerationKey)
+  ) return;
 
   lastContextId = contextId;
   lastRevision = revision;
+  if (generationKey) lastGenerationKey = generationKey;
   await contextWindowStore.refresh(contextId);
 }

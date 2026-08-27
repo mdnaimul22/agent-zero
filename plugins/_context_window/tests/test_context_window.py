@@ -145,6 +145,10 @@ def test_webui_and_accounting_are_plugin_owned():
     helper = (ROOT / "plugins/_context_window/helpers/usage.py").read_text(
         encoding="utf-8"
     )
+    refresh_hook = (
+        ROOT
+        / "plugins/_context_window/extensions/webui/apply_snapshot_before/refresh-context-window.js"
+    ).read_text(encoding="utf-8")
 
     assert 'id="model-context-strip-end"' in model_switcher
     assert "contextWindowUsage" not in model_switcher
@@ -186,6 +190,9 @@ def test_webui_and_accounting_are_plugin_owned():
     assert "Breakdown available after the next message." in component
     assert "startswith(" not in helper
     assert "rpartition(" not in helper
+    assert 'item?.type !== "agent"' in refresh_hook
+    assert "Number(item.agentno || 0) !== 0" in refresh_hook
+    assert "generationKey === lastGenerationKey" in refresh_hook
 
 
 def test_source_prompt_extensions_are_registered():
