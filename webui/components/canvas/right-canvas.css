@@ -1,4 +1,4 @@
-.container>*,
+.container > *,
 #right-panel {
   min-width: 0;
 }
@@ -7,8 +7,8 @@
   position: relative;
 }
 
-.container>x-component[path="canvas/right-canvas.html"],
-.container>x-component[path="canvas/right-canvas.html"]>div[x-data] {
+.container > x-component[path="canvas/right-canvas.html"],
+.container > x-component[path="canvas/right-canvas.html"] > div[x-data] {
   display: flex;
   flex: 0 0 auto;
   height: 100%;
@@ -237,11 +237,11 @@ body.right-canvas-resizing {
   background: var(--right-canvas-surface);
 }
 
-.right-canvas-panels>x-extension {
+.right-canvas-panels > x-extension {
   display: contents;
 }
 
-.right-canvas-panels>x-extension>x-component {
+.right-canvas-panels > x-extension > x-component {
   display: contents;
 }
 
@@ -266,8 +266,8 @@ body.right-canvas-resizing {
   z-index: 2;
 }
 
-.right-canvas-surface-panel>x-component,
-.right-canvas-surface-panel>x-component>div[x-data] {
+.right-canvas-surface-panel > x-component,
+.right-canvas-surface-panel > x-component > div[x-data] {
   display: flex;
   flex: 1 1 auto;
   width: 100%;
