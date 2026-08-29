@@ -56,24 +56,24 @@
     <style>
     #progress-bar-box { background-color: var(--color-panel); padding: var(--spacing-xs) var(--spacing-md) 0 var(--spacing-md); display: flex; flex-wrap: nowrap; justify-content: flex-start; align-items: center; z-index: 1000; gap: var(--spacing-sm); min-height: 0; position: relative; transition: all 0.2s ease; }
     #progress-bar-box.is-collapsed {
-      padding: 0 var(--spacing-md) 0 var(--spacing-md) !important;
-      height: 0 !important;
-      min-height: 0 !important;
-      overflow: visible !important;
-      background: transparent !important;
-      z-index: 10010 !important;
+      padding: 0 var(--spacing-md) 0 var(--spacing-md);
+      height: 0;
+      min-height: 0;
+      overflow: visible;
+      background: transparent;
+      z-index: 10010;
     }
     #progress-bar-box.is-collapsed > *:not(#progress-bar-right),
     #progress-bar-box.is-collapsed x-extension,
     #progress-bar-box.is-collapsed x-extension > * {
-      display: none !important;
+      display: none;
     }
     #progress-bar-box.is-collapsed #progress-bar-right {
       position: absolute;
       right: var(--spacing-md);
       top: 0px;
       transform: translateY(-50%);
-      z-index: 10015 !important;
+      z-index: 10015;
     }
     #progress-bar-box.is-collapsed .composer-collapse-btn {
       background-color: var(--color-panel);
@@ -85,7 +85,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      z-index: 10020 !important;
+      z-index: 10020;
     }
     #progress-bar-box > x-extension { display: contents; }
     #progress-bar-box h4 { margin: 0; }
@@ -112,7 +112,7 @@
       visibility: hidden;
       transition: opacity 0.15s ease, transform 0.15s ease;
       transform: translateY(4px);
-      z-index: 100000 !important;
+      z-index: 100000;
     }
     .composer-collapse-btn:hover::after {
       opacity: 1;
