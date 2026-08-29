@@ -123,3 +123,77 @@ examples:
   }
 }
 ~~~
+
+#### Some intersting tool that help much
+
+**view_file** - Use this tool to view the entire content of a file.
+Just provide the absolute path to the file you want to see.
+~~~json
+{
+    "Headline": "Reviewing test.py file for details analysis",
+    "headline": "Reading test.py",
+    "tool_name": "view_file",
+    "tool_args": {
+        "absolute_path": "/usr/test.py"
+    }
+}
+~~~
+
+**grep_search** - Search for patterns in code
+~~~json
+{
+    "Headline": "Using grep search tool",
+    "tool_name": "grep_search",
+    "tool_args": {
+        "search_path": "/a0/usr/project_dir",
+        "query": "search pattern",
+        "case_insensitive": false,
+        "match_per_line": true,
+        "includes": ["*.py", "*.js"]
+    }
+}
+~~~
+
+**find_by_name** - Find files by name or pattern
+~~~json
+{
+    "Headline": "Using tool ...",
+    "tool_name": "find_by_name",
+    "tool_args": {
+        "search_directory": "/a0/usr/project_dir",
+        "pattern": "*.py",
+        "type": "file",
+        "max_depth": 5,
+        "extensions": ["py", "js"],
+        "excludes": ["node_modules"]
+    }
+}
+~~~
+
+**list_dir** - List directory contents with details
+~~~json
+{
+    "Headline": "Analyzing list of directory structure ...",
+    "tool_name": "list_dir",
+    "tool_args": {
+        "directory_path": "/a0/usr/example_dir"
+    }
+}
+~~~
+Generating Dependency & Directory Structure
+
+Use **generate_structure** to understand project layout before writing instructions:
+
+~~~json
+{
+    "thoughts": [
+        "Generating structure for project simple-dantd"
+    ],
+    "tool_name": "generate_structure",
+    "tool_args": {
+        "tree_structure_input_path": "/a0/usr/projects/simple-dantd/",
+        "tree_structure_out_path": "/a0/usr/projects/simple-dantd/",
+        "ignored_path": "node_modules, dist, build, tests, __tests__, coverage, .git, .vscode, public/images"
+    }
+}
+~~~
