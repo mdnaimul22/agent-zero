@@ -7,3 +7,7 @@ helpers/settings.py merge=ours
 helpers/searxng.py merge=ours
 helpers/file_browser.py merge=ours
 api/get_work_dir_files.py merge=ours
+
+# Protect custom theme_plugin from upstream git merge / overwrite / delete
+plugins/theme_plugin/** merge=ours
+plugins/_code_execution/** merge=ours

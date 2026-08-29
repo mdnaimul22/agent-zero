@@ -342,10 +342,10 @@ body.right-canvas-mobile-mode .right-canvas.is-open {
 
 body.right-canvas-mobile-mode .right-canvas-rail {
   position: fixed;
-  top: 50%;
+  top: 115px !important;
   right: max(0px, env(safe-area-inset-right));
   display: flex !important;
-  transform: translateY(-50%);
+  transform: none !important;
   pointer-events: auto;
 }
 
@@ -358,8 +358,9 @@ body.right-canvas-mobile-mode .right-canvas-resize-handle {
   body.right-canvas-mobile-mode .right-canvas-rail {
     gap: 5px;
     padding: 8px 6px;
-    transform: translateY(-50%) scale(0.92);
-    transform-origin: right center;
+    top: 100px !important;
+    transform: scale(0.92) !important;
+    transform-origin: right top;
     box-shadow: -8px 0 24px rgba(0, 0, 0, 0.22);
   }
 
