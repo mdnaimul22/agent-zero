@@ -342,7 +342,7 @@ body.right-canvas-mobile-mode .right-canvas.is-open {
 
 body.right-canvas-mobile-mode .right-canvas-rail {
   position: fixed;
-  top: 115px;
+  top: calc(env(safe-area-inset-top, 0px) + 64px);
   right: max(0px, env(safe-area-inset-right));
   display: flex;
   transform: none;
@@ -358,7 +358,7 @@ body.right-canvas-mobile-mode .right-canvas-resize-handle {
   body.right-canvas-mobile-mode .right-canvas-rail {
     gap: 5px;
     padding: 8px 6px;
-    top: 100px;
+    top: calc(env(safe-area-inset-top, 0px) + 56px);
     transform: scale(0.92);
     transform-origin: right top;
     box-shadow: -8px 0 24px rgba(0, 0, 0, 0.22);
