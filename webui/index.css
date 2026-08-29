@@ -416,7 +416,7 @@ div#right-panel::-webkit-scrollbar-thumb:hover {
 }
 
 #time-date-container {
-  z-index: 2500;
+  z-index: 1000;
   position: absolute;
   top: 0;
   right: var(--spacing-md);
