@@ -241,7 +241,23 @@
           </div>
         </div>
 
-        <!-- 5. Silence Threshold -->
+        <!-- 5. Noise Reduction -->
+        <div class="field">
+          <div class="field-label">
+            <div class="field-title">Noise Reduction</div>
+            <div class="field-description">
+              Apply spectral noise reduction to filter background hum, fan noise, and static before transcription.
+            </div>
+          </div>
+          <div class="field-control">
+            <select x-model="config.noise_reduction">
+              <option :value="false">Disabled</option>
+              <option :value="true">Enabled</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 6. Silence Threshold -->
         <div class="field">
           <div class="field-label">
             <div class="field-title">Silence Threshold</div>

@@ -60,6 +60,7 @@ const model = {
     silence_threshold: 0.3,
     silence_duration: 1000,
     waiting_timeout: 2000,
+    noise_reduction: false,
   },
   modelReady: false,
   modelLoading: false,

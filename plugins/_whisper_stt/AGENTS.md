@@ -7,7 +7,7 @@
 ## Ownership
 
 - `api/` owns cancel_download, delete_model, download_stream, preload, transcribe, and status endpoints.
-- `helpers/` owns runtime, streaming model download, model preload dispatch, model deletion, and migration behavior.
+- `helpers/` owns runtime, streaming model download, model preload dispatch, model deletion, spectral noise reduction, and migration behavior.
 - `hooks.py` owns provider registration/lifecycle behavior.
 - `webui/` owns settings, main speech UI, store, and styling.
 - `default_config.yaml`, `plugin.yaml`, and `README.md` own defaults, metadata, and behavior notes.

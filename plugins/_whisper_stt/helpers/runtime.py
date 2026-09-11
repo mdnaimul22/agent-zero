@@ -38,6 +38,7 @@ DEFAULT_CONFIG = {
     "silence_threshold": 0.3,
     "silence_duration": 1000,
     "waiting_timeout": 2000,
+    "noise_reduction": False,
 }
 STANDARD_MODEL_SIZES = {"tiny", "base", "small", "medium", "large", "turbo"}
 VALID_MESSAGE_MODES = {"send", "draft"}
@@ -658,6 +659,8 @@ def normalize_config(config: dict[str, Any] | None) -> dict[str, Any]:
     except (TypeError, ValueError):
         pass
 
+    normalized["noise_reduction"] = bool(config.get("noise_reduction", normalized["noise_reduction"]))
+
     return normalized
 
 
@@ -744,7 +747,17 @@ async def transcribe(
         model_name,
         audio_bytes_b64,
         language=_resolve_language(str(cfg["language"])),
+        noise_reduction=bool(cfg.get("noise_reduction", False)),
     )
+
+
+def _apply_noise_reduction(audio: np.ndarray, sample_rate: int = 16000) -> np.ndarray:
+    try:
+        import noisereduce as nr
+        return nr.reduce_noise(y=audio, sr=sample_rate, stationary=True, prop_decrease=0.75)
+    except Exception as e:
+        PrintStyle.error(f"Noise reduction failed: {e}")
+        return audio
 
 
 _hf_supports_language: dict[str, bool] = {}
@@ -764,7 +777,11 @@ def _decode_audio(audio_bytes: bytes, temp_path: str) -> np.ndarray:
 
 
 async def _transcribe(
-    model_name: str, audio_bytes_b64: str, *, language: str | None = None
+    model_name: str,
+    audio_bytes_b64: str,
+    *,
+    language: str | None = None,
+    noise_reduction: bool = False,
 ) -> dict[str, Any]:
     if not _model or _model_name != model_name:
         await _preload(model_name)
@@ -775,11 +792,29 @@ async def _transcribe(
         audio_file.write(audio_bytes)
         temp_path = audio_file.name
 
+    clean_audio = None
+    if noise_reduction:
+        try:
+            raw_audio = await asyncio.to_thread(_decode_audio, audio_bytes, temp_path)
+            clean_audio = await asyncio.to_thread(_apply_noise_reduction, raw_audio, 16000)
+            int_data = np.clip(clean_audio * 32767.0, -32768, 32767).astype(np.int16)
+            with wave.open(temp_path, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(16000)
+                wf.writeframes(int_data.tobytes())
+        except Exception as e:
+            PrintStyle.error(f"Noise reduction processing error: {e}")
+            clean_audio = None
+
     try:
         import torch
 
         if _model_type == "hf":
-            audio_input = await asyncio.to_thread(_decode_audio, audio_bytes, temp_path)
+            if clean_audio is not None:
+                audio_input = clean_audio
+            else:
+                audio_input = await asyncio.to_thread(_decode_audio, audio_bytes, temp_path)
 
             def _run_hf():
                 with torch.inference_mode():
