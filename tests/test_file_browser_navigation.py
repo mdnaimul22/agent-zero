@@ -255,6 +255,10 @@ def test_file_browser_dropdown_escapes_scroll_container_and_header_is_opaque() -
     store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
 
     assert '@scroll="$store.fileBrowser.closeDropdown(); $store.fileBrowser.closeNewItemsMenu()"' in html
+    # A picker opened over a live canvas surface must restore the prior listing
+    # on close instead of destroying the shared store state.
+    assert 'const surfaceActive = Boolean(document.querySelector(".file-browser-root.is-surface"));' in store
+    assert 'await this.openSurface(retainedPath);' in store
     assert 'overflow: auto;' in html
     assert 'x-teleport="body"' in html
     assert 'class="dropdown-menu file-actions-menu"' in html

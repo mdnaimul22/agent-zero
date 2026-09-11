@@ -389,6 +389,9 @@ const model = {
   // --- Public API (called from button/link) --------------------------------
   async open(path = "", options = {}) {
     if (this.isLoading) return; // Prevent double-open
+    // A picker may open over a live canvas surface; its listing must survive the modal close.
+    const surfaceActive = Boolean(document.querySelector(".file-browser-root.is-surface"));
+    const retainedPath = surfaceActive ? this.browser.currentPath : "";
     this.resetOpenState(options);
 
     try {
@@ -398,7 +401,13 @@ const model = {
 
       // await modal close
       await this.closePromise;
-      if (!this.isSurfaceHandoff) this.destroy();
+      if (!this.isSurfaceHandoff) {
+        if (surfaceActive) {
+          await this.openSurface(retainedPath);
+        } else {
+          this.destroy();
+        }
+      }
 
     } catch (error) {
       console.error("File browser error:", error);

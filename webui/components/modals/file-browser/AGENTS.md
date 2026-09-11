@@ -15,6 +15,7 @@
 ## Local Contracts
 
 - Keep `open(path)` as the modal entry point for workflows that await browser close.
+- A picker opened while a canvas surface is mounted must restore the surface listing on close (`openSurface(retainedPath)`), never destroy the shared store state — destroy only runs when no surface is active.
 - Keep `openSurface(path)` as the right-canvas entry point; it must load files without opening or awaiting a modal.
 - The floating file-browser modal must use the shared surface modal chrome so it remains draggable/resizable and exposes Focus mode.
 - Preserve remembered-directory behavior: explicit paths win, then remembered path, then `$WORK_DIR`.
