@@ -10,6 +10,7 @@ PLUGIN_NAME = "_whisper_stt"
 LEGACY_SETTINGS_FILE = files.get_abs_path("usr/settings.json")
 DEFAULT_CONFIG = {
     "model_size": "base",
+    "custom_model": "",
     "language": "en",
     "message_mode": "send",
     "silence_threshold": 0.3,

@@ -1,54 +1,236 @@
 <html>
 <head>
   <title>Whisper STT</title>
+  <script type="module" src="/plugins/_whisper_stt/webui/config-store.js"></script>
 </head>
 
 <body>
-  <div x-data>
+  <div x-data="createWhisperConfigModel(context, config)">
     <template x-if="config">
-      <div class="plugin-config-page">
+      <div class="plugin-config-page" x-init="init()">
         <div class="section-title">Whisper STT</div>
         <div class="section-description">
           Configure the built-in Whisper speech-to-text provider. Browser microphone
           device selection stays local to the Web UI and is managed from the plugin status panel.
         </div>
 
+        <!-- 1. Model Size Dropdown -->
         <div class="field">
           <div class="field-label">
             <div class="field-title">Model Size</div>
             <div class="field-description">
-              Whisper model variant loaded by the backend runtime.
+              Whisper model variant loaded by the backend runtime. Hover or click to select or manage models.
             </div>
           </div>
           <div class="field-control">
-            <select x-model="config.model_size">
-              <option value="tiny">Tiny</option>
-              <option value="base">Base</option>
-              <option value="small">Small</option>
-              <option value="medium">Medium</option>
-              <option value="large">Large</option>
-              <option value="turbo">Turbo</option>
-            </select>
+            <div
+              class="model-dropdown-container"
+              @click.outside="closeDropdown()"
+            >
+              <!-- Trigger Box -->
+              <div
+                class="model-dropdown-trigger"
+                @click="toggleDropdown()"
+                :class="{ 'active': dropdownOpen }"
+              >
+                <div class="selected-model-info">
+                  <span
+                    class="selected-model-name"
+                    x-text="truncateModelName(config?.model_size)"
+                    :title="config?.model_size || 'Base'"
+                  ></span>
+                  <span
+                    class="badge-custom"
+                    x-show="isCustomModel(config?.model_size)"
+                    title="Custom downloaded model"
+                  >Custom</span>
+                </div>
+                <x-icon
+                  name="expand_more"
+                  class="dropdown-arrow"
+                  :class="{ 'open': dropdownOpen }"
+                ></x-icon>
+              </div>
+
+              <!-- Menu Items -->
+              <div class="model-dropdown-menu" x-show="dropdownOpen" x-cloak>
+                <div class="dropdown-group-title">Standard</div>
+                <template x-for="m in standardModels" :key="m">
+                  <div
+                    class="dropdown-item"
+                    :class="{ 'selected': (config?.model_size || '').toLowerCase() === m }"
+                    @click="selectModel(m)"
+                  >
+                    <span class="dropdown-item-name" x-text="m.charAt(0).toUpperCase() + m.slice(1)"></span>
+                    <x-icon
+                      name="check"
+                      class="check-icon"
+                      x-show="(config?.model_size || '').toLowerCase() === m"
+                    ></x-icon>
+                  </div>
+                </template>
+
+                <template x-if="downloadedModels && downloadedModels.length > 0">
+                  <div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-group-title">Custom</div>
+                    <template x-for="m in downloadedModels" :key="m">
+                      <div
+                        class="dropdown-item custom-item"
+                        :class="{ 'selected': config?.model_size === m }"
+                      >
+                        <div
+                          class="dropdown-item-content"
+                          @click="selectModel(m)"
+                          :title="m"
+                        >
+                          <span class="dropdown-item-name" x-text="truncateModelName(m)"></span>
+                          <x-icon
+                            name="check"
+                            class="check-icon"
+                            x-show="config?.model_size === m"
+                          ></x-icon>
+                        </div>
+                        <button
+                          type="button"
+                          class="btn-item-delete"
+                          :class="{ 'armed': confirmingDelete === m }"
+                          @click="handleDeleteClick(m, $event)"
+                          :title="confirmingDelete === m ? 'Click again to confirm delete' : 'Delete model from disk'"
+                        >
+                          <span x-show="confirmingDelete !== m">&times;</span>
+                          <span x-show="confirmingDelete === m" class="confirm-text">Confirm</span>
+                        </button>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+              </div>
+            </div>
           </div>
         </div>
 
+        <!-- 2. Custom Model Input + Inline Download Button -->
+        <div class="field">
+          <div class="field-label">
+            <div class="field-title">Custom Model (Hugging Face / Path)</div>
+            <div class="field-description">
+              Enter any Hugging Face model repository (e.g. <code>distil-whisper/distil-large-v3</code>, <code>shhossain/whisper-base-bn</code>) or local checkpoint path.
+            </div>
+          </div>
+          <div class="field-control custom-model-control">
+            <div class="custom-model-inline-row">
+              <input
+                type="text"
+                class="custom-model-input"
+                x-model.trim="config.custom_model"
+                placeholder="e.g. distil-whisper/distil-large-v3"
+              />
+              <button
+                type="button"
+                class="button btn-download"
+                :disabled="downloading || !(config?.custom_model || '').trim()"
+                @click="downloadModel()"
+              >
+                <x-icon class="icon" name="download" x-show="!downloading"></x-icon>
+                <span x-show="!downloading">Download</span>
+                <span x-show="downloading">Downloading…</span>
+              </button>
+            </div>
+            <div
+              class="download-stream-box"
+              x-show="downloadState.active || downloadState.error || downloadState.done"
+              :class="{
+                'is-active': downloadState.active,
+                'is-error': downloadState.error,
+                'is-done': downloadState.done
+              }"
+              x-cloak
+            >
+              <div class="download-stream-header">
+                <div class="stream-info-left">
+                  <div class="stream-status-indicator" x-show="downloadState.active">
+                    <span class="stream-pulse-dot"></span>
+                  </div>
+                  <x-icon name="error_outline" class="stream-icon error-icon" x-show="downloadState.error"></x-icon>
+                  <x-icon name="check_circle" class="stream-icon success-icon" x-show="downloadState.done && !downloadState.active"></x-icon>
+                  <span
+                    class="stream-stage-label"
+                    x-text="downloadState.error ? downloadState.error : formatStreamStage(downloadState.stage || 'Preparing download...')"
+                    :title="downloadState.error || downloadState.stage"
+                  ></span>
+                </div>
+                <div class="stream-info-right">
+                  <span
+                    class="stream-percent"
+                    x-show="!downloadState.error && (downloadState.active || downloadState.done)"
+                    x-text="downloadState.percent + '%'"
+                  ></span>
+                  <button
+                    type="button"
+                    class="btn-stream-cancel"
+                    x-show="downloadState.active"
+                    @click="cancelDownload()"
+                    title="Cancel download"
+                  >Cancel</button>
+                  <button
+                    type="button"
+                    class="btn-stream-close"
+                    x-show="downloadState.error || downloadState.done"
+                    @click="resetDownloadState()"
+                    title="Close"
+                  >&times;</button>
+                </div>
+              </div>
+
+              <div class="stream-progress-track" x-show="!downloadState.error && (downloadState.active || downloadState.done)">
+                <div
+                  class="stream-progress-bar"
+                  :class="{ 'stream-bar-active': downloadState.active, 'stream-bar-done': downloadState.done }"
+                  :style="'width: ' + Math.max(downloadState.percent, 3) + '%'"
+                >
+                  <div class="stream-bar-glow" x-show="downloadState.active"></div>
+                </div>
+              </div>
+
+              <div
+                class="stream-metrics-footer"
+                x-show="!downloadState.error && (downloadState.active || downloadState.done)"
+              >
+                <span
+                  class="stream-size"
+                  x-show="downloadState.downloaded_mb"
+                  x-text="downloadState.downloaded_mb + ' / ' + downloadState.total_mb + ' MB'"
+                ></span>
+                <span
+                  class="stream-speed"
+                  x-show="downloadState.speed_mb > 0"
+                  x-text="downloadState.speed_mb + ' MB/s'"
+                ></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Language -->
         <div class="field">
           <div class="field-label">
             <div class="field-title">Language</div>
             <div class="field-description">
-              Language hint forwarded to Whisper. Use <code>auto</code> to let Whisper detect it.
+              Primary spoken language code (e.g. <code>en</code>, <code>bn</code>, <code>es</code>, <code>fr</code>). Leave empty or set to <code>auto</code> for automatic detection.
             </div>
           </div>
           <div class="field-control">
-            <input type="text" x-model="config.language" placeholder="en" />
+            <input type="text" x-model.trim="config.language" placeholder="en, bn, auto..." />
           </div>
         </div>
 
+        <!-- 4. Message Mode -->
         <div class="field">
           <div class="field-label">
-            <div class="field-title">Voice Message Handling</div>
+            <div class="field-title">Message Mode</div>
             <div class="field-description">
-              Choose whether final transcriptions are sent immediately or left in the composer for review.
+              Choose whether finished voice transcripts should submit immediately or stay in the composer.
             </div>
           </div>
           <div class="field-control">
@@ -59,6 +241,7 @@
           </div>
         </div>
 
+        <!-- 5. Silence Threshold -->
         <div class="field">
           <div class="field-label">
             <div class="field-title">Silence Threshold</div>
@@ -72,6 +255,7 @@
           </div>
         </div>
 
+        <!-- 6. Silence Duration -->
         <div class="field">
           <div class="field-label">
             <div class="field-title">Silence Duration</div>
@@ -84,6 +268,7 @@
           </div>
         </div>
 
+        <!-- 7. Waiting Timeout -->
         <div class="field">
           <div class="field-label">
             <div class="field-title">Waiting Timeout</div>
@@ -98,5 +283,484 @@
       </div>
     </template>
   </div>
+
+  <style>
+    /* Theme-agnostic UI styling for Whisper STT */
+    [x-cloak] {
+      display: none !important;
+    }
+
+    /* Model Dropdown Container */
+    .model-dropdown-container {
+      position: relative;
+      width: 100%;
+    }
+
+    .model-dropdown-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background-color: var(--color-input);
+      color: var(--color-text);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color 0.2s ease, background-color 0.2s ease;
+      min-height: 2.5rem;
+    }
+
+    .model-dropdown-trigger:hover,
+    .model-dropdown-trigger.active {
+      border-color: var(--color-highlight);
+      background-color: var(--color-background-hover);
+    }
+
+    .selected-model-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+      flex: 1 1 auto;
+      min-width: 0;
+      margin-right: 8px;
+    }
+
+    .selected-model-name {
+      font-weight: 500;
+      font-size: 0.9rem;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .badge-custom {
+      margin-left: auto;
+      flex-shrink: 0;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: color-mix(in srgb, var(--color-highlight) 20%, transparent);
+      color: var(--color-highlight);
+      border: 1px solid color-mix(in srgb, var(--color-highlight) 35%, transparent);
+    }
+
+    .dropdown-arrow {
+      font-size: 1.25rem;
+      color: var(--color-text-muted);
+      transition: transform 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .dropdown-arrow.open {
+      transform: rotate(180deg);
+    }
+
+    /* Dropdown Menu */
+    .model-dropdown-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      z-index: 1050;
+      background: var(--color-panel);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      padding: 6px;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+
+    .dropdown-group-title {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-muted);
+      padding: 4px 8px 2px 8px;
+      user-select: none;
+    }
+
+    .dropdown-divider {
+      height: 1px;
+      background: var(--color-border);
+      margin: 4px 0 6px 0;
+      opacity: 0.6;
+    }
+
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--color-text);
+      font-size: 0.88rem;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .dropdown-item:hover {
+      background-color: var(--color-background-hover);
+    }
+
+    .dropdown-item.selected {
+      background-color: color-mix(in srgb, var(--color-highlight) 18%, transparent);
+      color: var(--color-highlight);
+      font-weight: 500;
+    }
+
+    .dropdown-item.custom-item {
+      padding: 3px 6px 3px 10px;
+    }
+
+    .dropdown-item-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex: 1;
+      min-width: 0;
+      padding: 3px 0;
+    }
+
+    .dropdown-item-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .check-icon {
+      font-size: 1rem;
+      color: var(--color-highlight);
+      margin-left: 6px;
+      flex-shrink: 0;
+    }
+
+    /* Cross / 2-step Delete Button */
+    .btn-item-delete {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--color-text-muted);
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 1.05rem;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 8px;
+      transition: all 0.18s ease;
+      flex-shrink: 0;
+    }
+
+    .btn-item-delete:hover {
+      color: var(--color-error-text);
+      background: color-mix(in srgb, var(--color-error-text) 15%, transparent);
+      border-color: color-mix(in srgb, var(--color-error-text) 30%, transparent);
+    }
+
+    .btn-item-delete.armed {
+      color: #ffffff;
+      background: var(--color-error-text);
+      border-color: var(--color-error-text);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      letter-spacing: 0.02em;
+      animation: pulse-armed 1.5s infinite;
+    }
+
+    @keyframes pulse-armed {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.75; }
+    }
+
+    .custom-model-control {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
+      overflow: hidden;
+    }
+
+    .custom-model-inline-row {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
+    }
+
+    .custom-model-input {
+      flex: 1 1 auto !important;
+      width: auto !important;
+      min-width: 0 !important;
+      height: 2.5rem;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background-color: var(--color-input);
+      color: var(--color-text);
+      font-size: 0.875rem;
+      box-sizing: border-box !important;
+    }
+
+    .btn-download {
+      flex: 0 0 auto !important;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 2.5rem;
+      padding: 0 1.1rem !important;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      white-space: nowrap;
+      box-sizing: border-box !important;
+    }
+
+    .download-stream-box {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
+      margin-top: 6px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--color-border);
+      background: color-mix(in srgb, var(--color-input) 60%, var(--color-surface, transparent));
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow: hidden;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .download-stream-box.is-active {
+      border-color: color-mix(in srgb, var(--color-primary, #6366f1) 40%, var(--color-border));
+      box-shadow: 0 0 12px color-mix(in srgb, var(--color-primary, #6366f1) 12%, transparent);
+    }
+
+    .download-stream-box.is-error {
+      border-color: color-mix(in srgb, var(--color-error-text, #ef4444) 40%, var(--color-border));
+      background: color-mix(in srgb, var(--color-error-text, #ef4444) 8%, var(--color-input));
+    }
+
+    .download-stream-box.is-done {
+      border-color: color-mix(in srgb, var(--color-highlight, #10b981) 40%, var(--color-border));
+      background: color-mix(in srgb, var(--color-highlight, #10b981) 8%, var(--color-input));
+    }
+
+    .download-stream-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
+      font-size: 0.82rem;
+    }
+
+    .stream-info-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0 !important;
+      flex: 1 1 auto !important;
+      overflow: hidden;
+    }
+
+    .stream-status-indicator {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .stream-pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--color-primary, #6366f1);
+      box-shadow: 0 0 8px var(--color-primary, #6366f1);
+      animation: pulse-stream 1.2s infinite ease-in-out;
+    }
+
+    @keyframes pulse-stream {
+      0%, 100% { transform: scale(0.85); opacity: 0.7; }
+      50% { transform: scale(1.25); opacity: 1; }
+    }
+
+    .stream-icon {
+      font-size: 1.05rem;
+      flex-shrink: 0;
+    }
+
+    .stream-icon.error-icon {
+      color: var(--color-error-text, #ef4444);
+    }
+
+    .stream-icon.success-icon {
+      color: var(--color-highlight, #10b981);
+    }
+
+    .stream-stage-label {
+      font-weight: 500;
+      color: var(--color-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0 !important;
+      flex: 1 1 auto !important;
+    }
+
+    .download-stream-box.is-error .stream-stage-label {
+      color: var(--color-error-text, #ef4444);
+    }
+
+    .download-stream-box.is-done .stream-stage-label {
+      color: var(--color-highlight, #10b981);
+    }
+
+    .stream-info-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0 !important;
+      flex: 0 0 auto !important;
+      margin-left: auto;
+    }
+
+    .stream-percent {
+      font-weight: 700;
+      font-size: 0.8rem;
+      color: var(--color-primary, var(--color-text));
+      font-variant-numeric: tabular-nums;
+    }
+
+    .download-stream-box.is-done .stream-percent {
+      color: var(--color-highlight, #10b981);
+    }
+
+    .btn-stream-cancel {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--color-error-text, #ef4444);
+      background: color-mix(in srgb, var(--color-error-text, #ef4444) 14%, transparent);
+      border: 1px solid color-mix(in srgb, var(--color-error-text, #ef4444) 32%, transparent);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      line-height: 1.2;
+      flex-shrink: 0;
+    }
+
+    .btn-stream-cancel:hover {
+      background: var(--color-error-text, #ef4444);
+      color: #ffffff;
+      border-color: var(--color-error-text, #ef4444);
+    }
+
+    .btn-stream-close {
+      background: none;
+      border: none;
+      color: var(--color-text-secondary, #94a3b8);
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .btn-stream-close:hover {
+      color: var(--color-text);
+      background: color-mix(in srgb, var(--color-text) 10%, transparent);
+    }
+
+    .stream-progress-track {
+      width: 100% !important;
+      max-width: 100% !important;
+      height: 6px;
+      background: color-mix(in srgb, var(--color-border) 60%, transparent);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+      box-sizing: border-box !important;
+    }
+
+    .stream-progress-bar {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--color-primary, #6366f1);
+      position: relative;
+      transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+    }
+
+    .stream-progress-bar.stream-bar-active {
+      background: linear-gradient(90deg, var(--color-primary, #6366f1) 0%, color-mix(in srgb, var(--color-primary, #6366f1) 70%, white) 50%, var(--color-primary, #6366f1) 100%);
+      background-size: 200% 100%;
+      animation: stream-shimmer 2s infinite linear;
+    }
+
+    .stream-progress-bar.stream-bar-done {
+      background: var(--color-highlight, #10b981);
+    }
+
+    @keyframes stream-shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .stream-bar-glow {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 20px;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.6) 0%, transparent 70%);
+      filter: blur(2px);
+    }
+
+    .stream-metrics-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: var(--color-text-secondary, #94a3b8);
+      font-variant-numeric: tabular-nums;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .stream-metrics-footer .stream-size,
+    .stream-metrics-footer .stream-speed {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  </style>
 </body>
 </html>

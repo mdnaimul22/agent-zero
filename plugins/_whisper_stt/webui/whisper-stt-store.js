@@ -1,5 +1,5 @@
 import { createStore } from "/js/AlpineStore.js";
-import { toastFrontendError } from "/components/notifications/notification-store.js";
+import { toastFrontendError, toastFrontendSuccess } from "/components/notifications/notification-store.js";
 import { callJsonApi } from "/js/api.js";
 import { sttService } from "/js/stt-service.js";
 import { ttsService } from "/js/tts-service.js";
@@ -54,6 +54,7 @@ const model = {
   enabled: false,
   config: {
     model_size: "base",
+    custom_model: "",
     language: "en",
     message_mode: "send",
     silence_threshold: 0.3,
@@ -63,6 +64,7 @@ const model = {
   modelReady: false,
   modelLoading: false,
   loadedModel: "",
+  downloadedModels: [],
   packageVersion: "",
   providerCleanup: null,
   microphoneInput: null,
@@ -114,6 +116,7 @@ const model = {
       this.enabled = !!status?.enabled;
       this.config = {
         model_size: status?.config?.model_size || "base",
+        custom_model: status?.config?.custom_model || "",
         language: status?.config?.language || "en",
         message_mode:
           status?.config?.message_mode === "draft" ? "draft" : "send",
@@ -124,6 +127,7 @@ const model = {
       this.modelReady = !!status?.model?.ready;
       this.modelLoading = !!status?.model?.loading;
       this.loadedModel = status?.model?.loaded_model || "";
+      this.downloadedModels = Array.isArray(status?.downloaded_models) ? status.downloaded_models : [];
       this.packageVersion = status?.package?.version || "";
 
       if (this.enabled) {
@@ -139,9 +143,50 @@ const model = {
       }
     } finally {
       this.loading = false;
-      this.updateMicrophoneButtonUI();
     }
   },
+
+  async preloadModel() {
+    this.modelLoading = true;
+    try {
+      const modelName = (this.config.custom_model || "").trim() || this.config.model_size;
+      const res = await callJsonApi(`/plugins/${PLUGIN_NAME}/preload`, { model_name: modelName });
+      if (res?.success) {
+        this.modelReady = true;
+        this.loadedModel = res.loaded_model || modelName;
+        const typeStr = res.model_type ? ` (${res.model_type})` : "";
+        void toastFrontendSuccess(`Model "${this.loadedModel}"${typeStr} loaded successfully.`, "Whisper STT");
+      } else {
+        void toastFrontendError(res?.error || "Failed to load model", "Whisper STT");
+      }
+    } catch (e) {
+      void toastFrontendError(e instanceof Error ? e.message : String(e), "Whisper STT");
+    } finally {
+      this.modelLoading = false;
+      await this.refreshStatus();
+    }
+  },
+
+  async deleteModel(modelName) {
+    if (!modelName) return;
+    try {
+      const res = await callJsonApi(`/plugins/${PLUGIN_NAME}/delete_model`, { model_name: modelName });
+      if (res?.success) {
+        if (this.loadedModel === modelName) {
+          this.loadedModel = "";
+          this.modelReady = false;
+        }
+        void toastFrontendSuccess(`Model "${modelName}" deleted from disk.`, "Whisper STT");
+      } else {
+        void toastFrontendError(res?.error || "Failed to delete model", "Whisper STT");
+      }
+    } catch (e) {
+      void toastFrontendError(e instanceof Error ? e.message : String(e), "Whisper STT");
+    } finally {
+      await this.refreshStatus();
+    }
+  },
+
 
   registerProvider() {
     if (this.providerCleanup || !this.enabled) return;

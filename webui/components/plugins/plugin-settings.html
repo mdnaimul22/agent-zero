@@ -282,6 +282,54 @@
             margin-left: auto;
         }
 
+        .plugin-settings-footer-actions .btn {
+            background: var(--color-panel);
+            border: 1px solid var(--color-border);
+            color: var(--color-text);
+            font-weight: 500;
+            padding: 0.42rem 1rem;
+            border-radius: 7px;
+            cursor: pointer;
+            transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+        }
+
+        .plugin-settings-footer-actions .btn:hover:not(:disabled) {
+            background: var(--color-background-hover);
+            border-color: color-mix(in srgb, var(--color-text) 40%, var(--color-border));
+        }
+
+        .plugin-settings-footer-actions .btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .plugin-settings-footer-actions .btn-ok {
+            border: 1px solid var(--color-primary);
+            background: color-mix(in srgb, var(--color-primary) 22%, var(--color-panel));
+            color: var(--color-primary);
+            font-weight: 600;
+            transition: background 0.2s ease-in-out, border-color 0.2s ease-in-out, color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+
+        .plugin-settings-footer-actions .btn-ok:hover:not(:disabled) {
+            background: var(--color-primary);
+            color: var(--color-background);
+            border-color: var(--color-primary);
+            box-shadow: 0 0 10px color-mix(in srgb, var(--color-primary) 40%, transparent);
+        }
+
+        .plugin-settings-footer-actions .btn-cancel {
+            background: transparent;
+            color: var(--color-accent);
+            border: 1px solid color-mix(in srgb, var(--color-accent) 82%, var(--color-border));
+            transition: background 0.3s ease-in-out, color 0.3s ease-in-out;
+        }
+
+        .plugin-settings-footer-actions .btn-cancel:hover:not(:disabled) {
+            background: var(--color-accent);
+            color: var(--color-background);
+        }
+
         .spinning {
             animation: spin 1s linear infinite;
         }

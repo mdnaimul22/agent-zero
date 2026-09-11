@@ -11,3 +11,4 @@ api/get_work_dir_files.py merge=ours
 # Protect custom theme_plugin from upstream git merge / overwrite / delete
 plugins/theme_plugin/** merge=ours
 plugins/_code_execution/** merge=ours
+plugins/_whisper_stt/** merge=ours
