@@ -12,6 +12,7 @@
 
 - Keep tooltip positioning compatible with desktop and mobile layouts.
 - Do not make tooltips required for completing a workflow.
+- Tooltip content wraps, including long unbroken strings such as file paths (`overflow-wrap: anywhere` on `.tooltip` in `webui/index.css`, inherited by `.tooltip-inner`); keep that rule when restyling.
 
 ## Work Guidance
 

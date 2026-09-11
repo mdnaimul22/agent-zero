@@ -139,6 +139,16 @@ const model = {
   pathInput: "",
   pathError: "",
   isPathSubmitting: false,
+  pathEditing: false,
+  rawPathFocused: false,
+  pathSuggestions: [],
+  pathSuggestionsStyle: {},
+  pathSuggestionIndex: 0,
+  pathCrumbsOverflow: 0,
+  pathOverflowMenuOpen: false,
+  pathOverflowMenuStyle: {},
+  _pathSuggestionsToken: 0,
+  _pathSuggestionsHidden: false,
   rememberLastDirectory: DEFAULT_REMEMBER_LAST_DIRECTORY,
   settingsLoadPromise: null,
   settingsUpdatedHandler: null,
@@ -270,7 +280,7 @@ const model = {
     link.remove();
   },
 
-  preferences: { sortBy: "name", sortDirection: "asc", view: "list", treeShown: false, treeRoot: "/a0" },
+  preferences: { sortBy: "name", sortDirection: "asc", view: "list", treeShown: false, treeRoot: "/a0", pathBar: "buttons" },
 
   normalizeTreeRoot(value) {
     if (typeof value !== "string" || !value.trim().startsWith("/")) return "";
@@ -297,6 +307,7 @@ const model = {
         view: value.view === "icons" ? "icons" : "list",
         treeShown: value.treeShown === true,
         treeRoot: this.normalizeTreeRoot(value.treeRoot) || "/a0",
+        pathBar: value.pathBar === "raw" ? "raw" : "buttons",
       };
     } catch { /* Storage may be unavailable. Keep the defaults. */ }
     this.browser.sortBy = this.preferences.sortBy;
@@ -319,6 +330,8 @@ const model = {
 
   async loadSettings() {
     try {
+      // Reflect saved UI preferences (e.g. pathBar) before binding settings fields.
+      this.loadPreferences();
       await this.ensureLimits(true);
       this.textLimitMib = this.limits.max_text_bytes / (1024 * 1024);
       this.transferLimitMib = this.limits.max_file_bytes / (1024 * 1024);
@@ -726,9 +739,227 @@ const model = {
     this.pathInput = this.browser.currentPath || "";
   },
 
+  // Keep the raw path input pinned to its right end whenever it is not being edited.
+  pinPathInput(element) {
+    if (!element) return;
+    if (!element._pinResizeObserver) {
+      element._pinResizeObserver = new ResizeObserver(() => {
+        if (document.activeElement !== element && element.isConnected) {
+          element.scrollLeft = element.scrollWidth;
+        }
+      });
+      element._pinResizeObserver.observe(element);
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (document.activeElement !== element && element.isConnected) {
+        element.scrollLeft = element.scrollWidth;
+      }
+    }));
+  },
+
+  // Shared submit-button icon state: pencil idle, check while editing/focused, spinner while busy.
+  pathSubmitState() {
+    if (this.isPathSubmitting || this.isLoading) return "spinner";
+    if (this.pathEditing || this.rawPathFocused) return "check";
+    return "pencil";
+  },
+
+  // The submit icon acts as part of the field: a real click focuses the input.
+  focusPathInput(button) {
+    const input = button?.closest(".path-input-shell")?.querySelector("input");
+    if (input) input.focus();
+  },
+
   resetPathInput() {
     this.syncPathInput();
     this.pathError = "";
+    this.pathSuggestions = [];
+    this.pathSuggestionsStyle = {};
+  },
+
+  // --- Path bar: crumbs, edit mode, folder autocomplete --------------------
+  pathCrumbs() {
+    const current = this.normalizePath(this.browser.currentPath || "").replace(/\/+$/, "");
+    const crumbs = [{ name: "/", path: "/" }];
+    if (!current || current === "$WORK_DIR") return crumbs;
+    let acc = "";
+    for (const part of current.split("/").filter(Boolean)) {
+      acc += `/${part}`;
+      crumbs.push({ name: part, path: acc });
+    }
+    return crumbs;
+  },
+
+  startPathEdit() {
+    this.pathEditing = true;
+    this.pathSuggestions = [];
+    this.pathSuggestionsStyle = {};
+    this.syncPathInput();
+  },
+
+  exitPathEdit() {
+    this.pathEditing = false;
+    this.pathSuggestions = [];
+    this.pathSuggestionsStyle = {};
+    this.resetPathInput();
+  },
+
+  pathOverflowAncestors() {
+    return this.pathCrumbs().slice(0, this.pathCrumbsOverflow);
+  },
+
+  togglePathOverflowMenu(element = null) {
+    this.pathOverflowMenuOpen = !this.pathOverflowMenuOpen;
+    if (this.pathOverflowMenuOpen && element) {
+      this.pathOverflowMenuStyle = this.getDropdownStyle(element, 220, true);
+    } else if (!this.pathOverflowMenuOpen) {
+      this.pathOverflowMenuStyle = {};
+    }
+  },
+
+  closePathOverflowMenu() {
+    this.pathOverflowMenuOpen = false;
+    this.pathOverflowMenuStyle = {};
+  },
+
+  async pickPathAncestor(ancestor) {
+    this.closePathOverflowMenu();
+    await this.navigateToFolder(ancestor.path);
+  },
+
+  // Hide crumbs that would render partially; expose an overflow parent menu.
+  measurePathCrumbFit(element) {
+    if (!element || element._crumbFitRunning) return;
+    if (!element._crumbFitObserver) {
+      element._crumbFitObserver = new ResizeObserver(() => {
+        if (element._crumbFitQueued) return;
+        element._crumbFitQueued = true;
+        requestAnimationFrame(() => {
+          element._crumbFitQueued = false;
+          this.measurePathCrumbFit(element);
+        });
+      });
+      element._crumbFitObserver.observe(element);
+    }
+    // A hidden duplicate path bar must not overwrite shared overflow state.
+    if (!element.clientWidth) return;
+
+    element._crumbFitRunning = true;
+    const crumbs = [...element.querySelectorAll(".path-crumb")];
+    if (!crumbs.length) {
+      element._crumbFitRunning = false;
+      return;
+    }
+    const measure = (available) => {
+      let used = 0;
+      let hidden = 0;
+      for (let i = crumbs.length - 1; i >= 0; i--) {
+        const width = crumbs[i].offsetWidth;
+        // Hide any leading crumb, including root; only current folder must remain.
+        if (used + width > available && i < crumbs.length - 1) {
+          hidden = i + 1;
+          break;
+        }
+        used += width;
+      }
+      return Math.min(hidden, crumbs.length - 1);
+    };
+    // Reset visibility first: hidden crumbs report offsetWidth 0 and corrupt sizing.
+    crumbs.forEach((crumb) => {
+      crumb.style.display = "";
+    });
+    // The flex layout already subtracts the visible parent-menu button from this width.
+    const hidden = measure(element.clientWidth);
+    crumbs.forEach((crumb, index) => {
+      crumb.style.display = index < hidden ? "none" : "";
+    });
+    element._crumbFitRunning = false;
+    if (hidden !== this.pathCrumbsOverflow) this.pathCrumbsOverflow = hidden;
+    element.scrollLeft = 0;
+  },
+
+  async updatePathSuggestions(element = null) {
+    const token = ++this._pathSuggestionsToken;
+    this.pathSuggestionIndex = 0;
+    this._pathSuggestionsHidden = false;
+    this.pathError = "";
+    const value = String(this.pathInput || "").trim();
+    if (!value || value === "$WORK_DIR") {
+      this.pathSuggestions = [];
+      this.pathSuggestionsStyle = {};
+      return;
+    }
+    const endsWithSlash = /\/$/.test(value);
+    const normalized = this.normalizeSubmittedPath(value).replace(/\/+$/, "");
+    const slashIndex = normalized.lastIndexOf("/");
+    // A trailing separator lists the children of the typed directory itself.
+    const parent = endsWithSlash ? normalized : (slashIndex <= 0 ? "/" : normalized.slice(0, slashIndex));
+    const prefix = endsWithSlash ? "" : normalized.slice(slashIndex + 1).toLowerCase();
+    try {
+      const response = await fetchApi(`/get_work_dir_files?path=${encodeURIComponent(parent)}`
+      );
+      const data = await response.json().catch(() => ({}));
+      if (token !== this._pathSuggestionsToken) return;
+      const entries = data?.data?.entries || [];
+      const matches = entries
+        .filter((entry) => entry.is_dir && entry.name.toLowerCase().startsWith(prefix) && entry.path !== normalized)
+        .map((entry) => ({ name: entry.name, path: entry.path }));
+      this.pathSuggestions = matches;
+      const style = this.pathSuggestions.length && element
+        ? this.getDropdownStyle(element, Math.max(element.getBoundingClientRect().width, 220), false)
+        : {};
+      // Cap the dropdown at 8 rows while keeping the viewport-aware placement.
+      if (style.maxHeight) {
+        style.maxHeight = `${Math.min(parseInt(style.maxHeight, 10) || 0, 304)}px`;
+      }
+      this.pathSuggestionsStyle = style;
+    } catch {
+      if (token === this._pathSuggestionsToken) {
+        this.pathSuggestions = [];
+        this.pathSuggestionsStyle = {};
+      }
+    }
+  },
+
+  async pickPathSuggestion(suggestion) {
+    let path = String(suggestion?.path || "");
+    if (path && !path.startsWith("/") && path !== "$WORK_DIR") path = `/${path}`;
+    this.pathInput = path;
+    this.pathSuggestions = [];
+    await this.submitPath();
+  },
+
+  get activePathSuggestion() {
+    return this.pathSuggestions[this.pathSuggestionIndex] || null;
+  },
+
+  selectPathSuggestion(element = null) {
+    if (this._pathSuggestionsHidden || !this.pathSuggestions.length) return false;
+    const suggestion = this.activePathSuggestion;
+    if (!suggestion) return false;
+    let path = String(suggestion.path || "");
+    if (path && !path.startsWith("/") && path !== "$WORK_DIR") path = `/${path}`;
+    this.pathInput = path.endsWith("/") ? path : `${path}/`;
+    this.pathSuggestions = [];
+    this.updatePathSuggestions(element);
+    return true;
+  },
+
+  movePathSuggestion(delta) {
+    if (this._pathSuggestionsHidden || !this.pathSuggestions.length) return false;
+    const count = this.pathSuggestions.length;
+    this.pathSuggestionIndex = (this.pathSuggestionIndex + delta + count) % count;
+    return true;
+  },
+
+  hidePathSuggestions() {
+    this._pathSuggestionsHidden = true;
+    this.exitPathEdit();
+  },
+
+  showPathSuggestions(element = null) {
+    this._pathSuggestionsHidden = false;
+    if (this.pathInput) this.updatePathSuggestions(element);
   },
 
   async loadDirectoryPreference() {
@@ -1159,8 +1390,12 @@ const model = {
 
   async navigateToFolder(path) {
     if(!path.startsWith("/")) path = "/" + path;
-    if (this.browser.currentPath !== path)
-      this.history.push(this.browser.currentPath);
+    if (this.browser.currentPath === path) {
+      this.closePathOverflowMenu();
+      return;
+    }
+    this.history.push(this.browser.currentPath);
+    this.closePathOverflowMenu();
     await this.fetchFiles(path);
   },
 
@@ -1170,6 +1405,13 @@ const model = {
     const path = this.normalizeSubmittedPath(this.pathInput);
     if (!path) {
       this.pathError = "Enter a directory path.";
+      return;
+    }
+
+    // Submitting the already-current directory is a no-op, like navigateToFolder.
+    const currentPath = String(this.browser.currentPath || "").replace(/\/+$/, "");
+    if (currentPath && path.replace(/\/+$/, "") === currentPath) {
+      this.exitPathEdit();
       return;
     }
 
@@ -1187,6 +1429,7 @@ const model = {
         if (previousPath && previousPath !== this.browser.currentPath) {
           this.history.push(previousPath);
         }
+        this.exitPathEdit();
         return;
       }
 

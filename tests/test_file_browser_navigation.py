@@ -39,8 +39,21 @@ def test_file_browser_editable_path_bar_and_remembered_directory_contract() -> N
     assert ".nav-button-label" in html
     assert 'x-model="$store.fileBrowser.pathInput"' in html
     assert '@submit.prevent="$store.fileBrowser.submitPath()"' in html
-    assert "Go to directory" in html
-    assert "$store.fileBrowser.pathError" in html
+    # The submit icon acts as part of the field per icon state: the raw pencil
+    # (text-edit affordance) focuses the input on real clicks, while the check
+    # (submit affordance) and the edit-mode button submit the form. Enter keeps
+    # submitting in both modes (synthetic clicks have detail 0).
+    assert html.count('focusPathInput($el)') == 1
+    assert "pathSubmitState() === 'pencil') { $event.preventDefault(); $store.fileBrowser.focusPathInput($el); }" in html
+    assert 'focusPathInput(button) {' in store
+    assert 'aria-label="Edit directory path"' in html
+    assert 'Go to directory' in html
+    # No hover feedback on the submit icon in either mode; it reserves its slot
+    # as a static flex item so text never renders underneath it.
+    assert '.file-browser-header-button.path-submit:hover:not(:disabled)' in html
+    assert 'opacity: 1' not in html.split('.file-browser-header-button.path-submit:hover')[1].split('}')[0]
+    assert 'cursor: text' in html
+    assert '$store.fileBrowser.pathError' in html
 
     assert "FILE_BROWSER_LAST_DIRECTORY_STORAGE_KEY" in store
     assert 'callJsonApi("settings_get", null)' in store
@@ -61,6 +74,81 @@ def test_file_browser_editable_path_bar_and_remembered_directory_contract() -> N
 
     assert "Remember last file browser location" in workdir_settings
     assert "$store.settings.settings.file_browser_remember_last_directory" in workdir_settings
+
+
+def test_file_browser_path_submit_state_machine_contract() -> None:
+    """One shared icon state machine drives raw and edit submit buttons (DRY)."""
+    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
+    store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
+
+    assert "pathSubmitState() {" in store
+    assert 'if (this.isPathSubmitting || this.isLoading) return "spinner";' in store
+    assert 'if (this.pathEditing || this.rawPathFocused) return "check";' in store
+    assert 'return "pencil";' in store
+
+    # Both submit buttons bind only to the shared helper, no inline conditions.
+    # Each button references the helper twice (is-submitting class + spinner x-show).
+    assert html.count("pathSubmitState() === 'spinner'") == 4
+    assert html.count("pathSubmitState() === 'check'") == 2
+    assert "!$store.fileBrowser.isPathSubmitting && !$store.fileBrowser.isLoading\"></x-icon>" not in html
+    assert "rawPathFocused" in store
+
+
+def test_file_browser_raw_mode_parity_contract() -> None:
+    """Raw mode reuses edit-mode machinery: pinning, suggestions, submit guards."""
+    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
+    store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
+
+    # Right-end scroll pinning: reactive on pathInput changes, re-pinned on blur.
+    assert "pinPathInput(element) {" in store
+    assert "ResizeObserver" in store
+    assert "$store.fileBrowser.pathInput; $store.fileBrowser.pinPathInput($el)" in html
+    assert "$store.fileBrowser.pinPathInput($el); $store.fileBrowser.rawPathFocused = false" in html
+
+    # Raw submit survives blur: mousedown.prevent like the edit-mode check button.
+    assert html.count('@mousedown.prevent') >= 2
+
+    # Escape restores the current path and clears suggestions + dropdown.
+    assert "resetPathInput() {" in store
+    reset_block = store[store.index("resetPathInput() {"):store.index("},", store.index("resetPathInput() {"))]
+    assert "this.pathSuggestions = [];" in reset_block
+    assert "this.pathSuggestionsStyle = {};" in reset_block
+
+    # Submitting the already-current directory is a no-op without a fetch.
+    submit_block = store[store.index("async submitPath()"):store.index("async navigateUp")]
+    assert "currentPath" in submit_block
+    assert "this.exitPathEdit();" in submit_block
+
+    # Shift+Tab must not accept suggestions.
+    assert html.count("@keydown.tab=\"if (!$event.shiftKey") == 2
+
+
+def test_file_browser_suggestion_dropdown_height_contract() -> None:
+    """Dropdown caps at 8 rows via the viewport-aware style, not a CSS !important."""
+    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
+    store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
+
+    assert "max-height: 304px !important" not in html
+    assert "max-height: 304px;" in html
+    assert "Math.min(parseInt(style.maxHeight, 10) || 0, 304)" in store
+
+
+def test_file_browser_loading_rows_not_interactive_contract() -> None:
+    """Rows act on soon-to-be-replaced entries during fetches; guard them."""
+    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
+
+    assert "'is-loading': $store.fileBrowser.isLoading" in html
+    assert ".files-list.is-loading .file-item {" in html
+    assert "pointer-events: none;" in html
+
+
+def test_file_browser_overflow_measure_reacts_to_navigation_contract() -> None:
+    """Crumb fit measurement must re-run per navigation, not only on resize."""
+    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
+
+    crumbs_effect = html[html.index("x-effect=\"$store.fileBrowser.pathCrumbs()"):html.index("@click.self")]
+    assert "$store.fileBrowser.pathCrumbs()" in crumbs_effect
+    assert "measurePathCrumbFit($el)" in crumbs_effect
 
 
 def test_file_browser_compact_controls_and_narrow_layout_contract() -> None:
@@ -298,8 +386,8 @@ let saved = '{}';
 const localStorage = { getItem: () => saved, setItem: (_key, value) => saved = value };
 ''' + source + '''
 store.loadPreferences();
-assert.deepEqual(store.preferences, {sortBy:'name', sortDirection:'asc', view:'list', treeShown:false, treeRoot:'/a0'});
-store.preferences = {sortBy:'date', sortDirection:'desc', view:'icons', treeShown:true, treeRoot:'/a0/usr'};
+assert.deepEqual(store.preferences, {sortBy:'name', sortDirection:'asc', view:'list', treeShown:false, treeRoot:'/a0', pathBar:'buttons'});
+store.preferences = {sortBy:'date', sortDirection:'desc', view:'icons', treeShown:true, treeRoot:'/a0/usr', pathBar:'raw'};
 await store.savePreferences();
 store.browser.sortBy = 'name';
 store.loadPreferences();
@@ -323,7 +411,8 @@ for (const path of ['', 'usr', '/a0/../usr', '/a0/./usr', null, 42]) {
 
 saved = '{"sortBy":"invalid","view":"invalid","treeShown":"true"}';
 store.loadPreferences();
-assert.deepEqual(store.preferences, {sortBy:'name', sortDirection:'asc', view:'list', treeShown:false, treeRoot:'/a0'});
+assert.equal(store.preferences.pathBar, 'raw');
+assert.deepEqual(store.preferences, {sortBy:'name', sortDirection:'asc', view:'list', treeShown:false, treeRoot:'/a0', pathBar:'buttons'});
 const sorted = store.sortFiles([{name:'b',is_dir:false},{name:'a',is_dir:false},{name:'z',is_dir:true}]);
 assert.deepEqual(sorted.map(x=>x.name), ['z','a','b']);
 '''
