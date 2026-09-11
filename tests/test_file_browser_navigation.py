@@ -154,11 +154,19 @@ def test_file_browser_overflow_measure_reacts_to_navigation_contract() -> None:
 def test_file_browser_compact_controls_and_narrow_layout_contract() -> None:
     html = read("webui", "components", "modals", "file-browser", "file-browser.html")
     dox = read("webui", "components", "modals", "file-browser", "AGENTS.md")
+    store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
 
     assert 'aria-label="New file"' in html
     assert 'title="New file"' in html
     assert 'aria-label="New folder"' in html
     assert 'title="New folder"' in html
+    # One + button owns both create actions behind a shared dropdown.
+    assert 'aria-label="Create new"' in html
+    assert 'toggleNewItemsMenu($el)' in html
+    assert 'newItemsMenuOpen' in store
+    assert 'pickNewItem(kind)' in store
+    assert html.count('btn-new-item') == 1
+    assert 'closeNewItemsMenu()' in html.split('files-list"')[1].split('>')[0]
     assert ">New File<" not in html
     assert ">New Folder<" not in html
     assert 'class="file-search-shell"' not in html
@@ -178,7 +186,7 @@ def test_file_browser_compact_controls_and_narrow_layout_contract() -> None:
     assert ".file-cell-size,\n    .file-size" not in html
 
     assert "hiding the Modified date column" in dox
-    assert "New file and New folder controls icon-only" in dox
+    assert "One Create new (+) control owns both create actions" in dox
 
 
 def test_file_browser_editor_picker_modes_have_primary_footer_actions() -> None:
@@ -246,7 +254,7 @@ def test_file_browser_dropdown_escapes_scroll_container_and_header_is_opaque() -
     html = read("webui", "components", "modals", "file-browser", "file-browser.html")
     store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
 
-    assert '@scroll="$store.fileBrowser.closeDropdown()"' in html
+    assert '@scroll="$store.fileBrowser.closeDropdown(); $store.fileBrowser.closeNewItemsMenu()"' in html
     assert 'overflow: auto;' in html
     assert 'x-teleport="body"' in html
     assert 'class="dropdown-menu file-actions-menu"' in html

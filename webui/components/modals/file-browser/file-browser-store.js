@@ -147,6 +147,8 @@ const model = {
   pathCrumbsOverflow: 0,
   pathOverflowMenuOpen: false,
   pathOverflowMenuStyle: {},
+  newItemsMenuOpen: false,
+  newItemsMenuStyle: {},
   _pathSuggestionsToken: 0,
   _pathSuggestionsHidden: false,
   rememberLastDirectory: DEFAULT_REMEMBER_LAST_DIRECTORY,
@@ -820,6 +822,28 @@ const model = {
   closePathOverflowMenu() {
     this.pathOverflowMenuOpen = false;
     this.pathOverflowMenuStyle = {};
+  },
+
+  toggleNewItemsMenu(element = null) {
+    this.newItemsMenuOpen = !this.newItemsMenuOpen;
+    if (this.newItemsMenuOpen && element) {
+      this.closeDropdown();
+      this.closePathOverflowMenu();
+      this.newItemsMenuStyle = this.getDropdownStyle(element, 180, true);
+    } else if (!this.newItemsMenuOpen) {
+      this.newItemsMenuStyle = {};
+    }
+  },
+
+  closeNewItemsMenu() {
+    this.newItemsMenuOpen = false;
+    this.newItemsMenuStyle = {};
+  },
+
+  async pickNewItem(kind) {
+    this.closeNewItemsMenu();
+    if (kind === "file") await this.openNewFile();
+    else await this.openNewFolderModal();
   },
 
   async pickPathAncestor(ancestor) {

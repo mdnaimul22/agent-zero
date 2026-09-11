@@ -207,23 +207,41 @@
                   <button
                     type="button"
                     class="file-browser-header-button btn-new-item surface-control"
-                    x-show="!$store.fileBrowser.isPickerMode() && $store.fileBrowser.remoteAllowed('upload') && $store.fileBrowser.remoteAllowed('edit')"
-                    @click="$store.fileBrowser.openNewFile()"
-                    aria-label="New file"
-                    title="New file"
+                    x-show="$store.fileBrowser.remoteAllowed('upload') && (!$store.fileBrowser.isTextOpenPicker() || ($store.fileBrowser.remoteAllowed('edit') && !$store.fileBrowser.isPickerMode()))"
+                    @click="$store.fileBrowser.toggleNewItemsMenu($el)"
+                    @keydown.escape.stop="$store.fileBrowser.closeNewItemsMenu()"
+                    :aria-expanded="$store.fileBrowser.newItemsMenuOpen ? 'true' : 'false'"
+                    aria-label="Create new"
+                    title="Create new"
                   >
-                    <x-icon aria-hidden="true" name="note_add"></x-icon>
+                    <x-icon aria-hidden="true" name="add"></x-icon>
                   </button>
-                  <button
-                    type="button"
-                    class="file-browser-header-button btn-new-item surface-control"
-                    x-show="!$store.fileBrowser.isTextOpenPicker() && $store.fileBrowser.remoteAllowed('upload')"
-                    @click="$store.fileBrowser.openNewFolderModal()"
-                    aria-label="New folder"
-                    title="New folder"
-                  >
-                    <x-icon aria-hidden="true" name="create_new_folder"></x-icon>
-                  </button>
+                  <template x-teleport="body">
+                    <div
+                      class="path-overflow-menu new-items-menu"
+                      x-show="$store.fileBrowser.newItemsMenuOpen"
+                      :style="$store.fileBrowser.newItemsMenuStyle"
+                      @click.outside="$store.fileBrowser.closeNewItemsMenu()"
+                      @keydown.escape.window="$store.fileBrowser.closeNewItemsMenu()"
+                    >
+                      <button
+                        type="button"
+                        class="new-item dropdown-item"
+                        x-show="!$store.fileBrowser.isPickerMode() && $store.fileBrowser.remoteAllowed('upload') && $store.fileBrowser.remoteAllowed('edit')"
+                        @click="$store.fileBrowser.pickNewItem('file')"
+                        aria-label="New file"
+                        title="New file"
+                      ><x-icon aria-hidden="true" name="note_add"></x-icon><span>New file</span></button>
+                      <button
+                        type="button"
+                        class="new-item dropdown-item"
+                        x-show="!$store.fileBrowser.isTextOpenPicker() && $store.fileBrowser.remoteAllowed('upload')"
+                        @click="$store.fileBrowser.pickNewItem('folder')"
+                        aria-label="New folder"
+                        title="New folder"
+                      ><x-icon aria-hidden="true" name="create_new_folder"></x-icon><span>New folder</span></button>
+                    </div>
+                  </template>
                   <span class="surface-toolbar-separator" aria-hidden="true"></span>
                   <button type="button" class="file-browser-header-button surface-control" title="Toggle file tree" aria-label="Toggle file tree" :aria-pressed="String($store.fileBrowser.fileTree.shown)" @click="$store.fileBrowser.fileTree.toggle($store.fileBrowser.browser.currentPath)">
                     <x-icon name="account_tree"></x-icon>
@@ -282,7 +300,7 @@
               <div class="file-browser-workspace">
                 <div class="file-browser-list-pane">
               <!-- Files list -->
-              <div class="files-list" :class="{ 'file-icons-view': $store.fileBrowser.preferences.view === 'icons', 'is-loading': $store.fileBrowser.isLoading }" @scroll="$store.fileBrowser.closeDropdown()">
+              <div class="files-list" :class="{ 'file-icons-view': $store.fileBrowser.preferences.view === 'icons', 'is-loading': $store.fileBrowser.isLoading }" @scroll="$store.fileBrowser.closeDropdown(); $store.fileBrowser.closeNewItemsMenu()">
                 <div class="file-header">
                   <div class="file-cell-select">
                     <input
@@ -895,6 +913,19 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    }
+
+    .new-items-menu {
+    width: 180px;
+    }
+
+    .new-item {
+    gap: 8px;
+    color: var(--color-text);
+    }
+
+    .new-item > x-icon {
+    font-size: 16px;
     }
 
     .path-input-shell:focus-within {
