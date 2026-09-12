@@ -407,6 +407,7 @@ assert.equal(store.browser.sortBy, 'date');
 assert.equal(store.browser.sortDirection, 'desc');
 assert.equal(store.fileTree.shown, true);
 assert.equal(store.preferences.view, 'icons');
+assert.equal(store.preferences.pathBar, 'raw');
 assert.equal(store.preferences.treeRoot, '/a0/usr');
 await store.saveTreeRoot(' /a0//usr/ ');
 assert.equal(JSON.parse(saved).treeRoot, '/a0/usr');
@@ -423,9 +424,119 @@ for (const path of ['', 'usr', '/a0/../usr', '/a0/./usr', null, 42]) {
 
 saved = '{"sortBy":"invalid","view":"invalid","treeShown":"true"}';
 store.loadPreferences();
-assert.equal(store.preferences.pathBar, 'raw');
 assert.deepEqual(store.preferences, {sortBy:'name', sortDirection:'asc', view:'list', treeShown:false, treeRoot:'/a0', pathBar:'buttons'});
 const sorted = store.sortFiles([{name:'b',is_dir:false},{name:'a',is_dir:false},{name:'z',is_dir:true}]);
 assert.deepEqual(sorted.map(x=>x.name), ['z','a','b']);
+'''
+    subprocess.run(['node', '--input-type=module'], input=script, text=True, check=True)
+
+
+def test_file_browser_history_back_forward_contract() -> None:
+    """Back/forward buttons drive the nav history stacks with success-gated moves."""
+    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
+    store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
+    dox = read("webui", "components", "modals", "file-browser", "AGENTS.md")
+
+    # One shared back/forward pair lives on the toolbar for both path bar modes.
+    assert html.count('class="file-browser-header-button surface-control nav-history-button"') == 2
+    assert '@click="$store.fileBrowser.navigateBack()"' in html
+    assert '@click="$store.fileBrowser.navigateForward()"' in html
+    assert ':disabled="!$store.fileBrowser.history.length || $store.fileBrowser.isLoading"' in html
+    assert ':disabled="!$store.fileBrowser.forwardHistory.length || $store.fileBrowser.isLoading"' in html
+    assert 'aria-label="Go back"' in html
+    assert 'aria-label="Go forward"' in html
+    assert '.nav-history-button:disabled' in html
+
+    assert "history: [], // back navigation stack" in store
+    assert "forwardHistory: [], // forward navigation stack" in store
+    assert "pushNavHistory(path) {" in store
+    # Every fresh navigation records through the shared helper, which clears the future.
+    assert "this.history.push(this.browser.currentPath);" not in store
+    assert store.count("this.pushNavHistory(") == 3
+
+    back_block = store[store.index("async navigateBack()"):store.index("async navigateForward()")]
+    forward_block = store[store.index("async navigateForward()"):store.index("async navigateToFolder")]
+    for block in (back_block, forward_block):
+        assert "preserveOnError: true" in block
+        assert "if (loaded) {" in block
+
+    destroy_block = store[store.index("  destroy() {"):store.index("  setupFloatingModal(")]
+    assert "this.forwardHistory = [];" in destroy_block
+    reset_block = store[store.index("  resetOpenState(options = {}) {"):store.index("  configurePicker(")]
+    assert "this.forwardHistory = [];" in reset_block
+
+    assert "pushNavHistory" in dox
+    assert "forwardHistory" in dox
+
+
+def test_file_browser_history_back_forward_stack_behavior():
+    import re
+    import subprocess
+
+    source = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
+    source = re.sub(r'^import\b[\s\S]*?;\n', '', source, flags=re.M)
+    source = source.replace('export const store = createStore', 'const store = createStore')
+    script = '''
+import assert from 'node:assert/strict';
+const window = globalThis;
+const createStore = (_name, model) => model;
+const createFileTree = () => ({ shown: false, follow: async () => {} });
+let saved = '{}';
+const localStorage = { getItem: () => saved, setItem: (_key, value) => saved = value };
+window.toastFrontendError = () => {};
+const dirs = {
+  '/a': { current_path: '/a', parent_path: '', entries: [{name:'b', path:'/a/b', is_dir:true}] },
+  '/a/b': { current_path: '/a/b', parent_path: '/a', entries: [{name:'c', path:'/a/b/c', is_dir:true}] },
+  '/a/b/c': { current_path: '/a/b/c', parent_path: '/a/b', entries: [] },
+};
+const failPaths = new Set();
+const fetchApi = async (url) => {
+  const path = decodeURIComponent(url.split('path=')[1]);
+  return { ok: !failPaths.has(path), json: async () => ({ data: dirs[path] }) };
+};
+''' + source + '''
+await store.fetchFiles('/a');
+await store.navigateToFolder('/a/b');
+await store.navigateToFolder('/a/b/c');
+assert.equal(store.browser.currentPath, '/a/b/c');
+assert.deepEqual(store.history, ['/a', '/a/b']);
+assert.deepEqual(store.forwardHistory, []);
+
+await store.navigateBack();
+assert.equal(store.browser.currentPath, '/a/b');
+assert.deepEqual(store.history, ['/a']);
+assert.deepEqual(store.forwardHistory, ['/a/b/c']);
+
+await store.navigateBack();
+assert.equal(store.browser.currentPath, '/a');
+assert.deepEqual(store.history, []);
+assert.deepEqual(store.forwardHistory, ['/a/b/c', '/a/b']);
+
+await store.navigateForward();
+assert.equal(store.browser.currentPath, '/a/b');
+assert.deepEqual(store.history, ['/a']);
+assert.deepEqual(store.forwardHistory, ['/a/b/c']);
+
+// A fresh navigation clears the forward stack.
+await store.navigateToFolder('/a/b/c');
+assert.equal(store.browser.currentPath, '/a/b/c');
+assert.deepEqual(store.history, ['/a', '/a/b']);
+assert.deepEqual(store.forwardHistory, []);
+
+// A failed back navigation restores the stack and keeps the current folder.
+await store.navigateBack();
+assert.equal(store.browser.currentPath, '/a/b');
+failPaths.add('/a');
+await store.navigateBack();
+assert.equal(store.browser.currentPath, '/a/b');
+assert.deepEqual(store.history, ['/a']);
+assert.deepEqual(store.forwardHistory, ['/a/b/c']);
+failPaths.delete('/a');
+
+// Buttons stay disabled without stack entries.
+assert.equal(store.history.length === 0, false);
+store.history = [];
+store.forwardHistory = [];
+assert.equal(store.history.length, 0);
 '''
     subprocess.run(['node', '--input-type=module'], input=script, text=True, check=True)

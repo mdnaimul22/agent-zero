@@ -37,6 +37,26 @@
                 <!-- Path navigator -->
               <div class="path-navigator-wrap">
                 <form class="path-navigator surface-toolbar" @submit.prevent="$store.fileBrowser.submitPath()">
+                  <button
+                    type="button"
+                    class="file-browser-header-button surface-control nav-history-button"
+                    @click="$store.fileBrowser.navigateBack()"
+                    :disabled="!$store.fileBrowser.history.length || $store.fileBrowser.isLoading"
+                    aria-label="Go back"
+                    title="Go back"
+                  >
+                    <x-icon aria-hidden="true" name="arrow_back"></x-icon>
+                  </button>
+                  <button
+                    type="button"
+                    class="file-browser-header-button surface-control nav-history-button"
+                    @click="$store.fileBrowser.navigateForward()"
+                    :disabled="!$store.fileBrowser.forwardHistory.length || $store.fileBrowser.isLoading"
+                    aria-label="Go forward"
+                    title="Go forward"
+                  >
+                    <x-icon aria-hidden="true" name="arrow_forward"></x-icon>
+                  </button>
                   <template x-if="$store.fileBrowser.preferences.pathBar === 'raw'">
                     <div class="path-edit-group">
                       <button
@@ -61,7 +81,7 @@
                           type="text"
                           x-model="$store.fileBrowser.pathInput"
                           x-effect="$store.fileBrowser.pathInput; $store.fileBrowser.pinPathInput($el)"
-                          @input="$store.fileBrowser.updatePathSuggestions($el)"
+                          @input="$store.fileBrowser.queuePathSuggestions($el)"
                           @focus="$el.setSelectionRange($el.value.length, $el.value.length); $store.fileBrowser.showPathSuggestions($el); $store.fileBrowser.rawPathFocused = true"
                           @blur="$store.fileBrowser.hidePathSuggestions(); $store.fileBrowser.pinPathInput($el); $store.fileBrowser.rawPathFocused = false"
                           @keydown.arrow-down="if ($store.fileBrowser.movePathSuggestion(1)) $event.preventDefault()"
@@ -159,7 +179,8 @@
                           type="text"
                           x-model="$store.fileBrowser.pathInput"
                           x-init="$nextTick(() => { $el.focus(); $el.setSelectionRange($el.value.length, $el.value.length); })"
-                          @input="$store.fileBrowser.updatePathSuggestions($el)"
+                          x-effect="$store.fileBrowser.pathInput; $store.fileBrowser.pinPathInput($el)"
+                          @input="$store.fileBrowser.queuePathSuggestions($el)"
                           @focus="$store.fileBrowser.showPathSuggestions($el)"
                           @blur="$store.fileBrowser.hidePathSuggestions()"
                           @keydown.arrow-down="if ($store.fileBrowser.movePathSuggestion(1)) $event.preventDefault()"
@@ -1302,6 +1323,10 @@
     .file-browser-header-button.path-submit:disabled { opacity: 0.65; cursor: text; }
     .file-browser-header-button:focus-visible { outline: 1px solid var(--color-text-secondary); outline-offset: 2px; }
     .path-navigator .nav-button-label { display: none; }
+    .nav-history-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
     .file-mass-toolbar {
       flex: 0 0 auto;
       flex-flow: row wrap;

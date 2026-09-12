@@ -130,7 +130,8 @@ const model = {
     sortBy: "name",
     sortDirection: "asc",
   },
-  history: [], // navigation stack
+  history: [], // back navigation stack
+  forwardHistory: [], // forward navigation stack
   initialPath: "", // Store path for open() call
   closePromise: null,
   isSurfaceHandoff: false,
@@ -150,6 +151,7 @@ const model = {
   newItemsMenuOpen: false,
   newItemsMenuStyle: {},
   _pathSuggestionsToken: 0,
+  _pathSuggestionsTimer: null,
   _pathSuggestionsHidden: false,
   rememberLastDirectory: DEFAULT_REMEMBER_LAST_DIRECTORY,
   settingsLoadPromise: null,
@@ -467,6 +469,7 @@ const model = {
     // Reset state when modal closes
     this.isLoading = false;
     this.history = [];
+    this.forwardHistory = [];
     this.initialPath = "";
     this.closePromise = null;
     this.isSurfaceHandoff = false;
@@ -528,6 +531,7 @@ const model = {
     this.isLoading = true;
     this.error = null;
     this.history = [];
+    this.forwardHistory = [];
     this.searchQuery = "";
     this.isBulkBusy = false;
     this.clearDragState();
@@ -750,22 +754,26 @@ const model = {
     this.pathInput = this.browser.currentPath || "";
   },
 
-  // Keep the raw path input pinned to its right end whenever it is not being edited.
+  // Keep the raw path input pinned to its right end whenever it is not being edited;
+  // a focused input with the caret at the end (edit entry, refocus, Tab accept) stays pinned too.
   pinPathInput(element) {
     if (!element) return;
     if (!element._pinResizeObserver) {
       element._pinResizeObserver = new ResizeObserver(() => {
-        if (document.activeElement !== element && element.isConnected) {
-          element.scrollLeft = element.scrollWidth;
-        }
+        this.scrollPathInputToEnd(element);
       });
       element._pinResizeObserver.observe(element);
     }
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (document.activeElement !== element && element.isConnected) {
-        element.scrollLeft = element.scrollWidth;
-      }
+      this.scrollPathInputToEnd(element);
     }));
+  },
+
+  scrollPathInputToEnd(element) {
+    if (!element || !element.isConnected) return;
+    const atEnd = document.activeElement !== element
+      || (element.selectionStart === element.value.length && element.selectionEnd === element.value.length);
+    if (atEnd) element.scrollLeft = element.scrollWidth;
   },
 
   // Shared submit-button icon state: pencil idle, check while editing/focused, spinner while busy.
@@ -784,6 +792,7 @@ const model = {
   resetPathInput() {
     this.syncPathInput();
     this.pathError = "";
+    this.clearPathSuggestionsDebounce();
     this.pathSuggestions = [];
     this.pathSuggestionsStyle = {};
   },
@@ -982,7 +991,30 @@ const model = {
     if (this._pathSuggestionsHidden || !this.pathSuggestions.length) return false;
     const count = this.pathSuggestions.length;
     this.pathSuggestionIndex = (this.pathSuggestionIndex + delta + count) % count;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      for (const container of document.querySelectorAll(".path-suggestions")) {
+        if (container.getClientRects().length === 0) continue;
+        const row = container.querySelectorAll(".path-suggestion")[this.pathSuggestionIndex];
+        row?.scrollIntoView({ block: "nearest" });
+      }
+    }));
     return true;
+  },
+
+  clearPathSuggestionsDebounce() {
+    if (this._pathSuggestionsTimer) {
+      clearTimeout(this._pathSuggestionsTimer);
+      this._pathSuggestionsTimer = null;
+    }
+  },
+
+  // Keystrokes debounce the directory fetch; direct calls (Tab accept, refocus) stay immediate.
+  queuePathSuggestions(element = null) {
+    this.clearPathSuggestionsDebounce();
+    this._pathSuggestionsTimer = setTimeout(() => {
+      this._pathSuggestionsTimer = null;
+      this.updatePathSuggestions(element);
+    }, 200);
   },
 
   hidePathSuggestions() {
@@ -1421,13 +1453,42 @@ const model = {
     }
   },
 
+  pushNavHistory(path) {
+    this.history.push(path);
+    this.forwardHistory = [];
+  },
+
+  async navigateBack() {
+    if (!this.history.length) return;
+    const targetPath = this.history.pop();
+    const previousPath = this.browser.currentPath;
+    const loaded = await this.fetchFiles(targetPath, { preserveOnError: true });
+    if (loaded) {
+      this.forwardHistory.push(previousPath);
+    } else {
+      this.history.push(targetPath);
+    }
+  },
+
+  async navigateForward() {
+    if (!this.forwardHistory.length) return;
+    const targetPath = this.forwardHistory.pop();
+    const previousPath = this.browser.currentPath;
+    const loaded = await this.fetchFiles(targetPath, { preserveOnError: true });
+    if (loaded) {
+      this.history.push(previousPath);
+    } else {
+      this.forwardHistory.push(targetPath);
+    }
+  },
+
   async navigateToFolder(path) {
     if(!path.startsWith("/")) path = "/" + path;
     if (this.browser.currentPath === path) {
       this.closePathOverflowMenu();
       return;
     }
-    this.history.push(this.browser.currentPath);
+    this.pushNavHistory(this.browser.currentPath);
     this.closePathOverflowMenu();
     await this.fetchFiles(path);
   },
@@ -1460,7 +1521,7 @@ const model = {
 
       if (loaded) {
         if (previousPath && previousPath !== this.browser.currentPath) {
-          this.history.push(previousPath);
+          this.pushNavHistory(previousPath);
         }
         this.exitPathEdit();
         return;
@@ -1474,7 +1535,7 @@ const model = {
 
   async navigateUp() {
     if (this.browser.parentPath) {
-      this.history.push(this.browser.currentPath);
+      this.pushNavHistory(this.browser.currentPath);
       await this.fetchFiles(this.browser.parentPath);
     }
   },
