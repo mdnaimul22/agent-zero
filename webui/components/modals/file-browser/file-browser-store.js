@@ -822,6 +822,9 @@ const model = {
     this.pathSuggestions = [];
     this.pathSuggestionsStyle = {};
     this.resetPathInput();
+    // Raw mode keeps the same input mounted: drop focus so the pencil icon returns.
+    const active = document.activeElement;
+    if (active && active.classList && active.classList.contains("path-input")) active.blur();
   },
 
   pathOverflowAncestors() {

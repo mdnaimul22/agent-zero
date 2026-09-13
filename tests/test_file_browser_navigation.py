@@ -93,6 +93,10 @@ def test_file_browser_path_submit_state_machine_contract() -> None:
     assert "!$store.fileBrowser.isPathSubmitting && !$store.fileBrowser.isLoading\"></x-icon>" not in html
     assert "rawPathFocused" in store
 
+    # Submitting exits edit mode and blurs the focused path input, so raw mode
+    # returns to the pencil icon instead of keeping the checkmark while focused.
+    assert "active.classList.contains(\"path-input\")) active.blur();" in store
+
 
 def test_file_browser_raw_mode_parity_contract() -> None:
     """Raw mode reuses edit-mode machinery: pinning, suggestions, submit guards."""
