@@ -142,6 +142,26 @@ def test_file_browser_loading_rows_not_interactive_contract() -> None:
     assert "pointer-events: none;" in html
 
 
+def test_file_browser_seamless_navigation_and_row_click_contract() -> None:
+    """Navigation never swaps the listing for a loading overlay; rows open on click."""
+    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
+
+    # The full-area Loading files overlay is gone; navigation stays seamless.
+    assert "loading-state" not in html
+    assert "loading-spinner" not in html
+    assert "Loading files..." not in html
+    # The spin keyframes remain for the path-submit spinner.
+    assert html.count("@keyframes spin") == 1
+
+    # The whole row opens files and navigates into folders; the name cell is passive.
+    assert '@click="$store.fileBrowser.handleFileNameClick(file)"' in html
+    assert '<div class="file-name">' in html
+    assert '.file-item {\n    cursor: pointer;' in html
+    # Selection and action cells opt out of the row opener.
+    assert '<label class="file-select-cell" @click.stop>' in html
+    assert 'x-show="!$store.fileBrowser.isPickerMode()" @click.stop>' in html
+
+
 def test_file_browser_overflow_measure_reacts_to_navigation_contract() -> None:
     """Crumb fit measurement must re-run per navigation, not only on resize."""
     html = read("webui", "components", "modals", "file-browser", "file-browser.html")
