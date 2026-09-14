@@ -16,6 +16,11 @@ def read(*parts: str) -> str:
     return PROJECT_ROOT.joinpath(*parts).read_text(encoding="utf-8")
 
 
+def flat(text: str) -> str:
+    """Collapse whitespace so CSS contract checks survive reformat-only edits."""
+    return " ".join(text.split())
+
+
 def test_file_browser_remember_last_directory_defaults_enabled() -> None:
     settings_source = read("helpers", "settings.py")
 
@@ -142,7 +147,7 @@ def test_file_browser_seamless_navigation_and_row_click_contract() -> None:
 
     assert '@click="$store.fileBrowser.handleFileNameClick(file)"' in html
     assert '<div class="file-name">' in html
-    assert '.file-item {\n    cursor: pointer;' in html
+    assert '.file-item { cursor: pointer;' in flat(html)
     assert '<label class="file-select-cell" @click.stop>' in html
     assert 'x-show="!$store.fileBrowser.isPickerMode()" @click.stop>' in html
 
@@ -180,13 +185,13 @@ def test_file_browser_compact_controls_and_narrow_layout_contract() -> None:
     assert "btn-new-item" in html
     assert "width: 32px;" in html
     assert "height: 32px;" in html
-    assert ".path-navigator {\n      align-items: center;\n      flex-direction: row;" in html
-    assert ".path-navigator .nav-button-label {\n        display: none;" in html
+    assert ".path-navigator { align-items: center; flex-direction: row;" in flat(html)
+    assert ".path-navigator .nav-button-label { display: none;" in flat(html)
 
     assert "container: file-browser / inline-size;" in html
     assert "@container file-browser (max-width: 620px)" in html
-    assert "grid-template-columns: 2.25rem minmax(0, 1fr) minmax(4.25rem, max-content) 8rem;" in html
-    assert ".file-cell-date,\n    .file-date {\n        display: none;" in html
+    assert "grid-template-columns: 2.25rem minmax(0, 1fr) minmax(4.25rem, max-content) 8rem;" in flat(html)
+    assert ".file-cell-date, .file-date { display: none;" in flat(html)
     assert ".file-cell-size,\n    .file-size" not in html
 
     assert "hiding the Modified date column" in dox
