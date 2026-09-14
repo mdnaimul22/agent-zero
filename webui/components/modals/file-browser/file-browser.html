@@ -30,7 +30,7 @@
           :class="{ 'is-surface': xAttrs($el)?.mode === 'canvas' }"
         >
           <!-- File Browser Content -->
-          <div x-show="!$store.fileBrowser.isLoading || $store.fileBrowser.browser.entries.length" class="file-browser-content">
+          <div class="file-browser-content">
             <!-- Path navigator -->
             <div class="path-navigator-wrap">
               <form class="path-navigator surface-toolbar" @submit.prevent="$store.fileBrowser.submitPath()">
@@ -537,7 +537,7 @@
                   </template>
 
                   <!-- Empty state -->
-                  <template x-if="!$store.fileBrowser.browser.entries.length">
+                  <template x-if="!$store.fileBrowser.browser.entries.length && !$store.fileBrowser.isLoading">
                     <div class="no-files">No files found</div>
                   </template>
                   <template x-if="$store.fileBrowser.browser.entries.length && !$store.fileBrowser.visibleEntries.length">
