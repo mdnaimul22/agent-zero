@@ -16,12 +16,7 @@ PICKERS = {"models": "model", "presets": "model", "chats": "sessions", "chat": "
 
 
 def available_commands(context=None) -> list[dict]:
-    enabled = plugins.get_enabled_plugins(context.agent0 if context else None)
-    if "_commands" not in enabled:
-        return []
-    project = projects.get_context_project_name(context) if context else ""
-    return [item for item in commands.list_effective_commands(project or "")[0]
-            if not item.get("source_plugin") or item["source_plugin"] in enabled]
+    return commands.list_context_commands(context)
 
 
 def menu_commands() -> list[tuple[str, str]]:
