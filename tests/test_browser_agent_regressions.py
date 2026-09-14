@@ -210,6 +210,7 @@ def test_browser_config_normalizes_extension_paths(tmp_path):
         "autofocus_active_page": True,
         "browser_tab_scope": "per_context",
         "max_open_tabs": 32,
+        "evaluate_timeout_seconds": 30.0,
         "runtime_backend": "container",
         "host_browser_privacy_policy": "allow",
         "host_browser_profile_mode": "existing",

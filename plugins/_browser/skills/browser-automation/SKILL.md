@@ -74,6 +74,7 @@ Screenshot args include `quality`, `full_page`, and optional `path`. Without `pa
 - `key_chord` presses `keys` in order and releases in reverse; `keyboard` types `text` or presses a single `key`.
 - `content` narrows extraction via `selector` or a list of `selectors`.
 - `evaluate` runs JavaScript in the page via `script` and returns the evaluated result.
+- Browser settings set the evaluate deadline (default 30 seconds, range 0.1–60 seconds); there is no tool-call timeout override. A timeout interrupts JavaScript in place and preserves the page when execution stops. If async execution remains pending, recovery may reload the affected tab, losing unsaved DOM edits; cookies and tab storage normally survive. The error explicitly reports a reload or fallback closure; use `list` before retrying a closed tab. Host evaluation requires an updated connector; Safari rejects it because its backend cannot forcibly interrupt JavaScript.
 - `wheel` scrolls by pixel deltas `delta_x`/`delta_y` at `x`/`y`.
 - `clipboard` actions are copy, cut, or paste, chosen via `clipboard_action`; paste inserts `text`.
 - `set_viewport` resizes the page viewport via `width` and `height`.
