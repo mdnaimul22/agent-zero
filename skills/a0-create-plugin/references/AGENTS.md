@@ -7,6 +7,7 @@
 ## Ownership
 
 - `implementation.md` owns manifest, backend, configuration, hooks and runtime guidance.
+- `channel-commands.md` owns channel command reuse: framework APIs, authorization/context binding, effect adaptation, native platform commands, and verification.
 - `webui.md` owns frontend examples and UI verification.
 - `review.md` owns evidence-based review; `contribute.md` owns standalone publication and Index submission.
 

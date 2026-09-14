@@ -14,6 +14,8 @@ Scale review to the change and requested risk. For a full audit, cover each grou
 
 ## Code And Configuration
 
+- For channel integrations, use [Channel Commands](channel-commands.md) to verify enabled-context discovery, custom precedence, authorization before resolution, effect handling, and a tested once-only handoff into the agent.
+
 - Use `AgentContext` and `UserMessage` from `agent`, API handlers from `helpers.api`, and `Tool`/`Response` from `helpers.tool`.
 - User-plugin imports use `usr.plugins.<name>...`; no `sys.path` hacks or symlink-dependent imports.
 - Read effective settings through `get_plugin_config`; save only intended scope/fields and preserve unowned settings. Caller metadata is not authorization.

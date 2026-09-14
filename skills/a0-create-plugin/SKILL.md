@@ -67,6 +67,7 @@ After loading this skill, use `skills_tool` with `action: "read_file"`, `skill_n
 | Work | Reference |
 |---|---|
 | Manifest, layout, backend, tools, settings, hooks, runtime verification | `references/implementation.md` |
+| Channel integrations: shared slash commands, effects, menus, authorization | [references/channel-commands.md](references/channel-commands.md) |
 | Alpine stores, store gates, notifications, settings UI, sidebar entry | `references/webui.md` |
 | Review existing code or verify a completed change | `references/review.md` |
 | Standalone repository, license, Index entry, validation and PR | `references/contribute.md` |
