@@ -39,17 +39,11 @@ def test_file_browser_editable_path_bar_and_remembered_directory_contract() -> N
     assert ".nav-button-label" in html
     assert 'x-model="$store.fileBrowser.pathInput"' in html
     assert '@submit.prevent="$store.fileBrowser.submitPath()"' in html
-    # The submit icon acts as part of the field per icon state: the raw pencil
-    # (text-edit affordance) focuses the input on real clicks, while the check
-    # (submit affordance) and the edit-mode button submit the form. Enter keeps
-    # submitting in both modes (synthetic clicks have detail 0).
     assert html.count('focusPathInput($el)') == 1
     assert "pathSubmitState() === 'pencil') { $event.preventDefault(); $store.fileBrowser.focusPathInput($el); }" in html
     assert 'focusPathInput(button) {' in store
     assert 'aria-label="Edit directory path"' in html
     assert 'Go to directory' in html
-    # No hover feedback on the submit icon in either mode; it reserves its slot
-    # as a static flex item so text never renders underneath it.
     assert '.file-browser-header-button.path-submit:hover:not(:disabled)' in html
     assert 'opacity: 1' not in html.split('.file-browser-header-button.path-submit:hover')[1].split('}')[0]
     assert 'cursor: text' in html
@@ -86,15 +80,11 @@ def test_file_browser_path_submit_state_machine_contract() -> None:
     assert 'if (this.pathEditing || this.rawPathFocused) return "check";' in store
     assert 'return "pencil";' in store
 
-    # Both submit buttons bind only to the shared helper, no inline conditions.
-    # Each button references the helper twice (is-submitting class + spinner x-show).
     assert html.count("pathSubmitState() === 'spinner'") == 4
     assert html.count("pathSubmitState() === 'check'") == 2
     assert "!$store.fileBrowser.isPathSubmitting && !$store.fileBrowser.isLoading\"></x-icon>" not in html
     assert "rawPathFocused" in store
 
-    # Submitting exits edit mode and blurs the focused path input, so raw mode
-    # returns to the pencil icon instead of keeping the checkmark while focused.
     assert "active.classList.contains(\"path-input\")) active.blur();" in store
 
 
@@ -103,27 +93,22 @@ def test_file_browser_raw_mode_parity_contract() -> None:
     html = read("webui", "components", "modals", "file-browser", "file-browser.html")
     store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
 
-    # Right-end scroll pinning: reactive on pathInput changes, re-pinned on blur.
     assert "pinPathInput(element) {" in store
     assert "ResizeObserver" in store
     assert "$store.fileBrowser.pathInput; $store.fileBrowser.pinPathInput($el)" in html
     assert "$store.fileBrowser.pinPathInput($el); $store.fileBrowser.rawPathFocused = false" in html
 
-    # Raw submit survives blur: mousedown.prevent like the edit-mode check button.
     assert html.count('@mousedown.prevent') >= 2
 
-    # Escape restores the current path and clears suggestions + dropdown.
     assert "resetPathInput() {" in store
     reset_block = store[store.index("resetPathInput() {"):store.index("},", store.index("resetPathInput() {"))]
     assert "this.pathSuggestions = [];" in reset_block
     assert "this.pathSuggestionsStyle = {};" in reset_block
 
-    # Submitting the already-current directory is a no-op without a fetch.
     submit_block = store[store.index("async submitPath()"):store.index("async navigateUp")]
     assert "currentPath" in submit_block
     assert "this.exitPathEdit();" in submit_block
 
-    # Shift+Tab must not accept suggestions.
     assert html.count("@keydown.tab=\"if (!$event.shiftKey") == 2
 
 
@@ -150,18 +135,14 @@ def test_file_browser_seamless_navigation_and_row_click_contract() -> None:
     """Navigation never swaps the listing for a loading overlay; rows open on click."""
     html = read("webui", "components", "modals", "file-browser", "file-browser.html")
 
-    # The full-area Loading files overlay is gone; navigation stays seamless.
     assert "loading-state" not in html
     assert "loading-spinner" not in html
     assert "Loading files..." not in html
-    # The spin keyframes remain for the path-submit spinner.
     assert html.count("@keyframes spin") == 1
 
-    # The whole row opens files and navigates into folders; the name cell is passive.
     assert '@click="$store.fileBrowser.handleFileNameClick(file)"' in html
     assert '<div class="file-name">' in html
     assert '.file-item {\n    cursor: pointer;' in html
-    # Selection and action cells opt out of the row opener.
     assert '<label class="file-select-cell" @click.stop>' in html
     assert 'x-show="!$store.fileBrowser.isPickerMode()" @click.stop>' in html
 
@@ -184,7 +165,6 @@ def test_file_browser_compact_controls_and_narrow_layout_contract() -> None:
     assert 'title="New file"' in html
     assert 'aria-label="New folder"' in html
     assert 'title="New folder"' in html
-    # One + button owns both create actions behind a shared dropdown.
     assert 'aria-label="Create new"' in html
     assert 'toggleNewItemsMenu($el)' in html
     assert 'newItemsMenuOpen' in store
@@ -279,8 +259,6 @@ def test_file_browser_dropdown_escapes_scroll_container_and_header_is_opaque() -
     store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
 
     assert '@scroll="$store.fileBrowser.closeDropdown(); $store.fileBrowser.closeNewItemsMenu()"' in html
-    # A picker opened over a live canvas surface must restore the prior listing
-    # on close instead of destroying the shared store state.
     assert 'const surfaceActive = Boolean(document.querySelector(".file-browser-root.is-surface"));' in store
     assert 'await this.openSurface(retainedPath);' in store
     assert 'overflow: auto;' in html
@@ -461,7 +439,6 @@ def test_file_browser_history_back_forward_contract() -> None:
     store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
     dox = read("webui", "components", "modals", "file-browser", "AGENTS.md")
 
-    # One shared back/forward pair lives on the toolbar for both path bar modes.
     assert html.count('class="file-browser-header-button surface-control nav-history-button"') == 2
     assert '@click="$store.fileBrowser.navigateBack()"' in html
     assert '@click="$store.fileBrowser.navigateForward()"' in html
@@ -474,7 +451,6 @@ def test_file_browser_history_back_forward_contract() -> None:
     assert "history: [], // back navigation stack" in store
     assert "forwardHistory: [], // forward navigation stack" in store
     assert "pushNavHistory(path) {" in store
-    # Every fresh navigation records through the shared helper, which clears the future.
     assert "this.history.push(this.browser.currentPath);" not in store
     assert store.count("this.pushNavHistory(") == 3
 
@@ -541,13 +517,11 @@ assert.equal(store.browser.currentPath, '/a/b');
 assert.deepEqual(store.history, ['/a']);
 assert.deepEqual(store.forwardHistory, ['/a/b/c']);
 
-// A fresh navigation clears the forward stack.
 await store.navigateToFolder('/a/b/c');
 assert.equal(store.browser.currentPath, '/a/b/c');
 assert.deepEqual(store.history, ['/a', '/a/b']);
 assert.deepEqual(store.forwardHistory, []);
 
-// A failed back navigation restores the stack and keeps the current folder.
 await store.navigateBack();
 assert.equal(store.browser.currentPath, '/a/b');
 failPaths.add('/a');
@@ -557,7 +531,6 @@ assert.deepEqual(store.history, ['/a']);
 assert.deepEqual(store.forwardHistory, ['/a/b/c']);
 failPaths.delete('/a');
 
-// Buttons stay disabled without stack entries.
 assert.equal(store.history.length === 0, false);
 store.history = [];
 store.forwardHistory = [];

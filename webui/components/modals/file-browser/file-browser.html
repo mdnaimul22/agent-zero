@@ -204,7 +204,7 @@
                   <template x-teleport="body">
                     <div
                       class="path-suggestions"
-                      x-show="$store.fileBrowser.pathSuggestions.length && !$store.fileBrowser._pathSuggestionsHidden && !$store.fileBrowser.pathError"
+                      x-show="$store.fileBrowser.pathSuggestions.length && !$store.fileBrowser.pathSuggestionsHidden && !$store.fileBrowser.pathError"
                       :style="$store.fileBrowser.pathSuggestionsStyle"
                     >
                       <template x-for="(suggestion, index) in $store.fileBrowser.pathSuggestions" :key="suggestion.path">
@@ -643,7 +643,6 @@
     .files-list.is-loading .file-item {
       pointer-events: none;
     }
-
 
     .file-browser-shell.is-surface .files-list,
     .modal-inner.file-browser-modal .files-list {

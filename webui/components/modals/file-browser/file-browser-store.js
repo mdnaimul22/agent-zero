@@ -153,6 +153,7 @@ const model = {
   _pathSuggestionsToken: 0,
   _pathSuggestionsTimer: null,
   _pathSuggestionsHidden: false,
+  _pathObservers: new Set(),
   rememberLastDirectory: DEFAULT_REMEMBER_LAST_DIRECTORY,
   settingsLoadPromise: null,
   settingsUpdatedHandler: null,
@@ -758,15 +759,30 @@ const model = {
   // a focused input with the caret at the end (edit entry, refocus, Tab accept) stays pinned too.
   pinPathInput(element) {
     if (!element) return;
+    this.sweepDetachedPathObservers();
     if (!element._pinResizeObserver) {
       element._pinResizeObserver = new ResizeObserver(() => {
-        this.scrollPathInputToEnd(element);
+        this.scrollPathInputNextFrame(element);
       });
-      element._pinResizeObserver.observe(element);
     }
+    this._pathObservers.add(element);
+    element._pinResizeObserver.observe(element);
+    this.scrollPathInputNextFrame(element);
+  },
+
+  scrollPathInputNextFrame(element) {
     requestAnimationFrame(() => requestAnimationFrame(() => {
       this.scrollPathInputToEnd(element);
     }));
+  },
+
+  sweepDetachedPathObservers() {
+    for (const element of this._pathObservers) {
+      if (element.isConnected) continue;
+      element._pinResizeObserver?.disconnect();
+      element._crumbFitObserver?.disconnect();
+      this._pathObservers.delete(element);
+    }
   },
 
   scrollPathInputToEnd(element) {
@@ -875,6 +891,7 @@ const model = {
   // Hide crumbs that would render partially; expose an overflow parent menu.
   measurePathCrumbFit(element) {
     if (!element || element._crumbFitRunning) return;
+    this.sweepDetachedPathObservers();
     if (!element._crumbFitObserver) {
       element._crumbFitObserver = new ResizeObserver(() => {
         if (element._crumbFitQueued) return;
@@ -884,6 +901,7 @@ const model = {
           this.measurePathCrumbFit(element);
         });
       });
+      this._pathObservers.add(element);
       element._crumbFitObserver.observe(element);
     }
     // A hidden duplicate path bar must not overwrite shared overflow state.
@@ -941,8 +959,7 @@ const model = {
     const parent = endsWithSlash ? normalized : (slashIndex <= 0 ? "/" : normalized.slice(0, slashIndex));
     const prefix = endsWithSlash ? "" : normalized.slice(slashIndex + 1).toLowerCase();
     try {
-      const response = await fetchApi(`/get_work_dir_files?path=${encodeURIComponent(parent)}`
-      );
+      const response = await fetchApi(`/get_work_dir_files?path=${encodeURIComponent(parent)}`);
       const data = await response.json().catch(() => ({}));
       if (token !== this._pathSuggestionsToken) return;
       const entries = data?.data?.entries || [];
@@ -978,8 +995,12 @@ const model = {
     return this.pathSuggestions[this.pathSuggestionIndex] || null;
   },
 
+  get pathSuggestionsHidden() {
+    return this._pathSuggestionsHidden;
+  },
+
   selectPathSuggestion(element = null) {
-    if (this._pathSuggestionsHidden || !this.pathSuggestions.length) return false;
+    if (this.pathSuggestionsHidden || !this.pathSuggestions.length) return false;
     const suggestion = this.activePathSuggestion;
     if (!suggestion) return false;
     let path = String(suggestion.path || "");
@@ -991,7 +1012,7 @@ const model = {
   },
 
   movePathSuggestion(delta) {
-    if (this._pathSuggestionsHidden || !this.pathSuggestions.length) return false;
+    if (this.pathSuggestionsHidden || !this.pathSuggestions.length) return false;
     const count = this.pathSuggestions.length;
     this.pathSuggestionIndex = (this.pathSuggestionIndex + delta + count) % count;
     requestAnimationFrame(() => requestAnimationFrame(() => {
