@@ -945,7 +945,10 @@ const model = {
       crumb.style.display = "";
     });
     // The flex layout already subtracts the visible parent-menu button from this width.
-    const hidden = measure(element.clientWidth);
+    const available = element.clientWidth;
+    let hidden = measure(available);
+    // A fresh overflow reveals the chevron and shrinks the bar by its 16px slot + 2px gap; converge synchronously so truncation never paints a frame late.
+    if (hidden > 0 && !this.pathCrumbsOverflow) hidden = measure(available - 18);
     crumbs.forEach((crumb, index) => {
       crumb.style.display = index < hidden ? "none" : "";
     });

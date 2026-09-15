@@ -137,7 +137,7 @@
                       class="path-crumbs"
                       role="navigation"
                       aria-label="Directory path"
-                      x-effect="$store.fileBrowser.pathCrumbs(); $nextTick(() => $store.fileBrowser.measurePathCrumbFit($el))"
+                      x-effect="$store.fileBrowser.pathCrumbs(); requestAnimationFrame(() => $store.fileBrowser.measurePathCrumbFit($el))"
                       @click.self="$store.fileBrowser.startPathEdit()"
                     >
                       <template x-for="(crumb, index) in $store.fileBrowser.pathCrumbs()" :key="crumb.path">

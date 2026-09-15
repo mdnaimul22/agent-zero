@@ -158,12 +158,14 @@ def test_file_browser_seamless_navigation_and_row_click_contract() -> None:
 def test_file_browser_overflow_measure_reacts_to_navigation_contract() -> None:
     """Crumb fit measurement must re-run per navigation, not only on resize."""
     html = read("webui", "components", "modals", "file-browser", "file-browser.html")
+    store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
 
     start = html.index('x-effect="$store.fileBrowser.pathCrumbs()')
     end = html.index('@click.self="$store.fileBrowser.startPathEdit()"', start)
     crumbs_effect = html[start:end]
     assert "$store.fileBrowser.pathCrumbs()" in crumbs_effect
-    assert "measurePathCrumbFit($el)" in crumbs_effect
+    assert "requestAnimationFrame(() => $store.fileBrowser.measurePathCrumbFit($el))" in crumbs_effect
+    assert "hidden = measure(available - 18);" in store
 
 
 def test_file_browser_compact_controls_and_narrow_layout_contract() -> None:
