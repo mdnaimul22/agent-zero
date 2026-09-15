@@ -71,7 +71,7 @@
                       <x-icon aria-hidden="true" name="arrow_upward"></x-icon>
                       <span class="nav-button-label">Up</span>
                     </button>
-                    <div class="path-input-shell" :class="{ 'has-error': $store.fileBrowser.pathError }" @click.self="$store.fileBrowser.focusPathInput($el)">
+                    <div class="path-input-shell" :class="{ 'has-error': $store.fileBrowser.pathError }" @mousedown.self.prevent @click.self="$store.fileBrowser.focusPathInput($el)">
                       <input
                         id="current-path"
                         class="path-input"
@@ -161,7 +161,7 @@
                 </template>
                 <template x-if="$store.fileBrowser.pathEditing">
                   <div class="path-edit-group">
-                    <div class="path-input-shell" :class="{ 'has-error': $store.fileBrowser.pathError }" @click.self="$store.fileBrowser.focusPathInput($el)">
+                    <div class="path-input-shell" :class="{ 'has-error': $store.fileBrowser.pathError }" @mousedown.self.prevent @click.self="$store.fileBrowser.focusPathInput($el)">
                       <input
                         id="current-path-edit"
                         class="path-input"

@@ -48,6 +48,7 @@ def test_file_browser_editable_path_bar_and_remembered_directory_contract() -> N
     assert 'aria-label="Go to directory"' in html
     assert '@click="$store.fileBrowser.focusPathInput($el)"' in html
     assert html.count('@click.self="$store.fileBrowser.focusPathInput($el)"') == 2
+    assert html.count('@mousedown.self.prevent @click.self="$store.fileBrowser.focusPathInput($el)"') == 2
     assert 'aria-label="Edit directory path"' in html
     assert '.file-browser-header-button.path-submit:hover:not(:disabled)' in html
     assert 'opacity: 1' not in html.split('.file-browser-header-button.path-submit:hover')[1].split('}')[0]
