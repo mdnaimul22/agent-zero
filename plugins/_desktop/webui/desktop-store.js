@@ -831,6 +831,7 @@ const model = {
         type: "document",
       },
       {
+        modal: true,
         currentPath: parentPath(path),
         validateName: (newName) => {
           if (!extension) return true;

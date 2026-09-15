@@ -10,7 +10,7 @@
 - `../../settings/file-browser/file-browser-settings.html` owns the shared Settings fields for default sort, list/icon view, tree visibility and starting folder, plus the saved remote connection list/form and per-connection permissions.
 - `file-browser-store.js` owns directory loading, remembered-location state, selection, upload/download/delete actions, and surface handoff state.
 - `file-tree.js` and `file-tree.html` own the shared lazy directory tree; Files and Editor each retain independent tree state.
-- `rename-modal.html` owns rename and create-folder prompts that reuse the file-browser store.
+- `rename-modal.html` owns the rename and create-folder prompt for external callers (Editor, Desktop) that have no live browser footer; inside the browser both flows use the shared footer input.
 
 ## Local Contracts
 
@@ -48,6 +48,7 @@
 - The list pane uses `padding: 0 6px`, a borderless list container/header bottom, and square file rows. Folder rows use the same `folder` Material Symbol as the tree; file-type SVGs remain for files. All list icons use a fixed 22px slot, with a 22px folder glyph, so folder and file names align. Folder glyphs match the muted gray in `webui/public/file.svg`.
 - Keep the list compact: 4px vertical header padding and 5px vertical item padding. The path-submit button (pencil icon in raw mode) is borderless and transparent, with opacity-only hover feedback.
 - One Create new (+) control owns both create actions across canvas and modal modes: its dropdown lists New file and New folder with accessible labels, each item keeping its original permission and picker visibility guards; the menu reuses the teleported dropdown chrome and closes on pick, outside click, Escape, and list scroll.
+- New folder and Rename edit the name in the shared footer input (same `file-browser-picker-actions` row as the Save As filename) through `renameInline`; `openRenameModal(file, { modal: true })` and `openNewFolderModal({ modal: true })` keep the `rename-modal.html` window for external callers (Editor, Desktop) without a live browser. Inline close resets through `closeRenameModal()`, and `resetOpenState()` clears the inline state so reopen never merges picker and rename fields.
 - Keep Up, path, the Create new control, the tree toggle, and the settings gear in one compact row, with equal button heights. Do not add a separate search or totals row.
 - The path bar has two preference modes persisted in `fileBrowser.preferences.pathBar` (`buttons` default, `raw`): `raw` keeps the Up button plus the plain path input with the pencil submit button; `buttons` replaces Up and the input with parent-folder crumb buttons and an Edit toggle. Both modes share one field frame owned by the shell (`1px solid var(--color-border)`, 6px radius, 36px outer height, `background: var(--color-input)`); the input fills it via `height: 100%` with `border: 0` and must never set its own 36px height.
 - The raw input pins its scroll to the right end through the shared `pinPathInput` helper (ResizeObserver + double-rAF, re-run on `pathInput` changes and on blur): always when unfocused, and when focused only with the caret at the end; a caret moved mid-string keeps native caret-follow behavior.

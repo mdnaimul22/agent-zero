@@ -163,6 +163,7 @@ const model = {
   renameTarget: null,
   renameName: "",
   renameMode: "rename",
+  renameInline: false,
   isRenaming: false,
   renameError: null,
   renameAfterConfirm: null,
@@ -541,6 +542,7 @@ const model = {
     this.loadPreferences();
     this.closeDropdown();
     this.cancelMountedDefaultLoad();
+    this.resetRenameState();
     this.isLoading = true;
     this.error = null;
     this.history = [];
@@ -1342,6 +1344,7 @@ const model = {
     this.renameTarget = null;
     this.renameName = "";
     this.renameMode = "rename";
+    this.renameInline = false;
     this.isRenaming = false;
     this.renameError = null;
     this.renameAfterConfirm = null;
@@ -1699,18 +1702,32 @@ const model = {
     if (Array.isArray(options.entries)) {
       this.browser.entries = options.entries;
     }
-    window.openModal("modals/file-browser/rename-modal.html");
+    // External callers without a live browser (Editor, Desktop) keep the modal window;
+    // inside the browser the name is edited in the shared footer input.
+    if (options.modal) {
+      window.openModal("modals/file-browser/rename-modal.html");
+    } else {
+      this.renameInline = true;
+    }
   },
 
-  async openNewFolderModal() {
+  async openNewFolderModal(options = {}) {
     this.resetRenameState();
     this.renameMode = "create-folder";
     this.renameName = "";
     this.renameError = null;
-    window.openModal("modals/file-browser/rename-modal.html");
+    if (options.modal) {
+      window.openModal("modals/file-browser/rename-modal.html");
+    } else {
+      this.renameInline = true;
+    }
   },
 
   closeRenameModal() {
+    if (this.renameInline) {
+      this.resetRenameState();
+      return;
+    }
     window.closeModal("modals/file-browser/rename-modal.html");
   },
 

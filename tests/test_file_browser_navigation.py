@@ -313,6 +313,79 @@ assert.equal(store.browser.currentPath, '/a0/usr', 'surface listing reloaded aft
     subprocess.run(['node', '--input-type=module'], input=script, text=True, check=True)
 
 
+def test_file_browser_inline_rename_and_new_folder_use_footer_input() -> None:
+    """New folder and Rename edit the name in the shared footer input; external callers keep the modal."""
+    import re
+    import subprocess
+
+    source = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
+    source = re.sub(r'^import\b[\s\S]*?;\n', '', source, flags=re.M)
+    source = source.replace('export const store = createStore', 'const store = createStore')
+    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
+    script = '''
+import assert from 'node:assert/strict';
+const window = globalThis;
+const createStore = (_name, model) => model;
+const createFileTree = () => ({ shown: false, follow: async () => {} });
+const localStorage = { getItem: () => null, setItem: () => {} };
+const document = { querySelector: () => null };
+const callJsonApi = async () => ({ settings: {} });
+const formatDateTime = () => '';
+const openLatestSurface = async () => {};
+const setupFloatingSurfaceModalChrome = () => () => {};
+let openModalCalls = 0;
+const modalStack = [];
+window.isModalOpen = path => modalStack.includes(path);
+window.openModal = async path => { openModalCalls++; modalStack.push(path); return Promise.resolve(); };
+window.closeModal = async path => { modalStack.splice(modalStack.indexOf(path), 1); };
+window.toastFrontendError = () => {};
+let renameResponse = { ok: true, json: async () => ({}) };
+const fetchApi = async (url, options = {}) => {
+  if (String(url).startsWith('/get_work_dir_files')) {
+    return { ok: true, json: async () => ({ data: { entries: [], current_path: '/a0/usr' } }) };
+  }
+  return renameResponse;
+};
+''' + source + '''
+// Rename opens the inline footer input, not a modal window.
+await store.openRenameModal({ name: 'note.md', path: '/a0/usr/note.md', is_dir: false });
+assert.equal(openModalCalls, 0, 'in-browser rename does not open a modal');
+assert.equal(store.renameInline, true);
+assert.equal(store.renameMode, 'rename');
+assert.equal(store.renameName, 'note.md');
+store.renameName = 'renamed.md';
+await store.confirmRename();
+assert.equal(store.pickerMode, '', 'confirm closes the inline editor');
+assert.equal(store.renameInline, false);
+
+// New folder opens the inline footer input in create mode.
+await store.openNewFolderModal();
+assert.equal(openModalCalls, 0, 'in-browser New folder does not open a modal');
+assert.equal(store.renameInline, true);
+assert.equal(store.renameMode, 'create-folder');
+store.closeRenameModal();
+assert.equal(store.renameInline, false, 'cancel resets the inline editor');
+
+// External callers keep the modal window.
+await store.openRenameModal({ name: 'doc.md', path: '/a0/doc.md', is_dir: false }, { modal: true });
+assert.equal(openModalCalls, 1, 'external rename keeps the modal window');
+assert.equal(store.renameInline, false);
+await store.openNewFolderModal({ modal: true });
+assert.equal(openModalCalls, 2, 'external New folder keeps the modal window');
+modalStack.length = 0;
+'''
+    subprocess.run(['node', '--input-type=module'], input=script, text=True, check=True)
+
+    assert 'file-browser-picker-actions" x-show="$store.fileBrowser.isPickerMode() || $store.fileBrowser.renameInline"' in html
+    assert 'renameInline ? $store.fileBrowser.confirmRename() : $store.fileBrowser.confirmPicker()' in html
+    assert "x-model=\"$store.fileBrowser.renameName\"" in html
+    assert "modal: true" in read("plugins", "_editor", "webui", "editor-store.js")
+    assert "modal: true" in read("plugins", "_desktop", "webui", "desktop-store.js")
+    dox = read("webui", "components", "modals", "file-browser", "AGENTS.md")
+    assert "shared footer input" in dox
+    assert "rename-modal.html` owns the rename and create-folder prompt for external callers" in dox
+
+
 def test_file_browser_extract_and_editor_download_actions() -> None:
     browser_html = read("webui", "components", "modals", "file-browser", "file-browser.html")
     browser_store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")

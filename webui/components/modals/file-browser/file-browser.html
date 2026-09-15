@@ -562,7 +562,10 @@
       <!-- Modal Footer (outside template x-if so it exists immediately) -->
       <template x-if="$store.fileBrowser">
         <div class="modal-footer file-browser-footer" data-modal-footer :class="{ 'is-surface': xAttrs($el)?.mode === 'canvas' }">
-          <div class="file-browser-picker-actions" x-show="$store.fileBrowser.isPickerMode()" style="display: none">
+          <div class="file-browser-picker-actions" x-show="$store.fileBrowser.isPickerMode() || $store.fileBrowser.renameInline" style="display: none">
+            <template x-if="$store.fileBrowser.renameInline">
+              <span class="picker-inline-label" x-text="$store.fileBrowser.renameMode === 'create-folder' ? 'New folder' : 'Rename'"></span>
+            </template>
             <template x-if="$store.fileBrowser.isSaveAsPicker()">
               <input
                 type="text"
@@ -575,19 +578,36 @@
                 spellcheck="false"
               />
             </template>
+            <template x-if="$store.fileBrowser.renameInline">
+              <input
+                type="text"
+                class="picker-filename-input"
+                x-model="$store.fileBrowser.renameName"
+                x-init="$el.focus()"
+                @keydown.enter.prevent="$store.fileBrowser.confirmRename()"
+                :placeholder="$store.fileBrowser.renameMode === 'create-folder' ? 'Folder name' : 'New name'"
+                :aria-label="$store.fileBrowser.renameMode === 'create-folder' ? 'Folder name' : 'New name'"
+                spellcheck="false"
+              />
+            </template>
             <template x-if="$store.fileBrowser.pickerFilenameError">
               <span class="picker-inline-error" x-text="$store.fileBrowser.pickerFilenameError"></span>
+            </template>
+            <template x-if="$store.fileBrowser.renameError">
+              <span class="picker-inline-error" x-text="$store.fileBrowser.renameError"></span>
             </template>
             <button
               type="button"
               class="btn btn-ok picker-confirm-button"
-              :disabled="!$store.fileBrowser.canConfirmPicker() || $store.fileBrowser.isBulkBusy"
-              @click="$store.fileBrowser.confirmPicker()"
-              x-text="$store.fileBrowser.pickerConfirmLabel"
+              :disabled="$store.fileBrowser.renameInline
+                ? ($store.fileBrowser.isRenaming || !$store.fileBrowser.renameName.trim())
+                : (!$store.fileBrowser.canConfirmPicker() || $store.fileBrowser.isBulkBusy)"
+              @click="$store.fileBrowser.renameInline ? $store.fileBrowser.confirmRename() : $store.fileBrowser.confirmPicker()"
+              x-text="$store.fileBrowser.renameInline ? ($store.fileBrowser.renameMode === 'create-folder' ? 'Create Folder' : 'Rename') : $store.fileBrowser.pickerConfirmLabel"
             ></button>
-            <button type="button" class="btn btn-cancel" :disabled="$store.fileBrowser.isBulkBusy" @click="$store.fileBrowser.cancelPicker()">Cancel</button>
+            <button type="button" class="btn btn-cancel" :disabled="$store.fileBrowser.isBulkBusy || $store.fileBrowser.isRenaming" @click="$store.fileBrowser.renameInline ? $store.fileBrowser.closeRenameModal() : $store.fileBrowser.cancelPicker()">Cancel</button>
           </div>
-          <label class="btn btn-upload" x-show="!$store.fileBrowser.isPickerMode() && $store.fileBrowser.remoteAllowed('upload')">
+          <label class="btn btn-upload" x-show="!$store.fileBrowser.isPickerMode() && !$store.fileBrowser.renameInline && $store.fileBrowser.remoteAllowed('upload')">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
               <path
                 stroke-linecap="round"
@@ -600,7 +620,7 @@
           </label>
           <button
             class="btn btn-cancel"
-            x-show="xAttrs($el)?.mode !== 'canvas' && !$store.fileBrowser.isPickerMode()"
+            x-show="xAttrs($el)?.mode !== 'canvas' && !$store.fileBrowser.isPickerMode() && !$store.fileBrowser.renameInline"
             @click="$store.fileBrowser.handleClose()"
           >
             Close Browser
