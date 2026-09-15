@@ -586,14 +586,16 @@ class ChatCompletionsTransport:
             reasoning_delta, final=reasoning_filter is None
         )
         parsed = {"reasoning_delta": reasoning_delta, "response_delta": response_delta}
-        if not response_delta:
-            tool_calls = _as_list(_get_value(message, "tool_calls"))
-            response_delta = ChatCompletionsTransport.tool_calls_text(tool_calls)
+        tool_calls = _as_list(_get_value(message, "tool_calls"))
+        call_text = ChatCompletionsTransport.tool_calls_text(tool_calls)
+        if call_text:
+            parsed["response_delta"] = call_text
+            parsed["_output_items"] = ChatCompletionsTransport.output_items(tool_calls)
             if response_delta:
-                parsed["response_delta"] = response_delta
-                parsed["_output_items"] = ChatCompletionsTransport.output_items(
-                    tool_calls
-                )
+                parsed["_output_items"].insert(0, {
+                    "type": "message", "role": "assistant",
+                    "content": [{"type": "output_text", "text": response_delta}],
+                })
         return parsed
 
     @classmethod
@@ -1236,6 +1238,7 @@ class ResponsesEventParser:
         self.emitted_function_calls: set[str] = set()
         self.streamed_function_calls: dict[str, str] = {}
         self.pending_function_calls: dict[str, Any] = {}
+        self.commentary: dict[str, str] = {}
         self.seen_response_delta = False
         self.seen_reasoning_delta = False
         self.completed_response: Any = None
@@ -1281,6 +1284,7 @@ class ResponsesEventParser:
         event_type = _get_value(event, "type") or ""
         response_delta = ""
         reasoning_delta = ""
+        is_commentary = False
 
         if event_type in {
             "response.output_text.delta",
@@ -1288,6 +1292,11 @@ class ResponsesEventParser:
             "response.text.delta",
         }:
             response_delta = str(_get_value(event, "delta") or "")
+            key = self._event_key(event)
+            item = self.output_items.get(key, {})
+            if event_type != "response.refusal.delta" and item.get("phase") == "commentary":
+                self.commentary[key] = self.commentary.get(key, "") + response_delta
+                is_commentary = True
         elif event_type in {
             "response.reasoning_summary_text.delta",
             "response.reasoning_text.delta",
@@ -1317,7 +1326,30 @@ class ResponsesEventParser:
         if reasoning_delta:
             self.seen_reasoning_delta = True
 
-        return {"reasoning_delta": reasoning_delta, "response_delta": response_delta}
+        parsed = {"reasoning_delta": reasoning_delta, "response_delta": response_delta}
+        is_call = event_type in {
+            "response.function_call_arguments.delta", "response.function_call_arguments.done",
+        } or event_type == "response.output_item.done"
+        if self.commentary and response_delta and (is_commentary or is_call):
+            parsed["response_preview"] = self._commentary_preview()
+        return parsed
+
+    def _commentary_preview(self) -> str:
+        preview = {"thoughts": list(self.commentary.values())}
+        calls = [(key, item) for key, item in self.function_calls.items()
+                 if key in self.emitted_function_calls or key in self.streamed_function_calls]
+        if len(calls) == 1:
+            key, item = calls[0]
+            if key in self.streamed_function_calls:
+                return (json.dumps(preview, ensure_ascii=False)[:-1]
+                        + ',"tool_name":' + json.dumps(item["name"], ensure_ascii=False)
+                        + ',"tool_args":' + item["arguments"])
+            preview.update(ResponsesTransport.function_call_object(item))
+        elif calls:
+            preview.update(tool_name="parallel_tool_calls", tool_args={
+                "calls": [ResponsesTransport.function_call_object(item) for _, item in calls],
+            })
+        return json.dumps(preview, ensure_ascii=False)
 
     def _remember_output_item(self, item: Any, event: Any) -> str:
         item_type = _get_value(item, "type")

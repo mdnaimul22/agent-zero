@@ -1449,12 +1449,14 @@ def test_responses_response_parser_extracts_text_reasoning_and_function_calls():
     }
 
 
-def test_chat_completions_response_parser_extracts_tool_calls():
+@pytest.mark.parametrize("commentary", [None, "Looking it up."])
+def test_chat_completions_response_parser_extracts_tool_calls(commentary):
     parsed = litellm_transport.ChatCompletionsTransport.parse(
         {
             "choices": [
                 {
                     "message": {
+                        "content": commentary,
                         "tool_calls": [
                             {
                                 "id": "call_1",
@@ -1475,7 +1477,17 @@ def test_chat_completions_response_parser_extracts_tool_calls():
         "tool_name": "lookup",
         "tool_args": {"q": "a0"},
     }
-    assert parsed["_output_items"][0]["name"] == "lookup"
+    items = parsed["_output_items"]
+    assert items[-1]["name"] == "lookup"
+    assert items[-1]["call_id"] == "call_1"
+    if commentary:
+        assert items[0] == {
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": commentary}],
+        }
+    else:
+        assert len(items) == 1
 
 
 def test_chat_completions_stream_parser_accumulates_tool_call_arguments():

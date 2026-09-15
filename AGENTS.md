@@ -20,6 +20,7 @@
 - Native function calls use canonical call content for history and repeat comparison, even when accompanied by commentary. The canonical content passes through the normal history template/masking hook; provider output metadata remains intact.
 - `initialize.py` owns framework initialization.
 - `models.py` owns model-provider configuration and LiteLLM integration.
+- Native agent-turn response callbacks may receive a display-only commentary preview as their full text; legacy callbacks, accumulated model output, usage and native dispatch retain the original text and result metadata.
 - `run_ui.py` is the WebUI entry point.
 - `DockerfileLocal` must remain compatible with the contracts under `docker/`.
 - Runtime or user state under `usr/` and `tmp/` is intentionally outside tracked DOX unless the user explicitly asks otherwise.

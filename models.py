@@ -727,7 +727,8 @@ class LiteLLMChatWrapper(SimpleChatModel):
                         if output["response_delta"]:
                             if response_callback:
                                 stop_response = await response_callback(
-                                    output["response_delta"], result.response
+                                    output["response_delta"],
+                                    parsed.get("response_preview", result.response),
                                 )
                             if tokens_callback:
                                 await tokens_callback(
