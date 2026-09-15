@@ -395,6 +395,18 @@ const model = {
     // A picker may open over a live canvas surface; its listing must survive the modal close.
     const surfaceActive = Boolean(document.querySelector(".file-browser-root.is-surface"));
     const retainedPath = surfaceActive ? this.browser.currentPath : "";
+    // A picker may also be requested while this browser is already live: convert in place instead of stacking a second window.
+    if (options?.pickerMode && (surfaceActive || window.isModalOpen?.(FILE_BROWSER_MODAL_PATH))) {
+      this.resetOpenState(options);
+      try {
+        await this.loadOpeningPath(path);
+      } catch (error) {
+        console.error("File browser error:", error);
+        this.error = error?.message || "Failed to load files";
+        this.isLoading = false;
+      }
+      return;
+    }
     this.resetOpenState(options);
 
     try {
@@ -1219,7 +1231,12 @@ const model = {
       const result = await this.pickerOnConfirm?.(payload);
       if (result === false) return;
       this.disposeScopedTooltips();
-      window.closeModal(FILE_BROWSER_MODAL_PATH);
+      if (window.isModalOpen?.(FILE_BROWSER_MODAL_PATH)) {
+        window.closeModal(FILE_BROWSER_MODAL_PATH);
+      } else {
+        // In-place picker over a live surface: restore the browser listing.
+        await this.restoreBrowserAfterInPlacePicker();
+      }
     } catch (error) {
       const message = error?.message || "File selection failed";
       if (this.isSaveAsPicker()) this.pickerFilenameError = message;
@@ -1231,7 +1248,20 @@ const model = {
 
   cancelPicker() {
     this.disposeScopedTooltips();
-    window.closeModal(FILE_BROWSER_MODAL_PATH);
+    if (window.isModalOpen?.(FILE_BROWSER_MODAL_PATH)) {
+      window.closeModal(FILE_BROWSER_MODAL_PATH);
+    } else {
+      // In-place picker over a live surface: restore the browser listing.
+      this.restoreBrowserAfterInPlacePicker();
+    }
+  },
+
+  async restoreBrowserAfterInPlacePicker() {
+    // Drop picker state and reload the listing so a live surface returns to normal browsing.
+    this.resetPickerState();
+    this.clearSelection();
+    this.isLoading = false;
+    await this.fetchFiles(this.browser.currentPath, { preserveOnError: true });
   },
 
   handleFileNameClick(file = {}) {

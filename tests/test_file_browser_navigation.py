@@ -242,6 +242,77 @@ def test_file_browser_editor_picker_modes_have_primary_footer_actions() -> None:
     assert 'x-show="$store.fileBrowser.canOpenInActionMenu(file)"' in html
 
 
+def test_file_browser_picker_reuses_open_browser_modal_instead_of_stacking() -> None:
+    """New file while the browser modal is open converts it in place; no second modal stacks."""
+    import re
+    import subprocess
+
+    source = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
+    source = re.sub(r'^import\b[\s\S]*?;\n', '', source, flags=re.M)
+    source = source.replace('export const store = createStore', 'const store = createStore')
+    script = '''
+import assert from 'node:assert/strict';
+const window = globalThis;
+const createStore = (_name, model) => model;
+const createFileTree = () => ({ shown: false, follow: async () => {} });
+const localStorage = { getItem: () => null, setItem: () => {} };
+let surfaceElement = null;
+const document = { querySelector: () => surfaceElement };
+const callJsonApi = async () => ({ settings: {} });
+const fetchApi = async () => ({ ok: true, json: async () => ({ data: { entries: [], current_path: '/a0/usr' } }) });
+const formatDateTime = () => '';
+const openLatestSurface = async () => {};
+const setupFloatingSurfaceModalChrome = () => () => {};
+let openModalCalls = 0;
+const modalStack = [];
+window.isModalOpen = path => modalStack.includes(path);
+window.openModal = async path => { openModalCalls++; modalStack.push(path); return Promise.resolve(); };
+window.closeModal = async () => {};
+window.toastFrontendError = () => {};
+''' + source + '''
+// 1) Picker while the browser modal is already open: convert in place, never stack.
+modalStack.push('modals/file-browser/file-browser.html');
+const sentinel = {};
+store.closePromise = sentinel;
+await store.openSaveAsPicker('/a0/usr', {
+  filename: 'Untitled.txt',
+  defaultExtension: '',
+  onConfirm: async () => true,
+});
+assert.equal(openModalCalls, 0, 'picker must not stack a second browser modal');
+assert.equal(store.pickerMode, 'save-as');
+assert.equal(store.pickerConfirmLabel, 'Save Here');
+assert.equal(store.pickerFilename, 'Untitled.txt');
+assert.equal(typeof store.pickerOnConfirm, 'function');
+assert.equal(store.closePromise, sentinel, 'original modal close awaiter is preserved');
+assert.equal(store.isLoading, false);
+assert.equal(store.browser.currentPath, '/a0/usr');
+assert.deepEqual(store.browser.entries, []);
+
+// 2) Picker with no browser modal open: normal picker modal flow.
+modalStack.length = 0;
+await store.openSaveAsPicker('/a0', { filename: 'Untitled.txt', defaultExtension: '' });
+assert.equal(openModalCalls, 1, 'fresh picker opens the modal once');
+assert.equal(store.pickerMode, '', 'modal close destroys state cleanly');
+assert.equal(store.closePromise, null);
+modalStack.length = 0;
+
+// 3) Picker over a live canvas surface: convert in place, restore listing on cancel.
+surfaceElement = { closest: () => null };
+store.browser.currentPath = '/a0/usr';
+await store.openSaveAsPicker('/a0', { filename: 'Untitled.txt', defaultExtension: '' });
+assert.equal(openModalCalls, 1, 'surface pickers never stack a second window');
+assert.equal(store.pickerMode, 'save-as', 'surface converts to picker in place');
+assert.equal(store.isLoading, false);
+store.cancelPicker();
+await Promise.resolve();
+await Promise.resolve();
+assert.equal(store.pickerMode, '', 'cancel restores the browser listing');
+assert.equal(store.browser.currentPath, '/a0/usr', 'surface listing reloaded after cancel');
+'''
+    subprocess.run(['node', '--input-type=module'], input=script, text=True, check=True)
+
+
 def test_file_browser_extract_and_editor_download_actions() -> None:
     browser_html = read("webui", "components", "modals", "file-browser", "file-browser.html")
     browser_store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
