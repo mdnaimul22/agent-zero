@@ -44,11 +44,10 @@ def test_file_browser_editable_path_bar_and_remembered_directory_contract() -> N
     assert ".nav-button-label" in html
     assert 'x-model="$store.fileBrowser.pathInput"' in html
     assert '@submit.prevent="$store.fileBrowser.submitPath()"' in html
-    assert html.count('focusPathInput($el)') == 1
-    assert "pathSubmitState() === 'pencil') { $event.preventDefault(); $store.fileBrowser.focusPathInput($el); }" in html
     assert 'focusPathInput(button) {' in store
+    assert 'aria-label="Go to directory"' in html
+    assert '@click="$store.fileBrowser.focusPathInput($el)"' in html
     assert 'aria-label="Edit directory path"' in html
-    assert 'Go to directory' in html
     assert '.file-browser-header-button.path-submit:hover:not(:disabled)' in html
     assert 'opacity: 1' not in html.split('.file-browser-header-button.path-submit:hover')[1].split('}')[0]
     assert 'cursor: text' in html
@@ -76,19 +75,21 @@ def test_file_browser_editable_path_bar_and_remembered_directory_contract() -> N
 
 
 def test_file_browser_path_submit_state_machine_contract() -> None:
-    """One shared icon state machine drives raw and edit submit buttons (DRY)."""
+    """One shared spinner-only submit slot drives raw and edit buttons (DRY)."""
     html = read("webui", "components", "modals", "file-browser", "file-browser.html")
     store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
 
-    assert "pathSubmitState() {" in store
-    assert 'if (this.isPathSubmitting || this.isLoading) return "spinner";' in store
-    assert 'if (this.pathEditing || this.rawPathFocused) return "check";' in store
-    assert 'return "pencil";' in store
-
-    assert html.count("pathSubmitState() === 'spinner'") == 4
-    assert html.count("pathSubmitState() === 'check'") == 2
-    assert "!$store.fileBrowser.isPathSubmitting && !$store.fileBrowser.isLoading\"></x-icon>" not in html
-    assert "rawPathFocused" in store
+    assert "pathSubmitState" not in store
+    assert "pathSubmitState" not in html
+    assert 'path-edit-spinner' not in html
+    assert ".path-submit.is-submitting::before," in html
+    assert ".path-edit-toggle.is-loading::before" in html
+    assert html.count(":class=\"{ 'is-submitting': $store.fileBrowser.isPathSubmitting || $store.fileBrowser.isLoading }\"") == 2
+    assert '<x-icon name="check"' not in html
+    assert 'x-icon name="edit" x-show="$store.fileBrowser.pathSubmitState()' not in html
+    assert ".file-browser-header-button.path-submit {" in html
+    assert "width: 26px;" in html
+    assert "min-width: 26px;" in html
 
     assert "active.classList.contains(\"path-input\")) active.blur();" in store
 
@@ -101,7 +102,9 @@ def test_file_browser_raw_mode_parity_contract() -> None:
     assert "pinPathInput(element) {" in store
     assert "ResizeObserver" in store
     assert "$store.fileBrowser.pathInput; $store.fileBrowser.pinPathInput($el)" in html
-    assert "$store.fileBrowser.pinPathInput($el); $store.fileBrowser.rawPathFocused = false" in html
+    assert "scrollPathInputToEnd(element) {" in store
+    assert "pinPathInputAfterBlur(element) {" in store
+    assert '@blur="$store.fileBrowser.hidePathSuggestions(); $store.fileBrowser.pinPathInputAfterBlur($el)"' in html
 
     assert html.count('@mousedown.prevent') >= 2
 
@@ -156,7 +159,9 @@ def test_file_browser_overflow_measure_reacts_to_navigation_contract() -> None:
     """Crumb fit measurement must re-run per navigation, not only on resize."""
     html = read("webui", "components", "modals", "file-browser", "file-browser.html")
 
-    crumbs_effect = html[html.index("x-effect=\"$store.fileBrowser.pathCrumbs()"):html.index("@click.self")]
+    start = html.index('x-effect="$store.fileBrowser.pathCrumbs()')
+    end = html.index('@click.self="$store.fileBrowser.startPathEdit()"', start)
+    crumbs_effect = html[start:end]
     assert "$store.fileBrowser.pathCrumbs()" in crumbs_effect
     assert "measurePathCrumbFit($el)" in crumbs_effect
 

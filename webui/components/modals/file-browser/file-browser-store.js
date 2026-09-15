@@ -141,7 +141,6 @@ const model = {
   pathError: "",
   isPathSubmitting: false,
   pathEditing: false,
-  rawPathFocused: false,
   pathSuggestions: [],
   pathSuggestionsStyle: {},
   pathSuggestionIndex: 0,
@@ -769,8 +768,7 @@ const model = {
     this.pathInput = this.browser.currentPath || "";
   },
 
-  // Keep the raw path input pinned to its right end whenever it is not being edited;
-  // a focused input with the caret at the end (edit entry, refocus, Tab accept) stays pinned too.
+  // Pin to the right end when unedited or caret at end; blur re-pins through pinPathInputAfterBlur.
   pinPathInput(element) {
     if (!element) return;
     this.sweepDetachedPathObservers();
@@ -806,14 +804,15 @@ const model = {
     if (atEnd) element.scrollLeft = element.scrollWidth;
   },
 
-  // Shared submit-button icon state: pencil idle, check while editing/focused, spinner while busy.
-  pathSubmitState() {
-    if (this.isPathSubmitting || this.isLoading) return "spinner";
-    if (this.pathEditing || this.rawPathFocused) return "check";
-    return "pencil";
+  // Chrome resets an input's scrollLeft to 0 when the input blurs, after handlers and microtasks; snap on the first frame (pre-paint, instant) and re-check on the second in case the reset lands between frames.
+  pinPathInputAfterBlur(element) {
+    requestAnimationFrame(() => {
+      this.scrollPathInputToEnd(element);
+      requestAnimationFrame(() => this.scrollPathInputToEnd(element));
+    });
   },
 
-  // The submit icon acts as part of the field: a real click focuses the input.
+  // The raw submit slot acts as part of the field: a real click focuses the input.
   focusPathInput(button) {
     const input = button?.closest(".path-input-shell")?.querySelector("input");
     if (input) input.focus();
