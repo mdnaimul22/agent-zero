@@ -34,11 +34,11 @@
     <div class="field">
       <div class="field-label">
         <label class="field-title" for="files-path-bar">Path bar style</label>
-        <div class="field-description" id="files-path-bar-description">Folder buttons with quick parent navigation, or a plain text path with the navigate up button.</div>
+        <div class="field-description" id="files-path-bar-description">Breadcrumbs with quick parent navigation, or a plain text path with the navigate up button.</div>
       </div>
       <div class="field-control">
         <select id="files-path-bar" aria-describedby="files-path-bar-description" x-model="$store.fileBrowser.preferences.pathBar" @change="$store.fileBrowser.savePreferences()">
-          <option value="buttons">Folder buttons</option><option value="raw">Plain text path</option>
+          <option value="buttons">Breadcrumbs</option><option value="raw">Text</option>
         </select>
       </div>
     </div>
