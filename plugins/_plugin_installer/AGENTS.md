@@ -16,6 +16,7 @@
 - Install third-party plugins into `usr/plugins/`, not bundled `plugins/`.
 - Reject unsafe archive paths, missing manifests, invalid manifests, and plugin name conflicts.
 - Run plugin install hooks and refresh plugin state after successful changes.
+- Download fallback thumbnails only when no supported thumbnail exists; repository-provided images change through Git updates.
 
 ## Work Guidance
 
