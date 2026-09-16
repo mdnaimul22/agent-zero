@@ -13,6 +13,8 @@
 
 ## Local Contracts
 
+- `extensions/webui/get_process_step_types/code-exe-types.js` registers `code_exe` as a process-step type so raw-log grouping matches the plugin's message renderer.
+
 - Keep session concurrency, timeout, streaming, and reset behavior predictable.
 - A direct parallel code job retains its worker and loop-bound shell until the command ends or is cancelled. Output timeouts publish model-facing progress to the registered job and continue polling; callers use parallel job IDs. Close parallel shells explicitly on that worker loop on completion or cancellation, including partially connected shells. Top-level sessions retain their ordinary timeout/output/reset behavior.
 - Execute multi-line terminal input as one current-shell compound so intermediate prompts cannot mark queued work complete; preserve `cd`, exports, and other shell state.

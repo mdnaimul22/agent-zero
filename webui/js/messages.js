@@ -20,6 +20,7 @@ import {
 import { Scroller, cancelPendingScroll } from "./scroller.js";
 import {
   MessageWindow,
+  PROCESS_STEP_TYPES,
   classifyMessageRenderUnits,
   getMessageCacheKey,
 } from "./message-window.js";
@@ -41,13 +42,14 @@ const PROCESS_GROUP_RENDER_INFO = Symbol("processGroupRenderInfo");
 
 let _messageProcessGroups = new WeakMap();
 let _messageIsProcessStep = new WeakSet();
+let _processStepTypes = PROCESS_STEP_TYPES;
 const _processGroupStepLimits = new Map();
 let _renderedProcessGroupPages = new Map();
 
 function getMessageRenderUnitKeys(messages) {
   _messageProcessGroups = new WeakMap();
   _messageIsProcessStep = new WeakSet();
-  const units = classifyMessageRenderUnits(messages);
+  const units = classifyMessageRenderUnits(messages, _processStepTypes);
   units.forEach((unit, index) => {
     if (!unit.group) return;
     _messageProcessGroups.set(messages[index], unit.group);
@@ -203,6 +205,17 @@ export function setMessages(messages) {
 async function setMessagesNow(messages, generation) {
   if (generation !== _messageRenderGeneration) return null;
   messages = normalizeMessages(messages);
+  const context = { processStepTypes: new Set(PROCESS_STEP_TYPES) };
+  await callJsExtensions("get_process_step_types", context);
+  const types = _messageWindow.messageTypes;
+  for (const message of messages) types.add(String(message.type || ""));
+  for (const type of types) {
+    if (!context.processStepTypes.has(type) && await getMessageHandler(type) === drawMessageTool) {
+      context.processStepTypes.add(type);
+    }
+  }
+  if (generation !== _messageRenderGeneration) return null;
+  _processStepTypes = context.processStepTypes;
   const history = getChatHistoryEl();
   const followTail = shouldFollowMessageTail();
 

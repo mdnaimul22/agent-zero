@@ -82,6 +82,45 @@ The modal's Save button persists `config` to `config.json` in the correct scope 
 ---
 
 
+## Custom Message Handlers
+
+Prefer the existing `tool` log type and `get_tool_message_handler` hook when only a tool's presentation needs customization. For a distinct log type, add `extensions/webui/get_message_handler/my-handler.js` inside the plugin:
+
+```javascript
+import { drawProcessStep } from "/js/messages.js";
+
+export default function (extData) {
+  if (extData.type !== "my_plugin_step") return;
+  extData.handler = function (log) {
+    return drawProcessStep({
+      id: log.id,
+      title: log.heading,
+      code: "MY",
+      content: log.content,
+      kvps: log.kvps,
+      log,
+    });
+  };
+}
+```
+
+- The backend emits the matching `type="my_plugin_step"` through the normal log API (for a tool, override `get_log_object()`). Use plugin-specific type names and stable IDs for streaming updates.
+- The default extension function assigns `extData.handler` only for its own types. A handler receives `{ id, no, type, heading, content, kvps, timestamp, agentno, ... }` and returns `{ element, ... }`, or a promise of that result. Return the object from `drawProcessStep`, not just its DOM element.
+- Register every custom type rendered as a process step using the hook below. The UI calls it before grouping raw logs for paging and hidden utility messages. No core type list or plugin manifest edit is needed. Keep a type's process/standalone role consistent across its handlers.
+- Pass the original handler argument as `log`; copying or reconstructing it can lose internal rendering metadata. Standalone handlers can use `drawMessageDefault(log)` and do not register a process type. Without a custom handler, types retain the generic tool-step fallback, including disabled plugins' old logs. The dispatcher recognizes that fallback before grouping; standalone rendering must come from an explicit handler.
+
+Add `extensions/webui/get_process_step_types/my-types.js` in the same plugin:
+
+```javascript
+export default function (context) {
+  context.processStepTypes.add("my_plugin_step");
+}
+```
+
+The context contains a fresh `Set` seeded with core types. Add only your process types, preserving existing entries; registration must be repeatable and independent of individual records. Use the normal plugin enable/disable flow and reload the page when prompted. The existing extension loader owns caching.
+
+Examples: `/a0/plugins/_code_execution/extensions/webui/get_message_handler/code-exe-handler.js` and `/a0/plugins/_text_editor/extensions/webui/get_message_handler/_10_text_editor_handler.js`. Verify live updates, replay, hidden/visible utilities, root-response completion, paging beyond 50 steps, and rendering old logs with the plugin disabled.
+
 ## Verification
 
 Check the browser console, store loading, settings persistence in the intended scope, and the rendered feature in the target instance. Verify desktop and narrow layouts for UI changes. Close only test surfaces you opened.

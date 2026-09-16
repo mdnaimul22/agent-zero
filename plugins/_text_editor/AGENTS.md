@@ -13,6 +13,8 @@
 
 ## Local Contracts
 
+- `extensions/webui/get_process_step_types/text-editor-types.js` registers `text_editor` as a process-step type so raw-log grouping matches the plugin's message renderer.
+
 - `patch` supports line-number `edits`, context `patch_text`, and exact `old_text`/`new_text` replacement. Line edits remain supported and require fresh read state; they are not deprecated.
 - Text Editor `write`/`patch` read the canonical UI-intent arg `open_in_canvas`; legacy aliases `open_canvas` and `open_document` still work. Document only the canonical arg in model-facing prompts.
 - `tools/text_editor.py` logs `type="text_editor"` through a `get_log_object()` override so the WebUI `get_message_handler` hook routes messages to `_text_editor/extensions/webui/get_message_handler/_10_text_editor_handler.js` instead of the default `drawMessageTool` handler.

@@ -22,6 +22,7 @@ Scale review to the change and requested risk. For a full audit, cover each grou
 - Keep configurable tool guidance policy-filtered. Validate complete JSON examples and exact tool IDs/args.
 - Gate store-dependent Alpine content, use separate `createStore` modules, bind settings to `config.*`, and use framework notifications. Verify real breakpoint names and existing geometry.
 - **FAIL** if setup, dependency installation/removal, required initialization, update migrations, or uninstall cleanup uses `execute.py` or requires a manual Execute/post-install step. Require `hooks.py:install()` and `hooks.py:uninstall()` for the applicable operations, with `pre_update()` when needed. Verify reruns, failure cleanup, and the actual target interpreter; task-runtime dependencies do not prove framework readiness.
+- For custom message handlers, verify the `get_process_step_types` hook registers every custom type rendered with `drawProcessStep`, the original handler argument is passed as `log`, and the result includes `element`. Test live/replayed records followed by hidden utilities and histories longer than 50 steps; standalone handlers must remain undeclared.
 - Track plugin-owned side effects and cleanup. Removing a plugin must not remove shared packages/services needed by other features.
 
 ## Security And Reliability
