@@ -1250,9 +1250,8 @@ function appendToMessageGroup(
 function getLastProcessGroup(allowCompleted = true) {
   const lastContainer = getLastMessageGroup();
   if (!lastContainer) return null;
-  const groups = lastContainer.querySelectorAll(".process-group");
-  if (groups.length === 0) return null;
-  const group = groups[groups.length - 1];
+  const group = lastContainer.lastElementChild?.querySelector(":scope > .process-group");
+  if (!group) return null;
   if (!allowCompleted && isProcessGroupComplete(group)) return null;
 
   return group;
@@ -1270,7 +1269,6 @@ function getOrCreateProcessGroup(id, allowCompleted = true, renderInfo = null) {
 
   // lastly create new
   const messageContainer = document.createElement("div");
-  messageContainer.id = `process-group-${groupIdentity}`;
   messageContainer.classList.add(
     "message-container",
     "ai-container",

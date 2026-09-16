@@ -232,3 +232,63 @@ def test_context_reset_during_fallback_resolution(page):
         handlerCache.add('frontend_extensions_js(extensions)(plugins)', 'get_message_handler', originalHandlers);
       }
     }""")
+
+
+@pytest.mark.parametrize("mode", ["collapsed", "current", "expanded"])
+@pytest.mark.parametrize("replay", [False, True])
+def test_utility_group_promotion_keeps_one_visible_group_and_unique_id(page, mode, replay):
+    page.evaluate("""async ({mode, replay}) => {
+      prefs.detailMode = mode;
+      prefs.showUtils = false;
+      for (const type of ['agent', 'text_editor', 'code_exe', 'unknown_step']) {
+        msgs.resetMessageRenderState();
+        const logs = [row(0, 'user'), row(1, 'util'), row(2, type)];
+        if (replay) await msgs.setMessages(logs);
+        else {
+          await msgs.setMessages(logs.slice(0, 2));
+          check(!visible(historyEl.querySelector('.process-group')), 'utility-only group should start hidden');
+          await msgs.setMessages([logs[2]]);
+        }
+        const group = historyEl.querySelector('.process-group');
+        check(visible(group), `${type}: first substantive step did not reveal utility group`);
+        check(historyEl.querySelectorAll('.process-group').length === 1, `${type}: promotion split the group`);
+        check(historyEl.querySelectorAll(`[id="${group.id}"]`).length === 1, 'process group ID belongs to multiple nodes');
+        check(document.getElementById(group.id) === group, 'ID lookup must return the process group itself');
+        await msgs.setMessages([row(2, type, {heading: 'Updated step'}), row(3, 'util')]);
+        check(visible(group), 'streaming update hid the promoted group');
+        await msgs.setMessages([row(4, 'response')]);
+        check(group.querySelector('.process-group-response'), 'response detached from promoted group');
+      }
+    }""", {"mode": mode, "replay": replay})
+
+
+@pytest.mark.parametrize("replay", [False, True])
+@pytest.mark.parametrize("boundary", ["user", "error", "hint", "model_setup_gate", "custom_note"])
+def test_process_group_lookup_stops_at_standalone_tail(page, replay, boundary):
+    page.evaluate("""async ({replay, boundary}) => {
+      const cache = await import('/js/cache.js');
+      const extensions = await import('/js/extensions.js');
+      const area = 'frontend_extensions_js(extensions)(plugins)';
+      const handlers = await extensions.loadJsExtensions('get_message_handler');
+      cache.add(area, 'get_message_handler', [...handlers, {path: 'standalone-test', module: {
+        default(data) { if (data.type === 'custom_note') data.handler = msgs.drawMessageDefault; },
+      }}]);
+      try {
+        prefs.showUtils = false;
+        for (const nextType of ['util', 'agent', 'warning', 'rate_limit', 'response']) {
+          msgs.resetMessageRenderState();
+          const logs = [row(0, 'user'), row(1, 'agent'), row(2, boundary), row(3, nextType)];
+          if (replay) await msgs.setMessages(logs);
+          else for (const log of logs) await msgs.setMessages([log]);
+          const first = historyEl.querySelector('#process-step-row-1').closest('.process-group');
+          const next = historyEl.querySelector('#process-step-row-3, #message-row-3');
+          check(visible(first), `${boundary} -> ${nextType}: hid previous process group`);
+          check(next && !first.contains(next), `${boundary} -> ${nextType}: crossed standalone boundary`);
+          const boundaryElement = historyEl.querySelector('#message-row-2');
+          check(boundaryElement.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING,
+            `${boundary} -> ${nextType}: reordered messages`);
+        }
+      } finally {
+        cache.add(area, 'get_message_handler', handlers);
+      }
+    }""", {"replay": replay, "boundary": boundary})
