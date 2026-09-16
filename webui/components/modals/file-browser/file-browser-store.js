@@ -2170,8 +2170,15 @@ window.openFileLink = async function (path) {
       return;
     }
     if (resp.is_dir) {
-      // Set initial path and open via store
-      await store.open(resp.abs_path);
+      // A live browser navigates in place instead of stacking a second window.
+      const { store: canvasStore } = await import("/components/canvas/right-canvas-store.js");
+      const hasLiveBrowser = window.isModalOpen?.(FILE_BROWSER_MODAL_PATH)
+        || (canvasStore.shouldRender?.() && canvasStore.isSurfaceVisible?.("files"));
+      if (hasLiveBrowser) {
+        await store.navigateToFolder(resp.abs_path);
+      } else {
+        await store.open(resp.abs_path);
+      }
     } else {
       store.downloadFile({ path: resp.abs_path, name: resp.file_name });
     }
