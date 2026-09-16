@@ -666,6 +666,40 @@ def test_browser_hook_installs_patchright_for_existing_self_updated_runtime(monk
     assert current is True
 
 
+@pytest.mark.parametrize("socks_installed", [False, True])
+def test_browser_install_ensures_httpx_socks_support(monkeypatch, socks_installed):
+    installed = socks_installed
+    calls = []
+
+    def find_spec(name):
+        assert name == "socksio"
+        return object() if installed else None
+
+    def install(command, *, cwd):
+        nonlocal installed
+        assert command == [
+            "/usr/local/bin/uv", "pip", "install", "--python", sys.executable,
+            "httpx[socks]",
+        ]
+        assert cwd == str(PROJECT_ROOT / "plugins" / "_browser")
+        calls.append(command)
+        installed = True
+
+    def prepare():
+        assert installed
+        return {"binary": "chromium"}
+
+    monkeypatch.setattr(browser_hooks_module.importlib.util, "find_spec", find_spec)
+    monkeypatch.setattr(browser_hooks_module.shutil, "which", lambda name: "/usr/local/bin/uv")
+    monkeypatch.setattr(browser_hooks_module.subprocess, "check_call", install)
+    monkeypatch.setattr(browser_hooks_module, "prepare_playwright_cache", prepare)
+
+    assert browser_hooks_module.install() == {"binary": "chromium"}
+    assert len(calls) == (0 if socks_installed else 1)
+    assert browser_hooks_module.install() == {"binary": "chromium"}
+    assert len(calls) == (0 if socks_installed else 1)
+
+
 def _write_playwright_binary(cache_dir: Path) -> Path:
     browser_binary = cache_dir / "chromium-1169" / "chrome-linux" / "chrome"
     browser_binary.parent.mkdir(parents=True)
