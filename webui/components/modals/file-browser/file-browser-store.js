@@ -130,7 +130,8 @@ const model = {
     sortBy: "name",
     sortDirection: "asc",
   },
-  history: [], // navigation stack
+  history: [], // back navigation stack
+  forwardHistory: [], // forward navigation stack
   initialPath: "", // Store path for open() call
   closePromise: null,
   isSurfaceHandoff: false,
@@ -139,6 +140,19 @@ const model = {
   pathInput: "",
   pathError: "",
   isPathSubmitting: false,
+  pathEditing: false,
+  pathSuggestions: [],
+  pathSuggestionsStyle: {},
+  pathSuggestionIndex: 0,
+  pathCrumbsOverflow: 0,
+  pathOverflowMenuOpen: false,
+  pathOverflowMenuStyle: {},
+  newItemsMenuOpen: false,
+  newItemsMenuStyle: {},
+  _pathSuggestionsToken: 0,
+  _pathSuggestionsTimer: null,
+  _pathSuggestionsHidden: false,
+  _pathObservers: new Set(),
   rememberLastDirectory: DEFAULT_REMEMBER_LAST_DIRECTORY,
   settingsLoadPromise: null,
   settingsUpdatedHandler: null,
@@ -148,6 +162,7 @@ const model = {
   renameTarget: null,
   renameName: "",
   renameMode: "rename",
+  renameInline: false,
   isRenaming: false,
   renameError: null,
   renameAfterConfirm: null,
@@ -270,7 +285,7 @@ const model = {
     link.remove();
   },
 
-  preferences: { sortBy: "name", sortDirection: "asc", view: "list", treeShown: false, treeRoot: "/a0" },
+  preferences: { sortBy: "name", sortDirection: "asc", view: "list", treeShown: false, treeRoot: "/a0", pathBar: "buttons" },
 
   normalizeTreeRoot(value) {
     if (typeof value !== "string" || !value.trim().startsWith("/")) return "";
@@ -297,6 +312,7 @@ const model = {
         view: value.view === "icons" ? "icons" : "list",
         treeShown: value.treeShown === true,
         treeRoot: this.normalizeTreeRoot(value.treeRoot) || "/a0",
+        pathBar: value.pathBar === "raw" ? "raw" : "buttons",
       };
     } catch { /* Storage may be unavailable. Keep the defaults. */ }
     this.browser.sortBy = this.preferences.sortBy;
@@ -319,6 +335,8 @@ const model = {
 
   async loadSettings() {
     try {
+      // Reflect saved UI preferences (e.g. pathBar) before binding settings fields.
+      this.loadPreferences();
       await this.ensureLimits(true);
       this.textLimitMib = this.limits.max_text_bytes / (1024 * 1024);
       this.transferLimitMib = this.limits.max_file_bytes / (1024 * 1024);
@@ -374,6 +392,21 @@ const model = {
   // --- Public API (called from button/link) --------------------------------
   async open(path = "", options = {}) {
     if (this.isLoading) return; // Prevent double-open
+    // A picker may open over a live canvas surface; its listing must survive the modal close.
+    const surfaceActive = Boolean(document.querySelector(".file-browser-root.is-surface"));
+    const retainedPath = surfaceActive ? this.browser.currentPath : "";
+    // A picker may also be requested while this browser is already live: convert in place instead of stacking a second window.
+    if (options?.pickerMode && (surfaceActive || window.isModalOpen?.(FILE_BROWSER_MODAL_PATH))) {
+      this.resetOpenState(options);
+      try {
+        await this.loadOpeningPath(path);
+      } catch (error) {
+        console.error("File browser error:", error);
+        this.error = error?.message || "Failed to load files";
+        this.isLoading = false;
+      }
+      return;
+    }
     this.resetOpenState(options);
 
     try {
@@ -383,7 +416,13 @@ const model = {
 
       // await modal close
       await this.closePromise;
-      if (!this.isSurfaceHandoff) this.destroy();
+      if (!this.isSurfaceHandoff) {
+        if (surfaceActive) {
+          await this.openSurface(retainedPath);
+        } else {
+          this.destroy();
+        }
+      }
 
     } catch (error) {
       console.error("File browser error:", error);
@@ -443,6 +482,7 @@ const model = {
     // Reset state when modal closes
     this.isLoading = false;
     this.history = [];
+    this.forwardHistory = [];
     this.initialPath = "";
     this.closePromise = null;
     this.isSurfaceHandoff = false;
@@ -501,9 +541,11 @@ const model = {
     this.loadPreferences();
     this.closeDropdown();
     this.cancelMountedDefaultLoad();
+    this.resetRenameState();
     this.isLoading = true;
     this.error = null;
     this.history = [];
+    this.forwardHistory = [];
     this.searchQuery = "";
     this.isBulkBusy = false;
     this.clearDragState();
@@ -605,7 +647,7 @@ const model = {
       }
     };
 
-    requestAnimationFrame(() => requestAnimationFrame(restore));
+    this.runNextFrame(restore);
   },
 
   formatFileSize(size) {
@@ -726,9 +768,307 @@ const model = {
     this.pathInput = this.browser.currentPath || "";
   },
 
+  // Pin to the right end when unedited or caret at end; blur re-pins through pinPathInputAfterBlur.
+  pinPathInput(element) {
+    if (!element) return;
+    this.sweepDetachedPathObservers();
+    if (!element._pinResizeObserver) {
+      element._pinResizeObserver = new ResizeObserver(() => {
+        this.scrollPathInputNextFrame(element);
+      });
+    }
+    this._pathObservers.add(element);
+    element._pinResizeObserver.observe(element);
+    this.scrollPathInputNextFrame(element);
+  },
+
+  runNextFrame(callback) {
+    requestAnimationFrame(() => requestAnimationFrame(callback));
+  },
+
+  scrollPathInputNextFrame(element) {
+    this.runNextFrame(() => this.scrollPathInputToEnd(element));
+  },
+
+  sweepDetachedPathObservers() {
+    for (const element of this._pathObservers) {
+      if (element.isConnected) continue;
+      element._pinResizeObserver?.disconnect();
+      element._crumbFitObserver?.disconnect();
+      this._pathObservers.delete(element);
+    }
+  },
+
+  scrollPathInputToEnd(element) {
+    if (!element || !element.isConnected) return;
+    const atEnd = document.activeElement !== element
+      || (element.selectionStart === element.value.length && element.selectionEnd === element.value.length);
+    if (atEnd) element.scrollLeft = element.scrollWidth;
+  },
+
+  // Chrome resets an input's scrollLeft to 0 when the input blurs, after handlers and microtasks; snap on the first frame (pre-paint, instant) and re-check on the second in case the reset lands between frames.
+  pinPathInputAfterBlur(element) {
+    requestAnimationFrame(() => {
+      this.scrollPathInputToEnd(element);
+      requestAnimationFrame(() => this.scrollPathInputToEnd(element));
+    });
+  },
+
+  // The raw submit slot acts as part of the field: a real click focuses the input.
+  focusPathInput(button) {
+    const input = button?.closest(".path-input-shell")?.querySelector("input");
+    if (input) input.focus();
+  },
+
   resetPathInput() {
     this.syncPathInput();
     this.pathError = "";
+    this.clearPathSuggestionsDebounce();
+    this.pathSuggestions = [];
+    this.pathSuggestionsStyle = {};
+  },
+
+  // --- Path bar: crumbs, edit mode, folder autocomplete --------------------
+  pathCrumbs() {
+    const current = this.normalizePath(this.browser.currentPath || "").replace(/\/+$/, "");
+    const crumbs = [{ name: "/", path: "/" }];
+    if (!current || current === "$WORK_DIR") return crumbs;
+    let acc = "";
+    for (const part of current.split("/").filter(Boolean)) {
+      acc += `/${part}`;
+      crumbs.push({ name: part, path: acc });
+    }
+    return crumbs;
+  },
+
+  startPathEdit() {
+    this.pathEditing = true;
+    this.pathSuggestions = [];
+    this.pathSuggestionsStyle = {};
+    this.syncPathInput();
+  },
+
+  exitPathEdit() {
+    this.pathEditing = false;
+    this.pathSuggestions = [];
+    this.pathSuggestionsStyle = {};
+    this.resetPathInput();
+    // Raw mode keeps the same input mounted: drop focus so the pencil icon returns.
+    const active = document.activeElement;
+    if (active && active.classList && active.classList.contains("path-input")) active.blur();
+  },
+
+  pathOverflowAncestors() {
+    return this.pathCrumbs().slice(0, this.pathCrumbsOverflow);
+  },
+
+  togglePathOverflowMenu(element = null) {
+    this.pathOverflowMenuOpen = !this.pathOverflowMenuOpen;
+    if (this.pathOverflowMenuOpen && element) {
+      this.pathOverflowMenuStyle = this.getDropdownStyle(element, 220, true);
+    } else if (!this.pathOverflowMenuOpen) {
+      this.pathOverflowMenuStyle = {};
+    }
+  },
+
+  closePathOverflowMenu() {
+    this.pathOverflowMenuOpen = false;
+    this.pathOverflowMenuStyle = {};
+  },
+
+  toggleNewItemsMenu(element = null) {
+    this.newItemsMenuOpen = !this.newItemsMenuOpen;
+    if (this.newItemsMenuOpen && element) {
+      this.closeDropdown();
+      this.closePathOverflowMenu();
+      this.newItemsMenuStyle = this.getDropdownStyle(element, 180, true);
+    } else if (!this.newItemsMenuOpen) {
+      this.newItemsMenuStyle = {};
+    }
+  },
+
+  closeNewItemsMenu() {
+    this.newItemsMenuOpen = false;
+    this.newItemsMenuStyle = {};
+  },
+
+  async pickNewItem(kind) {
+    this.closeNewItemsMenu();
+    if (kind === "file") await this.openNewFile();
+    else await this.openNewFolderModal();
+  },
+
+  async pickPathAncestor(ancestor) {
+    this.closePathOverflowMenu();
+    await this.navigateToFolder(ancestor.path);
+  },
+
+  // Hide crumbs that would render partially; expose an overflow parent menu.
+  measurePathCrumbFit(element) {
+    if (!element || element._crumbFitRunning) return;
+    this.sweepDetachedPathObservers();
+    if (!element._crumbFitObserver) {
+      element._crumbFitObserver = new ResizeObserver(() => {
+        if (element._crumbFitQueued) return;
+        element._crumbFitQueued = true;
+        requestAnimationFrame(() => {
+          element._crumbFitQueued = false;
+          this.measurePathCrumbFit(element);
+        });
+      });
+      this._pathObservers.add(element);
+      element._crumbFitObserver.observe(element);
+    }
+    // A hidden duplicate path bar must not overwrite shared overflow state.
+    if (!element.clientWidth) return;
+
+    element._crumbFitRunning = true;
+    const crumbs = [...element.querySelectorAll(".path-crumb")];
+    if (!crumbs.length) {
+      element._crumbFitRunning = false;
+      return;
+    }
+    const measure = (available) => {
+      let used = 0;
+      let hidden = 0;
+      for (let i = crumbs.length - 1; i >= 0; i--) {
+        const width = crumbs[i].offsetWidth;
+        // Hide any leading crumb, including root; only current folder must remain.
+        if (used + width > available && i < crumbs.length - 1) {
+          hidden = i + 1;
+          break;
+        }
+        used += width;
+      }
+      return Math.min(hidden, crumbs.length - 1);
+    };
+    // Reset visibility first: hidden crumbs report offsetWidth 0 and corrupt sizing.
+    crumbs.forEach((crumb) => {
+      crumb.style.display = "";
+    });
+    // The flex layout already subtracts the visible parent-menu button from this width.
+    const available = element.clientWidth;
+    let hidden = measure(available);
+    // A fresh overflow reveals the chevron and shrinks the bar by its 16px slot + 2px gap; converge synchronously so truncation never paints a frame late.
+    if (hidden > 0 && !this.pathCrumbsOverflow) hidden = measure(available - 18);
+    crumbs.forEach((crumb, index) => {
+      crumb.style.display = index < hidden ? "none" : "";
+    });
+    element._crumbFitRunning = false;
+    if (hidden !== this.pathCrumbsOverflow) this.pathCrumbsOverflow = hidden;
+    element.scrollLeft = 0;
+  },
+
+  async updatePathSuggestions(element = null) {
+    const token = ++this._pathSuggestionsToken;
+    this.pathSuggestionIndex = 0;
+    this._pathSuggestionsHidden = false;
+    this.pathError = "";
+    const value = String(this.pathInput || "").trim();
+    if (!value || value === "$WORK_DIR") {
+      this.pathSuggestions = [];
+      this.pathSuggestionsStyle = {};
+      return;
+    }
+    const endsWithSlash = /\/$/.test(value);
+    const normalized = this.normalizeSubmittedPath(value).replace(/\/+$/, "");
+    const slashIndex = normalized.lastIndexOf("/");
+    // A trailing separator lists the children of the typed directory itself.
+    const parent = endsWithSlash ? normalized : (slashIndex <= 0 ? "/" : normalized.slice(0, slashIndex));
+    const prefix = endsWithSlash ? "" : normalized.slice(slashIndex + 1).toLowerCase();
+    try {
+      const response = await fetchApi(`/get_work_dir_files?path=${encodeURIComponent(parent)}`);
+      const data = await response.json().catch(() => ({}));
+      if (token !== this._pathSuggestionsToken) return;
+      const entries = data?.data?.entries || [];
+      const matches = entries
+        .filter((entry) => entry.is_dir && entry.name.toLowerCase().startsWith(prefix) && entry.path !== normalized)
+        .map((entry) => ({ name: entry.name, path: entry.path }));
+      this.pathSuggestions = matches;
+      const style = this.pathSuggestions.length && element
+        ? this.getDropdownStyle(element, Math.max(element.getBoundingClientRect().width, 220), false)
+        : {};
+      // Cap the dropdown at 8 rows while keeping the viewport-aware placement.
+      if (style.maxHeight) {
+        style.maxHeight = `${Math.min(parseInt(style.maxHeight, 10) || 0, 304)}px`;
+      }
+      this.pathSuggestionsStyle = style;
+    } catch {
+      if (token === this._pathSuggestionsToken) {
+        this.pathSuggestions = [];
+        this.pathSuggestionsStyle = {};
+      }
+    }
+  },
+
+  absolutizeSuggestionPath(path) {
+    path = String(path || "");
+    return path && !path.startsWith("/") && path !== "$WORK_DIR" ? `/${path}` : path;
+  },
+
+  async pickPathSuggestion(suggestion) {
+    this.pathInput = this.absolutizeSuggestionPath(suggestion?.path);
+    this.pathSuggestions = [];
+    await this.submitPath();
+  },
+
+  get activePathSuggestion() {
+    return this.pathSuggestions[this.pathSuggestionIndex] || null;
+  },
+
+  get pathSuggestionsHidden() {
+    return this._pathSuggestionsHidden;
+  },
+
+  selectPathSuggestion(element = null) {
+    if (this.pathSuggestionsHidden || !this.pathSuggestions.length) return false;
+    const suggestion = this.activePathSuggestion;
+    if (!suggestion) return false;
+    const path = this.absolutizeSuggestionPath(suggestion.path);
+    this.pathInput = path.endsWith("/") ? path : `${path}/`;
+    this.pathSuggestions = [];
+    this.updatePathSuggestions(element);
+    return true;
+  },
+
+  movePathSuggestion(delta) {
+    if (this.pathSuggestionsHidden || !this.pathSuggestions.length) return false;
+    const count = this.pathSuggestions.length;
+    this.pathSuggestionIndex = (this.pathSuggestionIndex + delta + count) % count;
+    this.runNextFrame(() => {
+      for (const container of document.querySelectorAll(".path-suggestions")) {
+        if (container.getClientRects().length === 0) continue;
+        const row = container.querySelectorAll(".path-suggestion")[this.pathSuggestionIndex];
+        row?.scrollIntoView({ block: "nearest" });
+      }
+    });
+    return true;
+  },
+
+  clearPathSuggestionsDebounce() {
+    if (this._pathSuggestionsTimer) {
+      clearTimeout(this._pathSuggestionsTimer);
+      this._pathSuggestionsTimer = null;
+    }
+  },
+
+  // Keystrokes debounce the directory fetch; direct calls (Tab accept, refocus) stay immediate.
+  queuePathSuggestions(element = null) {
+    this.clearPathSuggestionsDebounce();
+    this._pathSuggestionsTimer = setTimeout(() => {
+      this._pathSuggestionsTimer = null;
+      this.updatePathSuggestions(element);
+    }, 200);
+  },
+
+  hidePathSuggestions() {
+    this._pathSuggestionsHidden = true;
+    this.exitPathEdit();
+  },
+
+  showPathSuggestions(element = null) {
+    this._pathSuggestionsHidden = false;
+    if (this.pathInput) this.updatePathSuggestions(element);
   },
 
   async loadDirectoryPreference() {
@@ -899,7 +1239,7 @@ const model = {
       const result = await this.pickerOnConfirm?.(payload);
       if (result === false) return;
       this.disposeScopedTooltips();
-      window.closeModal(FILE_BROWSER_MODAL_PATH);
+      await this.closeOrRestorePicker();
     } catch (error) {
       const message = error?.message || "File selection failed";
       if (this.isSaveAsPicker()) this.pickerFilenameError = message;
@@ -909,9 +1249,26 @@ const model = {
     }
   },
 
-  cancelPicker() {
+  async cancelPicker() {
     this.disposeScopedTooltips();
-    window.closeModal(FILE_BROWSER_MODAL_PATH);
+    await this.closeOrRestorePicker();
+  },
+
+  async closeOrRestorePicker() {
+    if (window.isModalOpen?.(FILE_BROWSER_MODAL_PATH)) {
+      window.closeModal(FILE_BROWSER_MODAL_PATH);
+    } else {
+      // In-place picker over a live surface: restore the browser listing.
+      await this.restoreBrowserAfterInPlacePicker();
+    }
+  },
+
+  async restoreBrowserAfterInPlacePicker() {
+    // Drop picker state and reload the listing so a live surface returns to normal browsing.
+    this.resetPickerState();
+    this.clearSelection();
+    this.isLoading = false;
+    await this.fetchFiles(this.browser.currentPath, { preserveOnError: true });
   },
 
   handleFileNameClick(file = {}) {
@@ -992,6 +1349,7 @@ const model = {
     this.renameTarget = null;
     this.renameName = "";
     this.renameMode = "rename";
+    this.renameInline = false;
     this.isRenaming = false;
     this.renameError = null;
     this.renameAfterConfirm = null;
@@ -1157,10 +1515,39 @@ const model = {
     }
   },
 
+  pushNavHistory(path) {
+    this.history.push(path);
+    this.forwardHistory = [];
+  },
+
+  async navigateStack(from, to) {
+    if (!this[from].length) return;
+    const targetPath = this[from].pop();
+    const previousPath = this.browser.currentPath;
+    const loaded = await this.fetchFiles(targetPath, { preserveOnError: true });
+    if (loaded) {
+      this[to].push(previousPath);
+    } else {
+      this[from].push(targetPath);
+    }
+  },
+
+  navigateBack() {
+    return this.navigateStack("history", "forwardHistory");
+  },
+
+  navigateForward() {
+    return this.navigateStack("forwardHistory", "history");
+  },
+
   async navigateToFolder(path) {
     if(!path.startsWith("/")) path = "/" + path;
-    if (this.browser.currentPath !== path)
-      this.history.push(this.browser.currentPath);
+    if (this.browser.currentPath === path) {
+      this.closePathOverflowMenu();
+      return;
+    }
+    this.pushNavHistory(this.browser.currentPath);
+    this.closePathOverflowMenu();
     await this.fetchFiles(path);
   },
 
@@ -1170,6 +1557,13 @@ const model = {
     const path = this.normalizeSubmittedPath(this.pathInput);
     if (!path) {
       this.pathError = "Enter a directory path.";
+      return;
+    }
+
+    // Submitting the already-current directory is a no-op, like navigateToFolder.
+    const currentPath = String(this.browser.currentPath || "").replace(/\/+$/, "");
+    if (currentPath && path.replace(/\/+$/, "") === currentPath) {
+      this.exitPathEdit();
       return;
     }
 
@@ -1185,8 +1579,9 @@ const model = {
 
       if (loaded) {
         if (previousPath && previousPath !== this.browser.currentPath) {
-          this.history.push(previousPath);
+          this.pushNavHistory(previousPath);
         }
+        this.exitPathEdit();
         return;
       }
 
@@ -1198,7 +1593,7 @@ const model = {
 
   async navigateUp() {
     if (this.browser.parentPath) {
-      this.history.push(this.browser.currentPath);
+      this.pushNavHistory(this.browser.currentPath);
       await this.fetchFiles(this.browser.parentPath);
     }
   },
@@ -1308,18 +1703,32 @@ const model = {
     if (Array.isArray(options.entries)) {
       this.browser.entries = options.entries;
     }
-    window.openModal("modals/file-browser/rename-modal.html");
+    // External callers without a live browser (Editor, Desktop) keep the modal window;
+    // inside the browser the name is edited in the shared footer input.
+    if (options.modal) {
+      window.openModal("modals/file-browser/rename-modal.html");
+    } else {
+      this.renameInline = true;
+    }
   },
 
-  async openNewFolderModal() {
+  async openNewFolderModal(options = {}) {
     this.resetRenameState();
     this.renameMode = "create-folder";
     this.renameName = "";
     this.renameError = null;
-    window.openModal("modals/file-browser/rename-modal.html");
+    if (options.modal) {
+      window.openModal("modals/file-browser/rename-modal.html");
+    } else {
+      this.renameInline = true;
+    }
   },
 
   closeRenameModal() {
+    if (this.renameInline) {
+      this.resetRenameState();
+      return;
+    }
     window.closeModal("modals/file-browser/rename-modal.html");
   },
 
@@ -1760,8 +2169,15 @@ window.openFileLink = async function (path) {
       return;
     }
     if (resp.is_dir) {
-      // Set initial path and open via store
-      await store.open(resp.abs_path);
+      // A live browser navigates in place instead of stacking a second window.
+      const { store: canvasStore } = await import("/components/canvas/right-canvas-store.js");
+      const hasLiveBrowser = window.isModalOpen?.(FILE_BROWSER_MODAL_PATH)
+        || (canvasStore.shouldRender?.() && canvasStore.isSurfaceVisible?.("files"));
+      if (hasLiveBrowser) {
+        await store.navigateToFolder(resp.abs_path);
+      } else {
+        await store.open(resp.abs_path);
+      }
     } else {
       store.downloadFile({ path: resp.abs_path, name: resp.file_name });
     }
