@@ -647,7 +647,7 @@ const model = {
       }
     };
 
-    requestAnimationFrame(() => requestAnimationFrame(restore));
+    this.runNextFrame(restore);
   },
 
   formatFileSize(size) {
@@ -782,10 +782,12 @@ const model = {
     this.scrollPathInputNextFrame(element);
   },
 
+  runNextFrame(callback) {
+    requestAnimationFrame(() => requestAnimationFrame(callback));
+  },
+
   scrollPathInputNextFrame(element) {
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      this.scrollPathInputToEnd(element);
-    }));
+    this.runNextFrame(() => this.scrollPathInputToEnd(element));
   },
 
   sweepDetachedPathObservers() {
@@ -999,10 +1001,13 @@ const model = {
     }
   },
 
+  absolutizeSuggestionPath(path) {
+    path = String(path || "");
+    return path && !path.startsWith("/") && path !== "$WORK_DIR" ? `/${path}` : path;
+  },
+
   async pickPathSuggestion(suggestion) {
-    let path = String(suggestion?.path || "");
-    if (path && !path.startsWith("/") && path !== "$WORK_DIR") path = `/${path}`;
-    this.pathInput = path;
+    this.pathInput = this.absolutizeSuggestionPath(suggestion?.path);
     this.pathSuggestions = [];
     await this.submitPath();
   },
@@ -1019,8 +1024,7 @@ const model = {
     if (this.pathSuggestionsHidden || !this.pathSuggestions.length) return false;
     const suggestion = this.activePathSuggestion;
     if (!suggestion) return false;
-    let path = String(suggestion.path || "");
-    if (path && !path.startsWith("/") && path !== "$WORK_DIR") path = `/${path}`;
+    const path = this.absolutizeSuggestionPath(suggestion.path);
     this.pathInput = path.endsWith("/") ? path : `${path}/`;
     this.pathSuggestions = [];
     this.updatePathSuggestions(element);
@@ -1031,13 +1035,13 @@ const model = {
     if (this.pathSuggestionsHidden || !this.pathSuggestions.length) return false;
     const count = this.pathSuggestions.length;
     this.pathSuggestionIndex = (this.pathSuggestionIndex + delta + count) % count;
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    this.runNextFrame(() => {
       for (const container of document.querySelectorAll(".path-suggestions")) {
         if (container.getClientRects().length === 0) continue;
         const row = container.querySelectorAll(".path-suggestion")[this.pathSuggestionIndex];
         row?.scrollIntoView({ block: "nearest" });
       }
-    }));
+    });
     return true;
   },
 
@@ -1235,12 +1239,7 @@ const model = {
       const result = await this.pickerOnConfirm?.(payload);
       if (result === false) return;
       this.disposeScopedTooltips();
-      if (window.isModalOpen?.(FILE_BROWSER_MODAL_PATH)) {
-        window.closeModal(FILE_BROWSER_MODAL_PATH);
-      } else {
-        // In-place picker over a live surface: restore the browser listing.
-        await this.restoreBrowserAfterInPlacePicker();
-      }
+      await this.closeOrRestorePicker();
     } catch (error) {
       const message = error?.message || "File selection failed";
       if (this.isSaveAsPicker()) this.pickerFilenameError = message;
@@ -1250,13 +1249,17 @@ const model = {
     }
   },
 
-  cancelPicker() {
+  async cancelPicker() {
     this.disposeScopedTooltips();
+    await this.closeOrRestorePicker();
+  },
+
+  async closeOrRestorePicker() {
     if (window.isModalOpen?.(FILE_BROWSER_MODAL_PATH)) {
       window.closeModal(FILE_BROWSER_MODAL_PATH);
     } else {
       // In-place picker over a live surface: restore the browser listing.
-      this.restoreBrowserAfterInPlacePicker();
+      await this.restoreBrowserAfterInPlacePicker();
     }
   },
 
@@ -1517,28 +1520,24 @@ const model = {
     this.forwardHistory = [];
   },
 
-  async navigateBack() {
-    if (!this.history.length) return;
-    const targetPath = this.history.pop();
+  async navigateStack(from, to) {
+    if (!this[from].length) return;
+    const targetPath = this[from].pop();
     const previousPath = this.browser.currentPath;
     const loaded = await this.fetchFiles(targetPath, { preserveOnError: true });
     if (loaded) {
-      this.forwardHistory.push(previousPath);
+      this[to].push(previousPath);
     } else {
-      this.history.push(targetPath);
+      this[from].push(targetPath);
     }
   },
 
-  async navigateForward() {
-    if (!this.forwardHistory.length) return;
-    const targetPath = this.forwardHistory.pop();
-    const previousPath = this.browser.currentPath;
-    const loaded = await this.fetchFiles(targetPath, { preserveOnError: true });
-    if (loaded) {
-      this.history.push(previousPath);
-    } else {
-      this.forwardHistory.push(targetPath);
-    }
+  navigateBack() {
+    return this.navigateStack("history", "forwardHistory");
+  },
+
+  navigateForward() {
+    return this.navigateStack("forwardHistory", "history");
   },
 
   async navigateToFolder(path) {

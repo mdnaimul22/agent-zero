@@ -612,11 +612,11 @@ def test_file_browser_history_back_forward_contract() -> None:
     assert "this.history.push(this.browser.currentPath);" not in store
     assert store.count("this.pushNavHistory(") == 3
 
-    back_block = store[store.index("async navigateBack()"):store.index("async navigateForward()")]
-    forward_block = store[store.index("async navigateForward()"):store.index("async navigateToFolder")]
-    for block in (back_block, forward_block):
-        assert "preserveOnError: true" in block
-        assert "if (loaded) {" in block
+    stack_block = store[store.index("async navigateStack("):store.index("async navigateToFolder")]
+    assert "preserveOnError: true" in stack_block
+    assert "if (loaded) {" in stack_block
+    assert 'navigateStack("history", "forwardHistory")' in store
+    assert 'navigateStack("forwardHistory", "history")' in store
 
     destroy_block = store[store.index("  destroy() {"):store.index("  setupFloatingModal(")]
     assert "this.forwardHistory = [];" in destroy_block
