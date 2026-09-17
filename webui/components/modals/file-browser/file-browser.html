@@ -26,7 +26,23 @@
       <template x-if="$store.fileBrowser">
         <div
           class="file-browser-root"
-          x-effect="$store.fileBrowser.fileTree.follow($store.fileBrowser.browser.currentPath)"
+          x-data="{
+            pathRoot: $el, menu: '', menuStyle: {}, menuTrigger: null, crumbsOverflow: 0,
+            closeMenu(restoreFocus = false) { this.menu = ''; this.menuStyle = {}; if (restoreFocus) this.menuTrigger?.focus(); },
+            toggleMenu(name, trigger, width) {
+              const opening = this.menu !== name;
+              this.closeMenu();
+              $store.fileBrowser.closeDropdown();
+              if (opening) {
+                this.menuTrigger = trigger; this.menuStyle = $store.fileBrowser.getDropdownStyle(trigger, width); this.menu = name;
+                $nextTick(() => Array.from($refs[name + 'Menu']?.querySelectorAll('button') || []).find(button => button.checkVisibility())?.focus({preventScroll: true}));
+              }
+            }
+          }"
+          x-effect="$store.fileBrowser.fileTree.follow($store.fileBrowser.browser.currentPath); $store.fileBrowser.isLoading; closeMenu()"
+          @resize.window="closeMenu(); $store.fileBrowser.clearPathSuggestions()"
+          @scroll.window.capture="if (!$event.target.closest?.('.path-navigator, .path-suggestions, .path-overflow-menu')) { closeMenu(); $store.fileBrowser.clearPathSuggestions(); }"
+          @keydown.escape.window.capture="if (menu) { $event.stopPropagation(); closeMenu(true); }"
           :class="{ 'is-surface': xAttrs($el)?.mode === 'canvas' }"
         >
           <!-- File Browser Content -->
@@ -54,11 +70,12 @@
                 >
                   <x-icon aria-hidden="true" name="arrow_forward"></x-icon>
                 </button>
-                <template x-if="$store.fileBrowser.preferences.pathBar === 'raw'">
+                <template x-if="$store.fileBrowser.preferences.pathBar === 'raw' || $store.fileBrowser.pathEditing">
                   <div class="path-edit-group">
                     <button
                       type="button"
                       class="nav-button back-button surface-control"
+                      x-show="$store.fileBrowser.preferences.pathBar === 'raw'"
                       @click="$store.fileBrowser.navigateUp()"
                       @dragover="$store.fileBrowser.setDropTarget($store.fileBrowser.browser.parentPath, $event)"
                       @dragleave="$store.fileBrowser.clearDropTarget($store.fileBrowser.browser.parentPath, $event)"
@@ -77,27 +94,29 @@
                         class="path-input"
                         type="text"
                         x-model="$store.fileBrowser.pathInput"
-                        x-effect="$store.fileBrowser.pathInput; $store.fileBrowser.pinPathInput($el)"
+                        x-create="$store.fileBrowser.pinPathInput($el); if ($store.fileBrowser.pathEditing) $nextTick(() => { if ($el.checkVisibility({checkOpacity: true})) $el.focus(); })"
+                        x-effect="$store.fileBrowser.pathInput; $store.fileBrowser.scrollPathInputNextFrame($el)"
+                        x-destroy="$el._pinResizeObserver?.disconnect()"
                         @input="$store.fileBrowser.queuePathSuggestions($el)"
-                        @focus="$el.setSelectionRange($el.value.length, $el.value.length); $store.fileBrowser.showPathSuggestions($el)"
+                        @focus="$store.fileBrowser.showPathSuggestions($el)"
                         @blur="$store.fileBrowser.hidePathSuggestions(); $store.fileBrowser.pinPathInputAfterBlur($el)"
                         @keydown.arrow-down="if ($store.fileBrowser.movePathSuggestion(1)) $event.preventDefault()"
                         @keydown.arrow-up="if ($store.fileBrowser.movePathSuggestion(-1)) $event.preventDefault()"
                         @keydown.tab="if (!$event.shiftKey && $store.fileBrowser.selectPathSuggestion($el)) { $event.preventDefault(); $el.focus(); }"
-                        @keydown.escape.stop.prevent="$store.fileBrowser.resetPathInput()"
+                        @keydown.escape.stop.prevent="$store.fileBrowser.exitPathEdit(true)"
                         :aria-invalid="$store.fileBrowser.pathError ? 'true' : 'false'"
                         aria-label="Directory path"
                         spellcheck="false"
                         autocomplete="off"
                       />
                       <button
-                        type="button"
+                        :type="$store.fileBrowser.pathEditing ? 'submit' : 'button'"
                         class="file-browser-header-button path-submit"
                         @mousedown.prevent
-                        @click="$store.fileBrowser.focusPathInput($el)"
+                        @click="if (!$store.fileBrowser.pathEditing) $store.fileBrowser.focusPathInput($el)"
                         :class="{ 'is-submitting': $store.fileBrowser.isPathSubmitting || $store.fileBrowser.isLoading }"
                         :disabled="$store.fileBrowser.isPathSubmitting || $store.fileBrowser.isLoading"
-                        aria-label="Edit directory path"
+                        :aria-label="$store.fileBrowser.pathEditing ? 'Go to directory' : 'Edit directory path'"
                       >
                       </button>
                     </div>
@@ -108,11 +127,10 @@
                     <button
                       type="button"
                       class="path-overflow-up"
-                      :class="{ 'is-hidden': !$store.fileBrowser.pathCrumbsOverflow }"
-                      @click="$store.fileBrowser.togglePathOverflowMenu($el)"
-                      @keydown.escape.stop="$store.fileBrowser.closePathOverflowMenu()"
+                      :class="{ 'is-hidden': !crumbsOverflow }"
+                      @click="toggleMenu('ancestors', $el, 220)"
                       :disabled="!$store.fileBrowser.browser.parentPath || $store.fileBrowser.isLoading"
-                      :aria-expanded="$store.fileBrowser.pathOverflowMenuOpen ? 'true' : 'false'"
+                      :aria-expanded="menu === 'ancestors' ? 'true' : 'false'"
                       aria-label="Parent folders"
                       title="Parent folders"
                     >
@@ -121,13 +139,13 @@
                     <template x-teleport="body">
                       <div
                         class="path-overflow-menu"
-                        x-show="$store.fileBrowser.pathOverflowMenuOpen"
-                        :style="$store.fileBrowser.pathOverflowMenuStyle"
-                        @click.outside="$store.fileBrowser.closePathOverflowMenu()"
-                        @keydown.escape.window="$store.fileBrowser.closePathOverflowMenu()"
+                        x-ref="ancestorsMenu"
+                        x-show="menu === 'ancestors'"
+                        :style="menuStyle"
+                        @click.outside="closeMenu()"
                       >
-                        <template x-for="ancestor in $store.fileBrowser.pathOverflowAncestors()" :key="ancestor.path">
-                          <button type="button" class="path-ancestor dropdown-item" @click="$store.fileBrowser.pickPathAncestor(ancestor)">
+                        <template x-for="ancestor in $store.fileBrowser.pathCrumbs().slice(0, crumbsOverflow)" :key="ancestor.path">
+                          <button type="button" class="path-ancestor dropdown-item" @click="closeMenu(); $store.fileBrowser.navigateToFolder(ancestor.path)">
                             <x-icon aria-hidden="true" name="folder"></x-icon><span x-text="ancestor.name"></span>
                           </button>
                         </template>
@@ -137,7 +155,10 @@
                       class="path-crumbs"
                       role="navigation"
                       aria-label="Directory path"
-                      x-effect="$store.fileBrowser.pathCrumbs(); requestAnimationFrame(() => $store.fileBrowser.measurePathCrumbFit($el))"
+                      x-data="{ measure() { requestAnimationFrame(() => { crumbsOverflow = $store.fileBrowser.measurePathCrumbFit($el, crumbsOverflow); }); } }"
+                      x-create="$el._crumbFitObserver = new ResizeObserver(() => measure()); $el._crumbFitObserver.observe($el)"
+                      x-destroy="$el._crumbFitObserver.disconnect()"
+                      x-effect="$store.fileBrowser.pathCrumbs(); measure()"
                       @click.self="$store.fileBrowser.startPathEdit()"
                     >
                       <template x-for="(crumb, index) in $store.fileBrowser.pathCrumbs()" :key="crumb.path">
@@ -156,47 +177,15 @@
                         </button>
                       </template>
                     </div>
-                    <span class="path-edit-toggle" :class="{ 'is-loading': $store.fileBrowser.isLoading }" aria-hidden="true" @click="$store.fileBrowser.startPathEdit()"></span>
-                  </div>
-                </template>
-                <template x-if="$store.fileBrowser.pathEditing">
-                  <div class="path-edit-group">
-                    <div class="path-input-shell" :class="{ 'has-error': $store.fileBrowser.pathError }" @mousedown.self.prevent @click.self="$store.fileBrowser.focusPathInput($el)">
-                      <input
-                        id="current-path-edit"
-                        class="path-input"
-                        type="text"
-                        x-model="$store.fileBrowser.pathInput"
-                        x-init="$nextTick(() => { $el.focus(); $el.setSelectionRange($el.value.length, $el.value.length); })"
-                        x-effect="$store.fileBrowser.pathInput; $store.fileBrowser.pinPathInput($el)"
-                        @input="$store.fileBrowser.queuePathSuggestions($el)"
-                        @focus="$store.fileBrowser.showPathSuggestions($el)"
-                        @blur="$store.fileBrowser.hidePathSuggestions()"
-                        @keydown.arrow-down="if ($store.fileBrowser.movePathSuggestion(1)) $event.preventDefault()"
-                        @keydown.arrow-up="if ($store.fileBrowser.movePathSuggestion(-1)) $event.preventDefault()"
-                        @keydown.tab="if (!$event.shiftKey && $store.fileBrowser.selectPathSuggestion($el)) { $event.preventDefault(); $el.focus(); }"
-                        @keydown.escape.stop.prevent="$store.fileBrowser.exitPathEdit()"
-                        :aria-invalid="$store.fileBrowser.pathError ? 'true' : 'false'"
-                        aria-label="Directory path"
-                        spellcheck="false"
-                        autocomplete="off"
-                      />
-                      <button
-                        type="submit"
-                        class="file-browser-header-button path-submit"
-                        @mousedown.prevent
-                        :class="{ 'is-submitting': $store.fileBrowser.isPathSubmitting || $store.fileBrowser.isLoading }"
-                        :disabled="$store.fileBrowser.isPathSubmitting || $store.fileBrowser.isLoading"
-                        aria-label="Go to directory"
-                      >
-                      </button>
-                    </div>
+                    <button type="button" class="path-edit-toggle" :class="{ 'is-loading': $store.fileBrowser.isLoading }"
+                      :disabled="$store.fileBrowser.isLoading" aria-label="Edit directory path" @click="$store.fileBrowser.startPathEdit()">
+                    </button>
                   </div>
                 </template>
                 <template x-teleport="body">
                   <div
                     class="path-suggestions"
-                    x-show="$store.fileBrowser.pathSuggestions.length && !$store.fileBrowser.pathSuggestionsHidden && !$store.fileBrowser.pathError"
+                    x-show="$store.fileBrowser.pathSuggestions.length && $store.fileBrowser.pathSuggestionsOwner?.closest('.file-browser-root') === pathRoot && !$store.fileBrowser.pathError"
                     :style="$store.fileBrowser.pathSuggestionsStyle"
                   >
                     <template x-for="(suggestion, index) in $store.fileBrowser.pathSuggestions" :key="suggestion.path">
@@ -217,10 +206,9 @@
                 <button
                   type="button"
                   class="file-browser-header-button btn-new-item surface-control"
-                  x-show="$store.fileBrowser.remoteAllowed('upload') && (!$store.fileBrowser.isTextOpenPicker() || ($store.fileBrowser.remoteAllowed('edit') && !$store.fileBrowser.isPickerMode()))"
-                  @click="$store.fileBrowser.toggleNewItemsMenu($el)"
-                  @keydown.escape.stop="$store.fileBrowser.closeNewItemsMenu()"
-                  :aria-expanded="$store.fileBrowser.newItemsMenuOpen ? 'true' : 'false'"
+                  x-show="$store.fileBrowser.remoteAllowed('upload') && !$store.fileBrowser.isTextOpenPicker()"
+                  @click="toggleMenu('new', $el, 180)"
+                  :aria-expanded="menu === 'new' ? 'true' : 'false'"
                   aria-label="Create new"
                   title="Create new"
                 >
@@ -229,16 +217,16 @@
                 <template x-teleport="body">
                   <div
                     class="path-overflow-menu new-items-menu"
-                    x-show="$store.fileBrowser.newItemsMenuOpen"
-                    :style="$store.fileBrowser.newItemsMenuStyle"
-                    @click.outside="$store.fileBrowser.closeNewItemsMenu()"
-                    @keydown.escape.window="$store.fileBrowser.closeNewItemsMenu()"
+                    x-ref="newMenu"
+                    x-show="menu === 'new'"
+                    :style="menuStyle"
+                    @click.outside="closeMenu()"
                   >
                     <button
                       type="button"
                       class="new-item dropdown-item"
                       x-show="!$store.fileBrowser.isPickerMode() && $store.fileBrowser.remoteAllowed('upload') && $store.fileBrowser.remoteAllowed('edit')"
-                      @click="$store.fileBrowser.pickNewItem('file')"
+                      @click="closeMenu(); $store.fileBrowser.openNewFile()"
                       aria-label="New file"
                       title="New file"
                     >
@@ -248,7 +236,7 @@
                       type="button"
                       class="new-item dropdown-item"
                       x-show="!$store.fileBrowser.isTextOpenPicker() && $store.fileBrowser.remoteAllowed('upload')"
-                      @click="$store.fileBrowser.pickNewItem('folder')"
+                      @click="closeMenu(); $store.fileBrowser.beginNewFolder()"
                       aria-label="New folder"
                       title="New folder"
                     >
@@ -329,8 +317,9 @@
                 <!-- Files list -->
                 <div
                   class="files-list"
+                  :inert="$store.fileBrowser.isLoading || $store.fileBrowser.isRenaming || $store.fileBrowser.isBulkBusy"
                   :class="{ 'file-icons-view': $store.fileBrowser.preferences.view === 'icons', 'is-loading': $store.fileBrowser.isLoading }"
-                  @scroll="$store.fileBrowser.closeDropdown(); $store.fileBrowser.closeNewItemsMenu()"
+                  @scroll="$store.fileBrowser.closeDropdown(); closeMenu()"
                 >
                   <div class="file-header">
                     <div class="file-cell-select">
@@ -485,7 +474,7 @@
                                   type="button"
                                   class="dropdown-item"
                                   x-show="$store.fileBrowser.remoteAllowed('rename', file)"
-                                  @click="$store.fileBrowser.openRenameModal(file)"
+                                  @click="$store.fileBrowser.beginRename(file)"
                                 >
                                   <x-icon name="drive_file_rename_outline"></x-icon>
                                   <span>Rename</span>
@@ -549,7 +538,7 @@
             <template x-if="$store.fileBrowser.renameInline">
               <span class="picker-inline-label" x-text="$store.fileBrowser.renameMode === 'create-folder' ? 'New folder' : 'Rename'"></span>
             </template>
-            <template x-if="$store.fileBrowser.isSaveAsPicker()">
+            <template x-if="$store.fileBrowser.isSaveAsPicker() && !$store.fileBrowser.renameInline">
               <input
                 type="text"
                 class="picker-filename-input"
@@ -566,14 +555,16 @@
                 type="text"
                 class="picker-filename-input"
                 x-model="$store.fileBrowser.renameName"
-                x-init="$el.focus()"
+                x-create="$nextTick(() => { if ($el.checkVisibility({checkOpacity: true})) { $el.focus(); $el.select(); } })"
+                :disabled="$store.fileBrowser.isRenaming"
+                @keydown.escape.stop.prevent="$store.fileBrowser.closeRenameModal()"
                 @keydown.enter.prevent="$store.fileBrowser.confirmRename()"
                 :placeholder="$store.fileBrowser.renameMode === 'create-folder' ? 'Folder name' : 'New name'"
                 :aria-label="$store.fileBrowser.renameMode === 'create-folder' ? 'Folder name' : 'New name'"
                 spellcheck="false"
               />
             </template>
-            <template x-if="$store.fileBrowser.pickerFilenameError">
+            <template x-if="$store.fileBrowser.pickerFilenameError && !$store.fileBrowser.renameInline">
               <span class="picker-inline-error" x-text="$store.fileBrowser.pickerFilenameError"></span>
             </template>
             <template x-if="$store.fileBrowser.renameError">
@@ -583,8 +574,8 @@
               type="button"
               class="btn btn-ok picker-confirm-button"
               :disabled="$store.fileBrowser.renameInline
-                ? ($store.fileBrowser.isRenaming || !$store.fileBrowser.renameName.trim())
-                : (!$store.fileBrowser.canConfirmPicker() || $store.fileBrowser.isBulkBusy)"
+                ? ($store.fileBrowser.isRenaming || $store.fileBrowser.isLoading || !$store.fileBrowser.renameName.trim())
+                : (!$store.fileBrowser.canConfirmPicker() || $store.fileBrowser.isBulkBusy || $store.fileBrowser.isLoading)"
               @click="$store.fileBrowser.renameInline ? $store.fileBrowser.confirmRename() : $store.fileBrowser.confirmPicker()"
               x-text="$store.fileBrowser.renameInline ? ($store.fileBrowser.renameMode === 'create-folder' ? 'Create Folder' : 'Rename') : $store.fileBrowser.pickerConfirmLabel"
             ></button>
@@ -1024,9 +1015,9 @@
       }
 
       .path-input-shell:focus-within {
-        border-color: var(--color-primary);
+        border-color: var(--color-text-secondary);
         background: var(--color-input-focus);
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 20%, transparent);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-text) 20%, transparent);
       }
 
       .path-input-shell.has-error {
@@ -1036,19 +1027,6 @@
 
       .path-input:focus {
         outline: none;
-      }
-
-      .path-submit {
-        color: var(--color-text);
-      }
-
-      .file-browser-header-button.path-submit:disabled {
-        opacity: 0.5;
-        cursor: wait;
-      }
-
-      .path-submit.is-submitting {
-        opacity: 1 !important;
       }
 
       .path-error {
@@ -1144,7 +1122,16 @@
         content: "";
       }
 
+      .path-edit-toggle:focus-visible {
+        outline: 1px solid var(--color-text-secondary);
+        outline-offset: 2px;
+      }
+
       .path-edit-toggle {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--color-text);
         flex: 0 0 auto;
         display: inline-grid;
         place-items: center;
@@ -1289,6 +1276,10 @@
         background-color: #2b309c;
       }
 
+      .file-browser-footer {
+        container: file-browser-footer / inline-size;
+      }
+
       .file-browser-footer.is-surface {
         display: flex;
         flex: 0 0 auto;
@@ -1327,9 +1318,6 @@
         font-size: 0.82rem;
         font-weight: 700;
         letter-spacing: 0;
-      }
-
-      .picker-inline-error {
         color: var(--color-error);
       }
 
@@ -1515,9 +1503,14 @@
           gap: 0.2rem;
           padding-right: 0.2rem;
         }
+      }
+      @container file-browser-footer (max-width: 620px) {
         .file-browser-picker-actions {
           flex-wrap: wrap;
           justify-content: stretch;
+        }
+        .picker-inline-label {
+          flex-basis: 100%;
         }
         .file-browser-picker-actions .picker-filename-input {
           flex-basis: 100%;

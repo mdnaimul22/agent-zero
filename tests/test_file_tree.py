@@ -166,6 +166,8 @@ const state = {{
   flushInput() {{ calls++; }}, destroySourceEditor() {{ calls++; }},
   _headerCleanup() {{ calls++; }}, _floatingCleanup() {{ calls++; }},
   cancelMountedDefaultLoad() {{ calls++; }}, closeDropdown() {{ calls++; }},
+  clearPathSuggestions() {{ calls++; }},
+  resetPickerState() {{ calls++; }}, resetRenameState() {{ calls++; }},
 }};
 cleanup.call(state, {{}});
 assert.equal(calls, 0, 'old canvas must not tear down active modal');

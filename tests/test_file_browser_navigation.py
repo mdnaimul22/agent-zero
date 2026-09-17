@@ -1,4 +1,6 @@
 from pathlib import Path
+import re
+import subprocess
 import sys
 
 import pytest
@@ -19,6 +21,296 @@ def read(*parts: str) -> str:
 def flat(text: str) -> str:
     """Collapse whitespace so CSS contract checks survive reformat-only edits."""
     return " ".join(text.split())
+
+
+def run_store_check(checks: str) -> None:
+    source = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
+    source = re.sub(r'^import\b[\s\S]*?;\n', '', source, flags=re.M)
+    source = source.replace('export const store = createStore', 'const store = createStore')
+    preamble = '''
+import assert from 'node:assert/strict';
+const window = globalThis;
+const createStore = (_name, model) => model;
+const createFileTree = () => ({ shown: false, follow: async () => {} });
+const localStorage = { getItem: () => null, setItem: () => {} };
+let surface = null;
+const document = Object.assign(new EventTarget(), { querySelector: () => surface, querySelectorAll: () => [], activeElement: null });
+const requestAnimationFrame = callback => callback();
+const callJsonApi = async () => ({settings: {}});
+const formatDateTime = () => '';
+const openLatestSurface = async () => {};
+const setupFloatingSurfaceModalChrome = () => () => {};
+const settle = () => new Promise(setImmediate);
+const listing = (path, entries = []) => ({ok:true, json:async () => ({data:{current_path:path, entries}})});
+let fetcher = async url => listing(new URL(url, 'http://local').searchParams.get('path'));
+const fetchApi = (...args) => fetcher(...args);
+let modalCalls = 0;
+let activeModal = null;
+const modals = new Map();
+const modalGuards = new Map();
+window.isModalOpen = path => modals.has(path);
+window.openModal = (path, guard) => { modalCalls++; activeModal = path; modalGuards.set(path, guard); return new Promise(resolve => modals.set(path, resolve)); };
+window.ensureModalOpen = async path => { if (!modals.has(path)) return window.openModal(path); activeModal = path; return null; };
+window.closeModal = path => { modals.get(path)?.(); modals.delete(path); document.dispatchEvent(new CustomEvent('modal-closed', {detail:{modalPath:path}})); };
+window.toastFrontendError = () => {};
+'''
+    subprocess.run(['node', '--input-type=module'], input=preamble + source + checks,
+                   text=True, check=True, timeout=15)
+
+
+def test_picker_modal_visibility_and_inline_new_file():
+    run_store_check('''
+const modal = 'modals/file-browser/file-browser.html';
+for (const host of [null, {hidden:true, closest:() => null}, {hidden:false, closest:() => null}]) {
+  surface = host;
+  store.browser.currentPath = '/original';
+  let closed = false;
+  const request = store.openSaveAsPicker('/target', {filename:'draft.txt'}).then(() => closed = true);
+  await settle();
+  assert.equal(modals.has(modal), true, 'external picker is visible regardless of canvas state');
+  assert.equal(closed, false, 'open waits for close');
+  assert.equal(store.pickerFilename, 'draft.txt');
+  await store.cancelPicker();
+  await request;
+  assert.equal(store.pickerMode, '');
+  assert.equal(store.browser.currentPath, host ? '/original' : '');
+}
+surface = null;
+const request = store.open('/a');
+await settle();
+const count = modalCalls;
+activeModal = 'editor';
+let reusedClosed = false;
+const reused = store.openTextPicker('/b').then(() => reusedClosed = true);
+await settle();
+assert.equal(modalCalls, count, 'reuse existing modal');
+assert.equal(activeModal, modal, 'activate Files parked behind Editor');
+assert.equal(reusedClosed, false, 'reuse preserves await-close contract');
+store.beginSurfaceHandoff();
+await store.openSurface('/b');
+assert.equal(store.pickerMode, 'text-open', 'docking preserves picker state');
+store.cancelSurfaceHandoff();
+await store.cancelPicker();
+await Promise.all([request, reused]);
+void window.openModal(modal);
+activeModal = 'editor';
+let genericClosed = false;
+const generic = store.openSaveAsPicker('/generic', {filename:'draft.txt'}).then(() => genericClosed = true);
+await settle();
+assert.equal(activeModal, modal, 'activate a parked Files modal opened by surface controls');
+assert.equal(genericClosed, false, 'surface-opened modal still awaits close');
+await store.cancelPicker();
+await generic;
+store.browser.currentPath = '/a';
+store.history = ['/'];
+await store.openNewFile();
+assert.equal(modalCalls, count + 1, 'New file configures current footer');
+assert.equal(store.pickerMode, 'save-as');
+assert.deepEqual(store.history, ['/'], 'inline New file preserves navigation');
+await store.cancelPicker();
+assert.equal(store.pickerMode, '');
+assert.equal(store.browser.currentPath, '/a');
+''')
+
+
+def test_surface_reopening_preserves_pending_writes():
+    run_store_check('''
+store.browser.currentPath = '/files';
+let finishRename;
+let renamed;
+const target = {name:'note.md', path:'/files/note.md'};
+store.beginRename(target, {
+  performRename: () => new Promise(resolve => finishRename = resolve),
+  onRenamed: result => { renamed = result; },
+});
+store.renameName = 'renamed.md';
+const pendingRename = store.confirmRename();
+assert.equal(await store.openSurface('/other'), false);
+assert.equal(store.isRenaming, true);
+assert.equal(store.renameTarget, target);
+assert.equal(store.browser.currentPath, '/files');
+assert.equal(store.beginNewFolder(), false, 'another write cannot start');
+finishRename({refreshFiles:false});
+await pendingRename;
+assert.equal(renamed.path, '/files/renamed.md', 'completion callback survives reactivation');
+assert.equal(store.isRenaming, false);
+
+let finishSave;
+store.configurePicker({
+  pickerMode:'save-as', filename:'draft.md',
+  onConfirm: () => new Promise(resolve => finishSave = resolve),
+});
+const pendingSave = store.confirmPicker();
+assert.equal(await store.openSurface('/other'), false);
+assert.equal(store.isBulkBusy, true);
+assert.equal(store.pickerMode, 'save-as');
+assert.equal(store.pickerFilename, 'draft.md');
+assert.equal(store.browser.currentPath, '/files');
+finishSave(false);
+await pendingSave;
+assert.equal(store.isBulkBusy, false);
+assert.equal(await store.openSurface('/other'), true, 'normal opening resumes after the write');
+assert.equal(store.browser.currentPath, '/other');
+''')
+
+
+def test_rename_forms_preserve_picker_and_target_directory():
+    run_store_check('''
+store.browser.currentPath = '/files';
+store.browser.entries = [{name:'taken.md', path:'/files/taken.md'}];
+store.beginRename({name:'note.md', path:'/files/note.md'});
+assert.equal(store.renameInline, true);
+assert.equal(modalCalls, 0);
+store.renameName = 'taken.md';
+await store.confirmRename();
+assert.match(store.renameError, /already exists/);
+store.closeRenameModal();
+store.configurePicker({pickerMode:'save-as', filename:'draft.md', onConfirm:() => assert.fail('folder form must win')});
+store.beginNewFolder();
+await store.confirmPicker();
+assert.equal(store.pickerFilename, 'draft.md');
+let body;
+fetcher = async (url, options) => {
+  if (options) { body = JSON.parse(options.body); return listing('/files'); }
+  return listing('/files');
+};
+store.renameName = 'new-folder';
+await store.confirmRename();
+assert.equal(body.parentPath, '/files');
+assert.equal(store.renameInline, false);
+assert.equal(store.pickerFilename, 'draft.md', 'return to Save As draft after creating folder');
+store.resetPickerState();
+let finishRename;
+store.openRenameModal({name:'note.md',path:'/external/note.md'}, {currentPath:'/external', performRename: () => new Promise(resolve => finishRename = resolve)});
+assert.equal(modalCalls, 1);
+assert.equal(store.renameInline, false);
+assert.equal(store.browser.currentPath, '/files', 'external rename must not retarget Files');
+assert.deepEqual(store.renameEntries, [], 'unrelated listing cannot reject external name');
+store.renameName = 'renamed.md';
+const pendingRename = store.confirmRename();
+assert.equal(modalGuards.get('modals/file-browser/rename-modal.html')(), false, 'pending rename blocks X/Escape');
+store.closeRenameModal();
+assert.equal(store.isRenaming, true, 'cancel cannot clear a pending operation');
+finishRename({refreshFiles:false});
+await pendingRename;
+assert.equal(modalGuards.get('modals/file-browser/rename-modal.html')(), true);
+store.resetRenameState();
+store.openNewFolderModal();
+assert.equal(modalCalls, 2);
+assert.equal(store.renameMode, 'create-folder');
+store.closeRenameModal();
+''')
+    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
+    assert 'x-if="$store.fileBrowser.isSaveAsPicker() && !$store.fileBrowser.renameInline"' in html
+    assert 'container: file-browser-footer / inline-size;' in html
+    assert '@container file-browser-footer (max-width: 620px)' in html
+
+
+def test_autocomplete_root_paths_and_cancellation():
+    run_store_check('''
+let requested;
+fetcher = async url => { requested = new URL(url, 'http://local').searchParams.get('path'); return listing(requested, [{name:'child', path:requested+'/child', is_dir:true}]); };
+for (const [input, parent] of [['/','/'], ['a0/','/a0'], ['/a0/us','/a0'], ['/@connections/','/@connections']]) {
+  store.pathInput = input;
+  await store.updatePathSuggestions();
+  assert.equal(requested, parent);
+}
+const originalTimer = globalThis.setTimeout;
+globalThis.setTimeout = () => 123;
+for (const cancel of [() => store.resetPathInput(), () => store.queuePathSuggestions(), () => store.hidePathSuggestions(), () => store.destroy()]) {
+  let finish;
+  fetcher = () => new Promise(resolve => finish = resolve);
+  store.pathInput = '/a0/';
+  const pending = store.updatePathSuggestions();
+  cancel();
+  finish(listing('/a0', [{name:'stale', path:'/a0/stale', is_dir:true}]));
+  await pending;
+  assert.deepEqual(store.pathSuggestions, [], 'cancelled request cannot resurrect results');
+}
+globalThis.setTimeout = originalTimer;
+fetcher = async () => ({ok:false, json:async () => ({error:'denied'})});
+store.pathInput = '/';
+await store.updatePathSuggestions();
+assert.deepEqual(store.pathSuggestions, []);
+store.browser.currentPath = '/@connections/ssh/0123456789abcdef0123456789abcdef/docs';
+assert.deepEqual(store.pathCrumbs().map(c => c.path), ['/', '/@connections', '/@connections/ssh/0123456789abcdef0123456789abcdef', '/@connections/ssh/0123456789abcdef0123456789abcdef/docs']);
+store.pathSuggestions = [{name:'one',path:'a/one'}, {name:'two',path:'a/two'}];
+store.pathSuggestionIndex = 0;
+store.movePathSuggestion(-1);
+assert.equal(store.activePathSuggestion.name, 'two');
+fetcher = async url => listing(new URL(url, 'http://local').searchParams.get('path'));
+assert.equal(store.selectPathSuggestion(), true);
+assert.equal(store.pathInput, '/a/two/', 'Tab accepts active relative suggestion as an absolute child directory');
+await settle();
+store.pathInput = '/typed';
+store.pathSuggestions = [{name:'other',path:'/other'}];
+await store.submitPath();
+assert.equal(store.browser.currentPath, '/typed', 'Enter submits typed input instead of selected suggestion');
+store.browser.currentPath = '$WORK_DIR';
+assert.deepEqual(store.pathCrumbs(), [{name:'/',path:'/'}], 'startup sentinel is not a directory crumb');
+''')
+
+
+def test_autocomplete_respects_connection_roots():
+    run_store_check('''
+let requested;
+fetcher = async url => {
+  requested = new URL(url, 'http://local').searchParams.get('path');
+  return listing(requested, [{name:'child', path:requested+'/child', is_dir:true}]);
+};
+const id = '0123456789abcdef0123456789abcdef';
+for (const root of [`/@connections/host/${id}`, `/@connections/ssh/${id}`, `/@ssh/${id}`]) {
+  for (const input of [root, root+'/', root+'/ch']) {
+    store.pathInput = input;
+    await store.updatePathSuggestions();
+    assert.equal(requested, root, 'suggestions stay inside the connection');
+    assert.deepEqual(store.pathSuggestions, [{name:'child', path:root+'/child'}]);
+  }
+  store.pathInput = root+'/child/';
+  await store.updatePathSuggestions();
+  assert.equal(requested, root+'/child', 'nested folders remain browsable');
+}
+for (const input of ['/@connections/ssh', '/@connections/ssh/', '/@connections/ssh/0123', '/@connections/ssh/0123/', '/@ssh/0123/']) {
+  requested = null;
+  store.pathSuggestions = [{name:'stale',path:'/stale'}];
+  store.pathInput = input;
+  await store.updatePathSuggestions();
+  assert.equal(requested, null, 'do not query namespaces or incomplete connection IDs');
+  assert.deepEqual(store.pathSuggestions, []);
+}
+''')
+
+
+def test_directory_requests_and_history_only_commit_success():
+    run_store_check('''
+store.browser.currentPath = '/a';
+store.forwardHistory = ['/forward'];
+fetcher = async () => ({ok:false,json:async () => ({error:'denied'})});
+await store.navigateToFolder('/denied');
+assert.equal(store.browser.currentPath, '/a');
+assert.deepEqual(store.history, []);
+assert.deepEqual(store.forwardHistory, ['/forward']);
+let finish;
+fetcher = () => new Promise(resolve => finish = resolve);
+const pending = store.fetchFiles('/old');
+fetcher = async () => listing('/new');
+await store.fetchFiles('/new');
+finish(listing('/old'));
+await pending;
+assert.equal(store.browser.currentPath, '/new', 'latest request wins');
+fetcher = () => new Promise(resolve => finish = resolve);
+const closing = store.fetchFiles('/late');
+store.destroy();
+finish(listing('/late'));
+await closing;
+assert.equal(store.browser.currentPath, '', 'late response cannot resurrect a closed browser');
+const docking = store.fetchFiles('/docked');
+store.beginSurfaceHandoff();
+store.onUnmount();
+finish(listing('/docked'));
+await docking;
+assert.equal(store.browser.currentPath, '/docked', 'docking does not cancel the shared directory load');
+''')
 
 
 def test_file_browser_remember_last_directory_defaults_enabled() -> None:
@@ -44,15 +336,6 @@ def test_file_browser_editable_path_bar_and_remembered_directory_contract() -> N
     assert ".nav-button-label" in html
     assert 'x-model="$store.fileBrowser.pathInput"' in html
     assert '@submit.prevent="$store.fileBrowser.submitPath()"' in html
-    assert 'focusPathInput(button) {' in store
-    assert 'aria-label="Go to directory"' in html
-    assert '@click="$store.fileBrowser.focusPathInput($el)"' in html
-    assert html.count('@click.self="$store.fileBrowser.focusPathInput($el)"') == 2
-    assert html.count('@mousedown.self.prevent @click.self="$store.fileBrowser.focusPathInput($el)"') == 2
-    assert 'aria-label="Edit directory path"' in html
-    assert '.file-browser-header-button.path-submit:hover:not(:disabled)' in html
-    assert 'opacity: 1' not in html.split('.file-browser-header-button.path-submit:hover')[1].split('}')[0]
-    assert 'cursor: text' in html
     assert '$store.fileBrowser.pathError' in html
 
     assert "FILE_BROWSER_LAST_DIRECTORY_STORAGE_KEY" in store
@@ -76,98 +359,14 @@ def test_file_browser_editable_path_bar_and_remembered_directory_contract() -> N
     assert "$store.settings.settings.file_browser_remember_last_directory" in workdir_settings
 
 
-def test_file_browser_path_submit_state_machine_contract() -> None:
-    """One shared spinner-only submit slot drives raw and edit buttons (DRY)."""
+def test_file_browser_path_controls_preserve_accessibility_and_cleanup():
     html = read("webui", "components", "modals", "file-browser", "file-browser.html")
-    store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
-
-    assert "pathSubmitState" not in store
-    assert "pathSubmitState" not in html
-    assert 'path-edit-spinner' not in html
-    assert ".path-submit.is-submitting::before," in html
-    assert ".path-edit-toggle.is-loading::before" in html
-    assert html.count(":class=\"{ 'is-submitting': $store.fileBrowser.isPathSubmitting || $store.fileBrowser.isLoading }\"") == 2
-    assert '<x-icon name="check"' not in html
-    assert 'x-icon name="edit" x-show="$store.fileBrowser.pathSubmitState()' not in html
-    assert ".file-browser-header-button.path-submit {" in html
-    assert "width: 26px;" in html
-    assert "min-width: 26px;" in html
-
-    assert "active.classList.contains(\"path-input\")) active.blur();" in store
-
-
-def test_file_browser_raw_mode_parity_contract() -> None:
-    """Raw mode reuses edit-mode machinery: pinning, suggestions, submit guards."""
-    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
-    store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
-
-    assert "pinPathInput(element) {" in store
-    assert "ResizeObserver" in store
-    assert "$store.fileBrowser.pathInput; $store.fileBrowser.pinPathInput($el)" in html
-    assert "scrollPathInputToEnd(element) {" in store
-    assert "pinPathInputAfterBlur(element) {" in store
-    assert '@blur="$store.fileBrowser.hidePathSuggestions(); $store.fileBrowser.pinPathInputAfterBlur($el)"' in html
-
-    assert html.count('@mousedown.prevent') >= 2
-
-    assert "resetPathInput() {" in store
-    reset_block = store[store.index("resetPathInput() {"):store.index("},", store.index("resetPathInput() {"))]
-    assert "this.pathSuggestions = [];" in reset_block
-    assert "this.pathSuggestionsStyle = {};" in reset_block
-
-    submit_block = store[store.index("async submitPath()"):store.index("async navigateUp")]
-    assert "currentPath" in submit_block
-    assert "this.exitPathEdit();" in submit_block
-
-    assert html.count("@keydown.tab=\"if (!$event.shiftKey") == 2
-
-
-def test_file_browser_suggestion_dropdown_height_contract() -> None:
-    """Dropdown caps at 8 rows via the viewport-aware style, not a CSS !important."""
-    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
-    store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
-
-    assert "max-height: 304px !important" not in html
-    assert "max-height: 304px;" in html
-    assert "Math.min(parseInt(style.maxHeight, 10) || 0, 304)" in store
-
-
-def test_file_browser_loading_rows_not_interactive_contract() -> None:
-    """Rows act on soon-to-be-replaced entries during fetches; guard them."""
-    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
-
-    assert "'is-loading': $store.fileBrowser.isLoading" in html
-    assert ".files-list.is-loading .file-item {" in html
-    assert "pointer-events: none;" in html
-
-
-def test_file_browser_seamless_navigation_and_row_click_contract() -> None:
-    """Navigation never swaps the listing for a loading overlay; rows open on click."""
-    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
-
-    assert "loading-state" not in html
-    assert "loading-spinner" not in html
-    assert "Loading files..." not in html
-    assert html.count("@keyframes spin") == 1
-
-    assert '@click="$store.fileBrowser.handleFileNameClick(file)"' in html
-    assert '<div class="file-name">' in html
-    assert '.file-item { cursor: pointer;' in flat(html)
-    assert '<label class="file-select-cell" @click.stop>' in html
-    assert 'x-show="!$store.fileBrowser.isPickerMode()" @click.stop>' in html
-
-
-def test_file_browser_overflow_measure_reacts_to_navigation_contract() -> None:
-    """Crumb fit measurement must re-run per navigation, not only on resize."""
-    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
-    store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
-
-    start = html.index('x-effect="$store.fileBrowser.pathCrumbs()')
-    end = html.index('@click.self="$store.fileBrowser.startPathEdit()"', start)
-    crumbs_effect = html[start:end]
-    assert "$store.fileBrowser.pathCrumbs()" in crumbs_effect
-    assert "requestAnimationFrame(() => $store.fileBrowser.measurePathCrumbFit($el))" in crumbs_effect
-    assert "hidden = measure(available - 18);" in store
+    assert 'aria-label="Edit directory path"' in html
+    assert 'class="path-edit-toggle"' in html
+    assert '@keydown.escape.stop.prevent=' in html
+    assert 'x-destroy="$el._pinResizeObserver?.disconnect()"' in html
+    assert 'x-destroy="$el._crumbFitObserver.disconnect()"' in html
+    assert ':inert="$store.fileBrowser.isLoading || $store.fileBrowser.isRenaming || $store.fileBrowser.isBulkBusy"' in html
 
 
 def test_file_browser_compact_controls_and_narrow_layout_contract() -> None:
@@ -180,11 +379,7 @@ def test_file_browser_compact_controls_and_narrow_layout_contract() -> None:
     assert 'aria-label="New folder"' in html
     assert 'title="New folder"' in html
     assert 'aria-label="Create new"' in html
-    assert 'toggleNewItemsMenu($el)' in html
-    assert 'newItemsMenuOpen' in store
-    assert 'pickNewItem(kind)' in store
     assert html.count('btn-new-item') == 1
-    assert 'closeNewItemsMenu()' in html.split('files-list"')[1].split('>')[0]
     assert ">New File<" not in html
     assert ">New Folder<" not in html
     assert 'class="file-search-shell"' not in html
@@ -251,150 +446,6 @@ def test_file_browser_editor_picker_modes_have_primary_footer_actions() -> None:
     assert 'x-show="$store.fileBrowser.canOpenInActionMenu(file)"' in html
 
 
-def test_file_browser_picker_reuses_open_browser_modal_instead_of_stacking() -> None:
-    """New file while the browser modal is open converts it in place; no second modal stacks."""
-    import re
-    import subprocess
-
-    source = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
-    source = re.sub(r'^import\b[\s\S]*?;\n', '', source, flags=re.M)
-    source = source.replace('export const store = createStore', 'const store = createStore')
-    script = '''
-import assert from 'node:assert/strict';
-const window = globalThis;
-const createStore = (_name, model) => model;
-const createFileTree = () => ({ shown: false, follow: async () => {} });
-const localStorage = { getItem: () => null, setItem: () => {} };
-let surfaceElement = null;
-const document = { querySelector: () => surfaceElement };
-const callJsonApi = async () => ({ settings: {} });
-const fetchApi = async () => ({ ok: true, json: async () => ({ data: { entries: [], current_path: '/a0/usr' } }) });
-const formatDateTime = () => '';
-const openLatestSurface = async () => {};
-const setupFloatingSurfaceModalChrome = () => () => {};
-let openModalCalls = 0;
-const modalStack = [];
-window.isModalOpen = path => modalStack.includes(path);
-window.openModal = async path => { openModalCalls++; modalStack.push(path); return Promise.resolve(); };
-window.closeModal = async () => {};
-window.toastFrontendError = () => {};
-''' + source + '''
-// 1) Picker while the browser modal is already open: convert in place, never stack.
-modalStack.push('modals/file-browser/file-browser.html');
-const sentinel = {};
-store.closePromise = sentinel;
-await store.openSaveAsPicker('/a0/usr', {
-  filename: 'Untitled.txt',
-  defaultExtension: '',
-  onConfirm: async () => true,
-});
-assert.equal(openModalCalls, 0, 'picker must not stack a second browser modal');
-assert.equal(store.pickerMode, 'save-as');
-assert.equal(store.pickerConfirmLabel, 'Save Here');
-assert.equal(store.pickerFilename, 'Untitled.txt');
-assert.equal(typeof store.pickerOnConfirm, 'function');
-assert.equal(store.closePromise, sentinel, 'original modal close awaiter is preserved');
-assert.equal(store.isLoading, false);
-assert.equal(store.browser.currentPath, '/a0/usr');
-assert.deepEqual(store.browser.entries, []);
-
-// 2) Picker with no browser modal open: normal picker modal flow.
-modalStack.length = 0;
-await store.openSaveAsPicker('/a0', { filename: 'Untitled.txt', defaultExtension: '' });
-assert.equal(openModalCalls, 1, 'fresh picker opens the modal once');
-assert.equal(store.pickerMode, '', 'modal close destroys state cleanly');
-assert.equal(store.closePromise, null);
-modalStack.length = 0;
-
-// 3) Picker over a live canvas surface: convert in place, restore listing on cancel.
-surfaceElement = { closest: () => null };
-store.browser.currentPath = '/a0/usr';
-await store.openSaveAsPicker('/a0', { filename: 'Untitled.txt', defaultExtension: '' });
-assert.equal(openModalCalls, 1, 'surface pickers never stack a second window');
-assert.equal(store.pickerMode, 'save-as', 'surface converts to picker in place');
-assert.equal(store.isLoading, false);
-store.cancelPicker();
-await Promise.resolve();
-await Promise.resolve();
-assert.equal(store.pickerMode, '', 'cancel restores the browser listing');
-assert.equal(store.browser.currentPath, '/a0/usr', 'surface listing reloaded after cancel');
-'''
-    subprocess.run(['node', '--input-type=module'], input=script, text=True, check=True)
-
-
-def test_file_browser_inline_rename_and_new_folder_use_footer_input() -> None:
-    """New folder and Rename edit the name in the shared footer input; external callers keep the modal."""
-    import re
-    import subprocess
-
-    source = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
-    source = re.sub(r'^import\b[\s\S]*?;\n', '', source, flags=re.M)
-    source = source.replace('export const store = createStore', 'const store = createStore')
-    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
-    script = '''
-import assert from 'node:assert/strict';
-const window = globalThis;
-const createStore = (_name, model) => model;
-const createFileTree = () => ({ shown: false, follow: async () => {} });
-const localStorage = { getItem: () => null, setItem: () => {} };
-const document = { querySelector: () => null };
-const callJsonApi = async () => ({ settings: {} });
-const formatDateTime = () => '';
-const openLatestSurface = async () => {};
-const setupFloatingSurfaceModalChrome = () => () => {};
-let openModalCalls = 0;
-const modalStack = [];
-window.isModalOpen = path => modalStack.includes(path);
-window.openModal = async path => { openModalCalls++; modalStack.push(path); return Promise.resolve(); };
-window.closeModal = async path => { modalStack.splice(modalStack.indexOf(path), 1); };
-window.toastFrontendError = () => {};
-let renameResponse = { ok: true, json: async () => ({}) };
-const fetchApi = async (url, options = {}) => {
-  if (String(url).startsWith('/get_work_dir_files')) {
-    return { ok: true, json: async () => ({ data: { entries: [], current_path: '/a0/usr' } }) };
-  }
-  return renameResponse;
-};
-''' + source + '''
-// Rename opens the inline footer input, not a modal window.
-await store.openRenameModal({ name: 'note.md', path: '/a0/usr/note.md', is_dir: false });
-assert.equal(openModalCalls, 0, 'in-browser rename does not open a modal');
-assert.equal(store.renameInline, true);
-assert.equal(store.renameMode, 'rename');
-assert.equal(store.renameName, 'note.md');
-store.renameName = 'renamed.md';
-await store.confirmRename();
-assert.equal(store.pickerMode, '', 'confirm closes the inline editor');
-assert.equal(store.renameInline, false);
-
-// New folder opens the inline footer input in create mode.
-await store.openNewFolderModal();
-assert.equal(openModalCalls, 0, 'in-browser New folder does not open a modal');
-assert.equal(store.renameInline, true);
-assert.equal(store.renameMode, 'create-folder');
-store.closeRenameModal();
-assert.equal(store.renameInline, false, 'cancel resets the inline editor');
-
-// External callers keep the modal window.
-await store.openRenameModal({ name: 'doc.md', path: '/a0/doc.md', is_dir: false }, { modal: true });
-assert.equal(openModalCalls, 1, 'external rename keeps the modal window');
-assert.equal(store.renameInline, false);
-await store.openNewFolderModal({ modal: true });
-assert.equal(openModalCalls, 2, 'external New folder keeps the modal window');
-modalStack.length = 0;
-'''
-    subprocess.run(['node', '--input-type=module'], input=script, text=True, check=True)
-
-    assert 'file-browser-picker-actions" x-show="$store.fileBrowser.isPickerMode() || $store.fileBrowser.renameInline"' in html
-    assert 'renameInline ? $store.fileBrowser.confirmRename() : $store.fileBrowser.confirmPicker()' in html
-    assert "x-model=\"$store.fileBrowser.renameName\"" in html
-    assert "modal: true" in read("plugins", "_editor", "webui", "editor-store.js")
-    assert "modal: true" in read("plugins", "_desktop", "webui", "desktop-store.js")
-    dox = read("webui", "components", "modals", "file-browser", "AGENTS.md")
-    assert "shared footer input" in dox
-    assert "rename-modal.html` owns the rename and create-folder prompt for external callers" in dox
-
-
 def test_file_browser_extract_and_editor_download_actions() -> None:
     browser_html = read("webui", "components", "modals", "file-browser", "file-browser.html")
     browser_store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
@@ -416,7 +467,7 @@ def test_file_browser_dropdown_escapes_scroll_container_and_header_is_opaque() -
     html = read("webui", "components", "modals", "file-browser", "file-browser.html")
     store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
 
-    assert '@scroll="$store.fileBrowser.closeDropdown(); $store.fileBrowser.closeNewItemsMenu()"' in html
+    assert '@scroll="$store.fileBrowser.closeDropdown(); closeMenu()"' in html
     assert 'const surfaceActive = Boolean(document.querySelector(".file-browser-root.is-surface"));' in store
     assert 'await this.openSurface(retainedPath);' in store
     assert 'overflow: auto;' in html
@@ -543,9 +594,6 @@ def test_file_browser_drag_and_drop_contract() -> None:
 
 
 def test_file_browser_preferences_validate_and_restore_defaults():
-    import re
-    import subprocess
-
     source = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
     source = re.sub(r'^import\b[\s\S]*?;\n', '', source, flags=re.M)
     source = source.replace('export const store = createStore', 'const store = createStore')
@@ -591,46 +639,7 @@ assert.deepEqual(sorted.map(x=>x.name), ['z','a','b']);
     subprocess.run(['node', '--input-type=module'], input=script, text=True, check=True)
 
 
-def test_file_browser_history_back_forward_contract() -> None:
-    """Back/forward buttons drive the nav history stacks with success-gated moves."""
-    html = read("webui", "components", "modals", "file-browser", "file-browser.html")
-    store = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
-    dox = read("webui", "components", "modals", "file-browser", "AGENTS.md")
-
-    assert html.count('class="file-browser-header-button surface-control nav-history-button"') == 2
-    assert '@click="$store.fileBrowser.navigateBack()"' in html
-    assert '@click="$store.fileBrowser.navigateForward()"' in html
-    assert ':disabled="!$store.fileBrowser.history.length || $store.fileBrowser.isLoading"' in html
-    assert ':disabled="!$store.fileBrowser.forwardHistory.length || $store.fileBrowser.isLoading"' in html
-    assert 'aria-label="Go back"' in html
-    assert 'aria-label="Go forward"' in html
-    assert '.nav-history-button:disabled' in html
-
-    assert "history: [], // back navigation stack" in store
-    assert "forwardHistory: [], // forward navigation stack" in store
-    assert "pushNavHistory(path) {" in store
-    assert "this.history.push(this.browser.currentPath);" not in store
-    assert store.count("this.pushNavHistory(") == 3
-
-    stack_block = store[store.index("async navigateStack("):store.index("async navigateToFolder")]
-    assert "preserveOnError: true" in stack_block
-    assert "if (loaded) {" in stack_block
-    assert 'navigateStack("history", "forwardHistory")' in store
-    assert 'navigateStack("forwardHistory", "history")' in store
-
-    destroy_block = store[store.index("  destroy() {"):store.index("  setupFloatingModal(")]
-    assert "this.forwardHistory = [];" in destroy_block
-    reset_block = store[store.index("  resetOpenState(options = {}) {"):store.index("  configurePicker(")]
-    assert "this.forwardHistory = [];" in reset_block
-
-    assert "pushNavHistory" in dox
-    assert "forwardHistory" in dox
-
-
 def test_file_browser_history_back_forward_stack_behavior():
-    import re
-    import subprocess
-
     source = read("webui", "components", "modals", "file-browser", "file-browser-store.js")
     source = re.sub(r'^import\b[\s\S]*?;\n', '', source, flags=re.M)
     source = source.replace('export const store = createStore', 'const store = createStore')
