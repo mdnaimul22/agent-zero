@@ -14,6 +14,7 @@
 ## Local Contracts
 
 - Preserve document storage integrity and live session synchronization.
+- `rename_document` validates scope, extension, and destination before calling an optional native-document rename handler. Preserve source mode/ownership, retain the source on native failure, and update stored paths and version history after a successful native save. Office routes supply the Desktop handler; Editor text renames keep their existing atomic-write path.
 - Atomic writes preserve the existing file mode and owner/group; Rename and Save As inherit them from the source. Temporary files and new files from atomic writes start private (0600). Metadata failures must leave the original untouched.
 - Version backups use private files (0600) inside a process-owned private directory (0700); `ensure_dirs` also restricts existing backup directories.
 - Keep LibreOffice operations bounded to intended workspaces and artifact paths.
