@@ -1700,6 +1700,109 @@ for (const [transport, oldUrl, nextUrl, stale, busy] of [
     subprocess.run(["node", "--input-type=module", "-e", script], check=True, text=True)
 
 
+def test_browser_viewer_clears_empty_context_and_ignores_late_responses():
+    source = (PROJECT_ROOT / "plugins/_browser/webui/browser-store.js").read_text(encoding="utf-8")
+    source = source[source.index("const EXTENSIONS_ROOT"):source.index("export const store")]
+    script = """
+import assert from 'node:assert/strict';
+const ok = data => ({ results: [{ ok: true, data }] });
+const empty = context_id => ({ context_id, active_browser_id: null, browsers: [],
+  viewer_transport: 'snapshot', interactive_view: null });
+const deferred = () => { let resolve; const promise = new Promise(r => resolve = r); return {promise, resolve}; };
+let request = async () => ok(empty('empty'));
+const websocket = { request: (...args) => request(...args), emit: async () => {} };
+const chatsStore = { selected: 'old' };
+""" + source + """
+Object.assign(model, {
+  loading: false, _surfaceMounted: true,
+  contextId: 'old', activeBrowserContextId: 'old', activeBrowserId: 1,
+  browsers: [{ id: 1, context_id: 'old', currentUrl: 'https://old.example' }],
+  address: 'https://old.example', addressFocused: true,
+  frameState: { id: 1, currentUrl: 'https://old.example' },
+  switchingBrowserId: 1, _surfaceSwitching: true,
+  _bindSocketEvents: async () => {},
+  currentViewportSize: () => ({ width: 900, height: 600 }),
+  isVisibleBrowserSurface: () => true,
+  syncViewportAfterSurfaceOpen: async () => {},
+});
+// Empty subscriptions are authoritative, even if the previous tab still exists elsewhere.
+await model.connectViewer({ browserId: null, contextId: 'empty' });
+assert.equal(model.activeBrowserId, null);
+assert.equal(model.address, '');
+assert.equal(model.frameState, null);
+assert.equal(model.isBusy(), false);
+
+// A structured server failure must release the same spinner as a transport failure.
+for (const transportFailure of [false, true]) {
+  Object.assign(model, { switchingBrowserId: 1, _surfaceSwitching: true });
+  request = async () => {
+    if (transportFailure) throw new Error('offline');
+    return { results: [{ ok: false, error: { error: 'offline' } }] };
+  };
+  await assert.rejects(model.connectViewer({ contextId: 'empty' }), /offline/);
+  assert.equal(model.isBusy(), false);
+  assert.equal(model.connected, false);
+}
+
+// Two pending context refreshes finish out of order. Only the latest may subscribe.
+const slow = deferred();
+const fast = deferred();
+const subscriptions = [];
+model.refreshBrowserSessions = async id => {
+  if (id === 'slow') await slow.promise;
+  if (id === 'fast') await fast.promise;
+};
+request = async (event, data) => {
+  subscriptions.push(data.context_id);
+  return ok(empty(data.context_id));
+};
+const switchingSlow = model.syncViewerToSelectedContext('slow');
+await Promise.resolve();
+const switchingFast = model.syncViewerToSelectedContext('fast');
+await Promise.resolve();
+slow.resolve();
+await switchingSlow;
+assert.equal(model.loading, true);
+fast.resolve();
+await switchingFast;
+assert.deepEqual(subscriptions, ['fast']);
+assert.equal(model.contextId, 'fast');
+assert.equal(model.isBusy(), false);
+
+// Leaving a chat also invalidates an already pending viewer response.
+const pending = deferred();
+request = async () => pending.promise;
+const connecting = model.connectViewer({ browserId: 1, contextId: 'old' });
+await Promise.resolve();
+await Promise.resolve();
+await model.syncViewerToSelectedContext('');
+pending.resolve(ok({ active_browser_id: 1, browsers: model.browsers,
+  viewer_transport: 'interactive', interactive_view: { available: true, url: '/old-viewer' } }));
+await connecting;
+assert.equal(model.contextId, '');
+assert.equal(model.activeBrowserId, null);
+assert.equal(model.address, '');
+assert.equal(model.interactiveViewUrl, '');
+assert.equal(model.isBusy(), false);
+
+// A late open-command result cannot take the user back to their previous chat.
+const commandReply = deferred();
+request = async () => commandReply.promise;
+model.contextIdForNewBrowser = async () => 'old';
+const opening = model.command('open');
+await Promise.resolve();
+await model.syncViewerToSelectedContext('');
+commandReply.resolve(ok({ result: { id: 1, context_id: 'old', currentUrl: 'https://old.example' },
+  browsers: [{ id: 1, context_id: 'old' }] }));
+await opening;
+assert.equal(model.contextId, '');
+assert.equal(model.address, '');
+assert.equal(model.activeBrowserId, null);
+assert.equal(model.isBusy(), false);
+"""
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True, text=True)
+
+
 def test_browser_viewer_uses_tabs_for_session_switching():
     main_html = (PROJECT_ROOT / "plugins" / "_browser" / "webui" / "browser-panel.html").read_text(
         encoding="utf-8"
