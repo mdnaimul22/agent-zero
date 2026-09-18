@@ -640,7 +640,7 @@ def _resolve_parallel_tool(
         return None
 
     try:
-        tool.args = dict(tool_args)
+        tool.args = tool_args
     except Exception:
         pass
 
