@@ -12,7 +12,9 @@ class _Response:
 
 
 @pytest.mark.asyncio
-async def test_parallel_execute_applies_hook_mutations_to_tool_args(monkeypatch) -> None:
+async def test_parallel_execute_applies_hook_mutations_to_tool_args(
+    monkeypatch,
+) -> None:
     observed = {}
 
     class FakeTool:
@@ -43,35 +45,28 @@ async def test_parallel_execute_applies_hook_mutations_to_tool_args(monkeypatch)
         async def handle_intervention(self):
             pass
 
-    async def unmask_nested_secret(*_args, **kwargs):
+    async def unmask_secret(*_args, **kwargs):
         if not _args or _args[0] != "tool_execute_before":
             return
         tool_args = kwargs["tool_args"]
-        tool_args["tool_calls"][0]["tool_args"]["code"] = tool_args["tool_calls"][0][
-            "tool_args"
-        ]["code"].replace("§§secret(TOKEN)", "resolved-secret")
+        tool_args["code"] = tool_args["code"].replace(
+            "§§secret(TOKEN)", "resolved-secret"
+        )
 
-    monkeypatch.setattr(
-        parallel_tools, "call_extensions_async", unmask_nested_secret
-    )
+    monkeypatch.setattr(parallel_tools, "call_extensions_async", unmask_secret)
+    worker_args = {"code": "curl -H 'Authorization: Bearer §§secret(TOKEN)'"}
 
     result = await parallel_tools.execute_tool_call(
         FakeAgent(),  # type: ignore[arg-type]
         "code_execution_tool",
-        {
-            "tool_calls": [
-                {
-                    "tool_name": "code_execution_tool",
-                    "tool_args": {
-                        "code": "curl -H 'Authorization: Bearer §§secret(TOKEN)'"
-                    },
-                }
-            ]
-        },
+        worker_args,
     )
 
     assert result == "done"
-    assert observed["tool_args"]["tool_calls"][0]["tool_args"]["code"] == (
+    assert observed["tool_args"] is worker_args
+    assert observed["tool_args"]["code"] == (
         "curl -H 'Authorization: Bearer resolved-secret'"
     )
-    assert observed["kwargs"] == observed["tool_args"]
+    assert observed["kwargs"]["code"] == (
+        "curl -H 'Authorization: Bearer resolved-secret'"
+    )
