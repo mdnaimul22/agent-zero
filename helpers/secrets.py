@@ -483,7 +483,7 @@ class SecretsManager:
         submitted_lines = self.parse_env_lines(submitted_text)
 
         existing_pairs: Dict[str, EnvLine] = {
-            ln.key: ln
+            ln.key.upper(): ln
             for ln in existing_lines
             if ln.type == "pair" and ln.key is not None
         }
@@ -495,7 +495,7 @@ class SecretsManager:
                 merged.append(sub)
                 continue
 
-            key = sub.key
+            key = sub.key.upper()
             submitted_val = sub.value or ""
 
             if key in existing_pairs and submitted_val == self.MASK_VALUE:
