@@ -70,6 +70,19 @@ def test_model_config_api_keys_can_be_cleared_via_backend(monkeypatch, tmp_path)
     assert handler._reveal_key({"provider": "openrouter"}) == {"ok": True, "value": ""}
 
 
+def test_api_key_reveal_preserves_the_pool_and_rotation_position(monkeypatch):
+    monkeypatch.setenv("API_KEY_OPENROUTER", "first-key,second-key")
+    monkeypatch.setattr(models, "api_keys_round_robin", {})
+    handler = ApiKeys(Flask(__name__), threading.Lock())
+    assert handler._reveal_key({"provider": "openrouter"}) == {
+        "ok": True, "value": "first-key,second-key"
+    }
+    assert models.api_keys_round_robin == {}
+    assert models.get_api_key("openrouter") == "first-key"
+    assert handler._reveal_key({"provider": "openrouter"})["value"] == "first-key,second-key"
+    assert models.get_api_key("openrouter") == "second-key"
+
+
 def test_chat_model_configured_requires_identity_and_key(monkeypatch):
     from plugins._model_config.helpers import model_config
 

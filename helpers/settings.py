@@ -323,7 +323,7 @@ def convert_out(settings: Settings) -> SettingsOutput:
     providers = get_providers("chat") + get_providers("embedding")
     for provider in providers:
         provider_name = provider["value"]
-        api_key = settings["api_keys"].get(provider_name, models.get_api_key(provider_name))
+        api_key = settings["api_keys"].get(provider_name, models.get_api_key_raw(provider_name))
         settings["api_keys"][provider_name] = API_KEY_PLACEHOLDER if api_key and api_key != "None" else ""
 
     # load auth from dotenv
@@ -359,7 +359,7 @@ def convert_out(settings: Settings) -> SettingsOutput:
     return out
 
 def _get_api_key_field(settings: Settings, provider: str, title: str) -> SettingsField:
-    key = settings["api_keys"].get(provider, models.get_api_key(provider))
+    key = settings["api_keys"].get(provider, models.get_api_key_raw(provider))
     # For API keys, use simple asterisk placeholder for existing keys
     return {
         "id": f"api_key_{provider}",
@@ -509,7 +509,7 @@ def _load_sensitive_settings(settings: Settings):
     providers = get_providers("chat") + get_providers("embedding")
     for provider in providers:
         provider_name = provider["value"]
-        api_key = settings["api_keys"].get(provider_name) or models.get_api_key(provider_name)
+        api_key = settings["api_keys"].get(provider_name) or models.get_api_key_raw(provider_name)
         if api_key and api_key != "None":
             settings["api_keys"][provider_name] = api_key
 

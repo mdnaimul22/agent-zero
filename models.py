@@ -272,15 +272,19 @@ rate_limiters: dict[str, RateLimiter] = {}
 api_keys_round_robin: dict[str, int] = {}
 
 
-@extensible
-def get_api_key(service: str) -> str:
-    # get api key for the service
-    key = (
+def get_api_key_raw(service: str) -> str:
+    """Read the stored value, including any comma-separated keys."""
+    return (
         dotenv.get_dotenv_value(f"API_KEY_{service.upper()}")
         or dotenv.get_dotenv_value(f"{service.upper()}_API_KEY")
         or dotenv.get_dotenv_value(f"{service.upper()}_API_TOKEN")
         or "None"
     )
+
+
+@extensible
+def get_api_key(service: str) -> str:
+    key = get_api_key_raw(service)
     # if the key contains a comma, use round-robin
     if "," in key:
         api_keys = [k.strip() for k in key.split(",") if k.strip()]
