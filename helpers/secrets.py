@@ -450,6 +450,7 @@ class SecretsManager:
                 left_raw = ln.key
                 left = left_raw.upper()
                 val = ln.value if ln.value is not None else ""
+                val = val.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r")
                 comment = ln.inline_comment or ""
                 formatted_key = (
                     key_formatter(left)
