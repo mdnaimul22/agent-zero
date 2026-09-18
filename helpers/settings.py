@@ -181,6 +181,9 @@ UI_CONTROL_VISIBILITY_DEFAULTS = {
 
 SETTINGS_FILE = files.get_abs_path("usr/settings.json")
 _settings: Settings | None = None
+_apply_settings_cache: ContextVar[dict[str, str] | None] = ContextVar(
+    "apply_settings_cache", default=None
+)
 _runtime_settings_snapshot: Settings | None = None
 _prompt_settings_snapshot: ContextVar[Settings | None] = ContextVar(
     "prompt_settings_snapshot", default=None
@@ -424,7 +427,14 @@ def set_settings(settings: Settings, apply: bool = True, browser_timezone: str |
     _settings = normalize_settings(settings)
     _write_settings_file(_settings)
     if apply:
-        _apply_settings(previous, browser_timezone)
+        cached = {"version": _settings["version"]}
+        token = _apply_settings_cache.set(cached)
+        try:
+            _apply_settings(previous, browser_timezone)
+        finally:
+            # Expire the cache in inherited task contexts too.
+            cached.clear()
+            _apply_settings_cache.reset(token)
     return reload_settings()
 
 
@@ -843,4 +853,4 @@ def create_auth_token() -> str:
 
 
 def _get_version():
-    return git.get_version()
+    return (_apply_settings_cache.get() or {}).get("version") or git.get_version()
