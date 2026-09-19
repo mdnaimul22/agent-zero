@@ -31,6 +31,7 @@
 - While the selected context is running, an empty composer makes the primary button stop the active run; typed text still adds to the queue, and Enter with an empty composer still sends queued messages.
 - Chat navigation controls must cross virtual message-window boundaries; top and bottom target the full cached history rather than only the mounted DOM slice.
 - The page-wide attachment drop overlay must activate only for external file drags so internal WebUI drag interactions keep their own targets.
+- `chatInput.browseFiles(path)` applies its resolved directory after opening Files, including modal routes that only mount the surface chrome; same-folder navigation remains a no-op.
 
 ## Work Guidance
 

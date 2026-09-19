@@ -1,0 +1,8 @@
+name: _right-click
+title: Right Click
+description: Right-click chats, tasks, and file entries to open their action menus.
+version: 1.0.0
+settings_sections: []
+per_project_config: false
+per_agent_config: false
+always_enabled: false

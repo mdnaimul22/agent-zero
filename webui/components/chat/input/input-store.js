@@ -576,6 +576,7 @@ const model = {
     } catch (error) {
       console.error("Error opening Files surface", error);
     }
+    if (opened && path) await fileBrowserStore.navigateToFolder(path);
     if (!opened) await fileBrowserStore.open(path);
   },
 
