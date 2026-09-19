@@ -294,6 +294,7 @@ const model = {
   async loadChats() {
     try {
       const fileContents = await this.readJsonFiles();
+      if (!fileContents.length) return;
       const response = await sendJsonData("/chat_load", { chats: fileContents });
 
       if (!response) {
@@ -310,10 +311,10 @@ const model = {
     }
   },
 
-  // Save current chat
-  async saveChat() {
+  // Save the supplied chat, or the current chat when omitted
+  async saveChat(ctxid = null) {
     try {
-      const context = this.selected || getContext();
+      const context = ctxid || this.selected || getContext();
       const response = await sendJsonData("/chat_export", { ctxid: context });
 
       if (!response) {
@@ -334,6 +335,7 @@ const model = {
       input.type = "file";
       input.accept = ".json";
       input.multiple = true;
+      input.oncancel = () => resolve([]);
 
       input.click();
 
