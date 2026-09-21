@@ -3,7 +3,7 @@ from plugins._pin_to_top.helpers.pins import toggle_pin
 
 
 class TogglePin(ApiHandler):
-    """Toggle one chat or task pin."""
+    """Toggle one chat, task, or project pin."""
 
     async def process(self, input: Input, request: Request) -> Output:
         try:
