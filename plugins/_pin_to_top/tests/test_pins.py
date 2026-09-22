@@ -172,6 +172,15 @@ assert.equal(calls.length, callCount, 'only an explicit empty project ID represe
     subprocess.run(["node", "--input-type=module", "-e", script, str(store)], check=True)
 
 
+def test_pin_presentation_does_not_depend_on_core_sidebar_pin_code():
+    sidebar = Path(__file__).resolve().parents[3] / "webui/components/sidebar"
+    for name in ("sidebar-store.js", "left-sidebar.html", "chats/chat-tree.html", "tasks/task-row.html"):
+        source = (sidebar / name).read_text(encoding="utf-8")
+        assert "isRowPinned" not in source
+        assert "pinToTop" not in source
+        assert 'name="push_pin"' not in source
+
+
 def test_pin_endpoints_keep_default_auth_and_csrf_protection():
     for handler in (GetPins, TogglePin):
         assert handler.requires_auth() is True
