@@ -866,13 +866,11 @@ async def test_unified_call_preserves_cache_control_with_chat_for_non_native_res
         assert messages[0]["content"][-1]["cache_control"] == {
             "type": "ephemeral"
         }
-        assert messages[1]["content"][-1]["cache_control"] == {
+        assert messages[1]["content"] == "question"
+        assert messages[2]["content"][-1]["cache_control"] == {
             "type": "ephemeral"
         }
-        assert "cache_control" not in messages[2]
-        assert messages[3]["content"][-1]["cache_control"] == {
-            "type": "ephemeral"
-        }
+        assert messages[3]["content"] == "follow up"
         return _AsyncChunkStream([_chunk("cached")])
 
     async def fake_rate_limiter(*args, **kwargs):
@@ -1344,6 +1342,36 @@ def test_chat_kwargs_mark_cached_tools_for_cache_control_providers():
     assert kwargs["tools"][0]["function"]["cache_control"] == {
         "type": "ephemeral"
     }
+
+
+@pytest.mark.parametrize("content", [
+    None, "", [],
+    [{"type": "thinking", "thinking": "Plan", "signature": "signature"}],
+    [{"type": "redacted_thinking", "data": "opaque"}],
+])
+def test_cache_markers_preserve_assistant_tool_calls_without_cacheable_text(content):
+    messages = [
+        {"role": "system", "content": "Instructions"},
+        {"role": "user", "content": "Question"},
+        {"role": "assistant", "content": "Previous answer"},
+        {
+            "role": "assistant", "content": content,
+            "tool_calls": [{"id": "call_1", "type": "function", "function": {
+                "name": "lookup", "arguments": "{}",
+            }}],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "Result"},
+        {"role": "user", "content": "Current extras"},
+    ]
+
+    prepared = litellm_transport.apply_chat_prompt_cache_markers(
+        messages, model="anthropic/claude-sonnet-4-5"
+    )
+
+    assert prepared[3] == messages[3]
+    assert prepared[4:] == messages[4:]
+    assert [i for i, message in enumerate(prepared)
+            if litellm_transport._has_cache_control(message)] == [0, 2]
 
 
 def test_chat_kwargs_strip_orphan_tool_choice_and_enable_fallback_drop_params():

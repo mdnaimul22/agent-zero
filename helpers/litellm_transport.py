@@ -1628,18 +1628,13 @@ def _prompt_cache_message_indexes(messages: list[dict[str, Any]]) -> list[int]:
     if leading_context:
         indexes.append(leading_context[-1])
 
-    user_indexes = [
+    # The trailing user/tool result includes extras rebuilt on every turn.
+    assistant_indexes = [
         index
         for index, message in enumerate(messages)
-        if str(message.get("role") or "") == "user"
+        if str(message.get("role") or "") == "assistant" and message.get("content")
     ]
-    indexes.extend(user_indexes[-2:])
-
-    deduplicated: list[int] = []
-    for index in indexes:
-        if index not in deduplicated:
-            deduplicated.append(index)
-    return deduplicated[:3]
+    return indexes + assistant_indexes[-2:]
 
 
 def _strip_message_cache_control(message: dict[str, Any]) -> dict[str, Any]:
@@ -1663,6 +1658,8 @@ def _content_with_cache_control(content: Any) -> Any:
         for index in range(len(blocks) - 1, -1, -1):
             block = blocks[index]
             if isinstance(block, dict):
+                if block.get("type") in {"thinking", "redacted_thinking"}:
+                    continue
                 block["cache_control"] = marker
                 return blocks
             if isinstance(block, str):
