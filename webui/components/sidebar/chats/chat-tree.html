@@ -11,7 +11,7 @@
               :aria-label="$store.chats.isExpanded(context.id) ? 'Collapse chat children' : 'Expand chat children'"
               @click.stop="$store.chats.toggleChildren(context.id)">
         <x-icon
-          :name="$store.chats.isExpanded(context.id) ? 'keyboard_arrow_up' : 'keyboard_arrow_down'"></x-icon>
+          :name="$store.chats.isExpanded(context.id) ? 'keyboard_arrow_down' : 'keyboard_arrow_right'"></x-icon>
       </button>
       <div class="chat-list-button">
         <span :class="{'project-color-ball': true, 'heartbeat': context.running}"

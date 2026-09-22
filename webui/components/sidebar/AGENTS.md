@@ -17,7 +17,7 @@
 - Preserve responsive sidebar behavior and collapsed/expanded state.
 - Keep chat and task list updates compatible with WebSocket state sync.
 - Contexts with `parent_context_id` render as indented children beneath their parent chat; they must remain selectable while hidden from the top-level chat list.
-- Chat tree expand/collapse controls use a parent-only leading slot and must not consume normal chat row text margin.
+- Chat tree expand/collapse controls use a parent-only leading slot, with right/down chevrons for collapsed/expanded state. Use spacing tokens for compact rows and the additional child indentation without consuming normal chat row text margin.
 - A restored selected parent chat with children auto-expands once during context hydration unless the user has already toggled it.
 - The Tasks list is reserved for scheduler-backed task contexts and must not be used for chat-bound parallel children.
 - Running parent and child chats share the chat-list working-bubble animation; keep it scoped away from task and connection-status indicators.

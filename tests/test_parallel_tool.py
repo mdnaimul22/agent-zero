@@ -1186,15 +1186,15 @@ def test_chats_sidebar_projects_parallel_children_as_indented_accordion() -> Non
     assert "topLevelContexts()" in html
     assert "childContexts(context.id)" in html
     assert "chat-child-container" in html
-    assert "keyboard_arrow_up" in html
+    assert "keyboard_arrow_right" in html
     assert "keyboard_arrow_down" in html
     assert ".chats-config-list .chat-tree-item" in html
     assert ".chats-config-list .chat-child-list > li" in html
     assert 'x-show="$store.chats.hasChildren(context.id)"' in html
     assert "'chat-has-children': $store.chats.hasChildren(context.id)" in html
     assert ".chat-container.chat-has-children .chat-list-button" in html
-    assert "left: 2px" in html
-    assert "padding-left: 24px" in html
+    assert "left: var(--spacing-xxs)" in html
+    assert "padding-left: calc(var(--spacing-md) + var(--spacing-xs))" in html
     assert "color: var(--color-text-muted)" in html
 
 

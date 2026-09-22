@@ -76,7 +76,7 @@
     }
 
     .chats-config-list > .chat-tree-item {
-      padding-block: 0.14rem;
+      padding-block: var(--spacing-xxs);
     }
 
     .chat-container {
@@ -85,7 +85,7 @@
       align-items: center;
       justify-content: space-between;
       width: 100%;
-      min-height: 40px;
+      min-height: calc(var(--spacing-lg) + var(--spacing-xxs));
       border-radius: 4px;
       overflow: hidden;
       cursor: pointer;
@@ -109,18 +109,14 @@
       padding: 0;
     }
 
-    .chat-child-container {
-      min-height: 34px;
-    }
-
     .chat-child-indent {
-      width: 18px;
+      width: calc(var(--spacing-md) + var(--spacing-sm));
       flex-shrink: 0;
     }
 
     .chat-expand-btn {
       position: absolute;
-      left: 2px;
+      left: var(--spacing-xxs);
       top: 50%;
       transform: translateY(-50%);
       width: 18px;
@@ -154,7 +150,7 @@
     }
 
     .chat-container.chat-has-children .chat-list-button {
-      padding-left: 24px;
+      padding-left: calc(var(--spacing-md) + var(--spacing-xs));
     }
 
     .chat-list-button {
@@ -162,18 +158,14 @@
       align-items: center;
       flex: 1 1 auto;
       min-width: 0;
-      padding: 8px 6px;
+      padding: var(--spacing-xs);
       overflow: hidden;
       gap: 0.5em;
     }
 
-    .project-color-ball {
-      width: 0.6em;
-      height: 0.6em;
-      border-radius: 50%;
-      display: inline-block;
-      box-sizing: border-box;
-      flex-shrink: 0;
+    .chat-list-button .project-color-ball {
+      width: 0.5em;
+      height: 0.5em;
     }
 
     .chats-list-container .project-color-ball.heartbeat {
