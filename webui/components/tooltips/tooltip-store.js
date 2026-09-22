@@ -60,6 +60,8 @@ function disposeBootstrapTooltip(element) {
   const instance = globalThis.bootstrap?.Tooltip?.getInstance(element);
   if (!instance) return;
   try {
+    // Finish pending fade callbacks before Bootstrap clears the instance state.
+    instance.tip?.dispatchEvent(new Event("transitionend"));
     instance.dispose();
   } catch {
     // Bootstrap 5 can throw while disposing an already-torn-down tooltip node.
