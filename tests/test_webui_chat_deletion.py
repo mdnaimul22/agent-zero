@@ -213,3 +213,38 @@ assert(model.selected === "b", "rollback must not override the fallback or a lat
         check=True,
         text=True,
     )
+
+
+def test_snapshot_cannot_reconcile_another_chat_after_an_async_context_switch():
+    if not shutil.which("node"):
+        pytest.skip("Node.js is required for the snapshot race regression.")
+    source = (PROJECT_ROOT / "webui/index.js").read_text(encoding="utf-8")
+    source = source[source.index("export async function applySnapshot("):source.index("export async function poll(")]
+    source = source.replace("export async", "async", 1)
+    import json
+
+    script = f"""
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+for (const phase of ['extension', 'messages']) {{
+  const sandbox = {{
+    context: 'old', lastLogGuid: '', lastLogVersion: 0,
+    chatsStore: {{ applyContexts() {{ assert.fail('stale sidebar reconciliation'); }} }},
+    tasksStore: {{}},
+    msgs: {{ resetMessageRenderState() {{}} }},
+    modelGateStore: {{ mergeSyntheticMessages: logs => logs }},
+    afterMessagesUpdate() {{ assert.fail('stale message completion'); }},
+  }};
+  sandbox.callJsExtensions = async () => {{ if (phase === 'extension') sandbox.context = 'new'; }};
+  sandbox.setMessages = async () => {{
+    assert.notEqual(phase, 'extension', 'stale snapshot reached message rendering');
+    sandbox.context = 'new';
+  }};
+  vm.createContext(sandbox);
+  vm.runInContext({json.dumps(source)}, sandbox);
+  const result = await sandbox.applySnapshot({{context:'old', contexts:[], tasks:[], logs:[], log_version:1, log_guid:'guid'}});
+  assert.equal(result.updated, false);
+  assert.equal(sandbox.context, 'new');
+}}
+"""
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True, capture_output=True, text=True)
