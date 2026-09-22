@@ -1177,6 +1177,8 @@ def test_chats_sidebar_projects_parallel_children_as_indented_accordion() -> Non
         encoding="utf-8"
     )
 
+    html += (PROJECT_ROOT / "webui/components/sidebar/chats/chat-tree.html").read_text(encoding="utf-8")
+
     assert "parent_context_id" in store
     assert "this.expandedParents[selectedId] === undefined" in store
     assert "...this.expandedParents," in store

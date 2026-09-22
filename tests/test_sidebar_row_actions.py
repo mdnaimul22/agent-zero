@@ -6,7 +6,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 def test_chat_rows_have_hover_scoped_overflow_actions() -> None:
     html = (
-        PROJECT_ROOT / "webui/components/sidebar/chats/chats-list.html"
+        PROJECT_ROOT / "webui/components/sidebar/chats/chat-tree.html"
     ).read_text(encoding="utf-8")
 
     assert html.count('aria-label="More chat actions"') == 2
@@ -17,7 +17,7 @@ def test_chat_rows_have_hover_scoped_overflow_actions() -> None:
 
 def test_task_rows_have_overflow_actions_after_standard_buttons() -> None:
     html = (
-        PROJECT_ROOT / "webui/components/sidebar/tasks/tasks-list.html"
+        PROJECT_ROOT / "webui/components/sidebar/tasks/task-row.html"
     ).read_text(encoding="utf-8")
 
     delete_button = html.index('title="Delete task"')

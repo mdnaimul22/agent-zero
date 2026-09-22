@@ -146,6 +146,12 @@ const model = {
     };
   },
 
+  hasListView(kind) {
+    return Object.values(this.rowListExtensions[kind] || {}).some(
+      (extension) => extension.hasView?.(),
+    );
+  },
+
   sortRows(kind, rows) {
     return Object.values(this.rowListExtensions[kind] || {}).reduce(
       (result, extension) => extension.sort?.(result) || result,

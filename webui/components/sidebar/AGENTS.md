@@ -8,8 +8,8 @@
 
 - `left-sidebar.html` and `sidebar-store.js` own sidebar shell and shared state.
 - `top-section/` owns header and quick actions.
-- `chats/` owns chat list UI and state.
-- `tasks/` owns task list UI and state.
+- `chats/` owns chat list UI and state; `chat-tree.html` is the shared parent/parallel-child row.
+- `tasks/` owns task list UI and state; `task-row.html` is the shared scheduler row.
 - `bottom/` owns lower sidebar controls and preferences panel.
 
 ## Local Contracts
@@ -28,6 +28,7 @@
 - `chats.saveChat(ctxid)` exports an explicit context without changing selection; omitted IDs retain current-chat behavior.
 - Cancelling the Load Chat file chooser resolves without calling `chat_load` or showing a success/error notification.
 - `sidebar-row-actions-menu` owns plugin-contributed row-menu actions; list-order plugins register stable sort and divider callbacks through the sidebar store instead of patching chat/task stores or injecting row DOM.
+- `sidebar-chats-list-view` and `sidebar-tasks-list-view` host plugin list presentations. A row-list extension may expose `hasView()` to hide the default list; both presentations reuse the core row components and their inherited `context`/`task` scopes.
 - `chats.newChat(projectName)` passes an explicit project choice to `chat_create`; omitted project names retain inheritance behavior, and an empty name explicitly creates a chat without a project.
 - Bottom version information shows its commit timestamp in UTC without a timezone suffix and remains on one line.
 - Avoid text or controls overflowing fixed sidebar widths.
