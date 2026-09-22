@@ -14,7 +14,8 @@
 ## Local Contracts
 
 - Pin state is separated into `chat`, `task`, and `project` groups and stored under the `plugin_pin_to_top` persistent KVP key; older state without `project` remains valid.
-- Project keys are validated project directory names. Adding a project pin requires its project header to exist; removing a stale pin remains possible.
+- Project keys are validated project directory names, with `""` reserved for the virtual **No project** folder. Adding a named project pin requires its project header to exist; removing a stale pin remains possible. Empty chat/task IDs and missing project IDs remain invalid.
+- **No project** is pinned by default with timestamp `1.0`, ahead of dated pins. Persist `no_project_pin_initialized` with pin changes so an explicit unpin survives reloads and changes to other pins; older pin state receives the default without losing existing pins.
 - Folder view reads `pins.project`, calls `isProjectPinned(name)` / `toggleProjectPin(name)`, and can sort groups with `sortItems("project", items)` where each item has `id: name`.
 - The plugin must register sidebar row-list callbacks; it must not patch chat/task stores or inject controls directly into rows.
 - Pinned items sort before unpinned items, older pins remain first, and existing order is preserved within the unpinned group.

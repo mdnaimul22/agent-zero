@@ -35,7 +35,7 @@ def test_pins_are_persistent_and_separated_by_kind(monkeypatch, persistent_store
     assert pins.get_pins() == {
         "chat": {"chat-1": 100.0},
         "task": {"task-1": 200.0},
-        "project": {},
+        "project": {"": 1.0},
     }
 
     assert pins.toggle_pin("chat", "chat-1") == (False, 0.0)
@@ -51,9 +51,15 @@ def test_invalid_pin_input_is_rejected(kind, item_id, persistent_store):
         pins.toggle_pin(kind, item_id)
 
 
-def test_toggle_api_returns_a_bad_request_for_invalid_input(persistent_store):
+@pytest.mark.parametrize("payload", [
+    {"kind": "unknown", "item_id": "item-1"},
+    {"kind": "project"},
+    {"kind": "project", "item_id": None},
+    {"kind": "project", "item_id": " "},
+])
+def test_toggle_api_returns_a_bad_request_for_invalid_input(payload, persistent_store):
     response = asyncio.run(
-        TogglePin(None, None).process({"kind": "unknown", "item_id": "item-1"}, None)
+        TogglePin(None, None).process(payload, None)
     )
 
     assert response.status_code == 400
@@ -69,7 +75,7 @@ def test_project_pins_validate_projects_and_preserve_legacy_pins(
     header.parent.mkdir(parents=True)
     header.write_text("{}")
 
-    assert pins.get_pins()["project"] == {}
+    assert pins.get_pins()["project"] == {"": 1.0}
     response = asyncio.run(
         TogglePin(None, None).process({"kind": "project", "item_id": "my-project"}, None)
     )
@@ -77,7 +83,7 @@ def test_project_pins_validate_projects_and_preserve_legacy_pins(
     assert asyncio.run(GetPins(None, None).process({}, None))["pins"] == {
         "chat": {"chat-1": 100.0},
         "task": {"task-1": 200.0},
-        "project": {"my-project": 300.0},
+        "project": {"my-project": 300.0, "": 1.0},
     }
     for name in ("../my-project", "missing-project"):
         response = asyncio.run(
@@ -87,7 +93,27 @@ def test_project_pins_validate_projects_and_preserve_legacy_pins(
 
     header.unlink()
     assert pins.toggle_pin("project", "my-project") == (False, 0.0)
-    assert pins.get_pins()["project"] == {}
+    assert pins.get_pins()["project"] == {"": 1.0}
+
+
+@pytest.mark.parametrize("legacy", [{}, {"project": {"existing-project": 200.0}}])
+def test_no_project_starts_pinned_and_remembers_unpinning(legacy, persistent_store):
+    persistent_store[pins.STORE_KEY] = legacy
+    assert pins.get_pins()["project"] == {**legacy.get("project", {}), "": 1.0}
+    handler = TogglePin(None, None)
+    payload = {"kind": "project", "item_id": ""}
+
+    assert asyncio.run(handler.process(payload, None)) == {
+        "ok": True, "pinned": False, "timestamp": 0.0,
+    }
+    assert pins.get_pins()["project"] == legacy.get("project", {})
+    pins.toggle_pin("chat", "another-chat")
+    assert pins.get_pins()["project"] == legacy.get("project", {})
+
+    assert asyncio.run(handler.process(payload, None)) == {
+        "ok": True, "pinned": True, "timestamp": 1.0,
+    }
+    assert pins.get_pins()["project"] == {**legacy.get("project", {}), "": 1.0}
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="node is required")
@@ -100,9 +126,14 @@ const source = readFileSync(process.argv[1], 'utf8')
   .replace(/^import .*;$/gm, '')
   .replace('export const store = createStore("pinToTop", model);', 'globalThis.store = model;');
 const calls = [];
+let noProjectPinned = false;
 const context = {
   callJsonApi: async (path, input) => {
     calls.push([path, input]);
+    if (input.kind === 'project' && input.item_id === '') {
+      noProjectPinned = !noProjectPinned;
+      return { pinned: noProjectPinned, timestamp: noProjectPinned ? 1 : 0 };
+    }
     return { pinned: calls.length === 1, timestamp: 300 };
   },
   toastFrontendError: message => { throw new Error(message); },
@@ -124,6 +155,18 @@ assert.equal(store.sortItems('project', rows).map(item => item.id).join(','), 'c
 await store.toggleFromMenu('task:task-1', 'task');
 assert.equal(calls[2][1].kind, 'task');
 assert.equal(calls[2][1].item_id, 'task-1');
+store.pins.project.constructor = 200;
+await store.toggleProjectPin('');
+assert.equal(calls[3][1].item_id, '');
+assert.equal(store.isProjectPinned(''), true);
+assert.equal(store.sortItems('project', [...rows, { id: '' }])[0].id, '');
+await store.toggleProjectPin('');
+assert.equal(store.isProjectPinned(''), false);
+assert.equal(store.isProjectPinned('constructor'), true);
+const callCount = calls.length;
+await store.togglePin('chat', '');
+await store.toggleProjectPin(undefined);
+assert.equal(calls.length, callCount, 'only an explicit empty project ID represents No project');
 """
     store = Path(__file__).resolve().parents[1] / "webui" / "pin-to-top-store.js"
     subprocess.run(["node", "--input-type=module", "-e", script, str(store)], check=True)

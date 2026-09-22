@@ -50,7 +50,7 @@ const model = {
   },
 
   async togglePin(kind, itemId) {
-    if (!itemId) return;
+    if (!itemId && !(kind === "project" && itemId === "")) return;
 
     try {
       const response = await callJsonApi(`/plugins/${PLUGIN_ID}/toggle_pin`, {

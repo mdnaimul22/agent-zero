@@ -7,5 +7,6 @@ Built-in Agent Zero plugin for pinning chats, scheduled tasks, and project folde
 - Separates pinned and unpinned items with the standard sidebar divider.
 - Persists state in Agent Zero's user key-value storage.
 - Folder view uses the same persisted project pins in Chats and Tasks; individual chat and task pins remain independent.
+- **No project** starts pinned and supports the same pin/unpin action as named projects. Unpinning it is remembered across reloads.
 
 The plugin is always enabled and has no configuration screen.
