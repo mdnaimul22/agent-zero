@@ -27,6 +27,7 @@
 - `chats.saveChat(ctxid)` exports an explicit context without changing selection; omitted IDs retain current-chat behavior.
 - Cancelling the Load Chat file chooser resolves without calling `chat_load` or showing a success/error notification.
 - `sidebar-row-actions-menu` owns plugin-contributed row-menu actions; list-order plugins register stable sort and divider callbacks through the sidebar store instead of patching chat/task stores or injecting row DOM.
+- `chats.newChat(projectName)` passes an explicit project choice to `chat_create`; omitted project names retain inheritance behavior, and an empty name explicitly creates a chat without a project.
 - Bottom version information shows its commit timestamp in UTC without a timezone suffix and remains on one line.
 - Avoid text or controls overflowing fixed sidebar widths.
 - Instance-level interface visibility preferences own independent mobile and desktop states for the chat-top controls and right canvas rail; mobile uses the shared 768px breakpoint.

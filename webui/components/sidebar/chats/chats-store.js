@@ -259,12 +259,13 @@ const model = {
   },
 
   // Create new chat
-  async newChat() {
+  async newChat(projectName = undefined) {
     try {
 
       // first create a new chat on the backend
       const response = await sendJsonData("/chat_create", {
-        current_context: this.selected
+        current_context: this.selected,
+        ...(projectName !== undefined ? { project_name: projectName } : {}),
       });
 
       if (response.ok) {
