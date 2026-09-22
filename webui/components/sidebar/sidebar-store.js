@@ -189,7 +189,7 @@ const model = {
     const menuWidth = 180;
     const spaceBelow = window.innerHeight - rect.bottom - gap - padding;
     const spaceAbove = rect.top - gap - padding;
-    const openUp = spaceBelow < 96 && spaceAbove > spaceBelow;
+    const openUp = spaceAbove > spaceBelow;
     const maxLeft = Math.max(padding, window.innerWidth - menuWidth - padding);
     const left = Math.min(Math.max(rect.right - menuWidth, padding), maxLeft);
 
@@ -199,6 +199,7 @@ const model = {
       top: openUp ? "auto" : `${Math.round(rect.bottom + gap)}px`,
       bottom: openUp ? `${Math.round(window.innerHeight - rect.top + gap)}px` : "auto",
       minWidth: `${menuWidth}px`,
+      maxHeight: `${Math.max(0, openUp ? spaceAbove : spaceBelow)}px`,
     };
   },
 };

@@ -43,7 +43,8 @@ def test_sidebar_uses_one_fixed_row_menu_with_standard_close_behavior() -> None:
     assert "z-index: 9999;" in html
     assert "rowMenuOpenId" in store
     assert "if (this.rowMenuOpenId === id)" in store
-    assert "const openUp = spaceBelow < 96 && spaceAbove > spaceBelow;" in store
+    assert "const openUp = spaceAbove > spaceBelow;" in store
+    assert "maxHeight:" in store
 
 
 def test_pin_plugin_contributes_the_menu_action_and_list_ordering() -> None:

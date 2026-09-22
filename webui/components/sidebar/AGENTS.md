@@ -23,6 +23,7 @@
 - Running parent and child chats share the chat-list working-bubble animation; keep it scoped away from task and connection-status indicators.
 - Chat and task lists reclaim the same part of the sidebar's left content inset so their project bubbles align, while their section headers retain the standard sidebar inset.
 - Chat-row action buttons consume layout width only while a pointer row is hovered or while that row is selected on a touch device.
+- Row overflow menus choose the roomier side of their trigger and cap their height to the available viewport so plugin actions remain reachable.
 - Built-in chat and task overflow menus follow the standard row actions; plugin controls remain direct row actions.
 - `chats.saveChat(ctxid)` exports an explicit context without changing selection; omitted IDs retain current-chat behavior.
 - Cancelling the Load Chat file chooser resolves without calling `chat_load` or showing a success/error notification.
