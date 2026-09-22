@@ -22,6 +22,7 @@
 - Pinned items sort before unpinned items, older pins remain first, and existing order is preserved within the unpinned group.
 - The menu label and icon must reflect whether the active row is pinned.
 - Keep pin markup, styling, and visibility inside this plugin. The idempotent startup decorator handles added rows in both list views; Alpine owns icon reactivity and cleanup when rows are removed. Do not add pin-specific hooks to the core sidebar or copy its row templates.
+- Decorate only titles owned by the shared `chat-tree.html` and `task-row.html` components; community plugins may reuse sidebar styling classes with different data scopes.
 
 ## Work Guidance
 
