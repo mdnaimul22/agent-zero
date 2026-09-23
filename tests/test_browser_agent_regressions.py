@@ -2730,7 +2730,8 @@ def test_browser_docker_pins_python_313_compatible_desktop_packages():
         PROJECT_ROOT / "docker" / "run" / "fs" / "ins" / "install_additional.sh"
     ).read_text(encoding="utf-8")
 
-    assert 'KALI_SUITE="kali-last-snapshot"' in install_additional
+    assert 'https://snapshot.debian.org/archive/debian/20260624T000000Z/' in install_additional
+    assert 'Dir::Etc::sourceparts=-' in install_additional
     assert 'LIBREOFFICE_VERSION="4:26.2.4.2-1"' in install_additional
     assert 'XPRA_VERSION="6.5.2-r0-1"' in install_additional
     assert 'XPRA_HTML5_VERSION="19-r1-1"' in install_additional
@@ -2749,7 +2750,7 @@ def test_browser_docker_pins_python_313_compatible_desktop_packages():
     assert '"xpra-server=$XPRA_VERSION"' in install_additional
     assert '"xpra-html5=$XPRA_HTML5_VERSION"' in install_additional
     assert "apt-get download" not in install_additional
-    assert install_additional.index('s/kali-rolling/$KALI_SUITE') < install_additional.index("apt-get update")
+    assert install_additional.index('cat >/etc/apt/a0-desktop.list') < install_additional.index('apt-get "${APT_OPTIONS[@]}" update')
     assert "https://xpra.org/beta" not in install_additional
 
 
