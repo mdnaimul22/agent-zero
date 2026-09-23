@@ -28,7 +28,7 @@
             <button class="btn-icon-action" title="Delete task" @click.stop="$confirmClick($event, () => $store.tasks.deleteTask(task.id))">
               <x-icon name="close"></x-icon>
             </button>
-            <button type="button" class="btn-icon-action" title="More task actions"
+            <button type="button" class="btn-icon-action"
               aria-label="More task actions" aria-haspopup="menu"
               :aria-expanded="($store.sidebar.rowMenuOpenId === `task:${task.id}`).toString()"
               @click.stop="$store.sidebar.rowMenuToggle(`task:${task.id}`, 'task', $event.currentTarget)">

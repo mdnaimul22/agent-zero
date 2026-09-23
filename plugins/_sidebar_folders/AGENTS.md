@@ -33,6 +33,7 @@
 - Folder rows use compact spacing tokens; thread lists have no vertical guide border and reuse the smaller core thread dots. Dim empty-folder labels and give their rows the same height as a chat row, preserving space before the next folder.
 - Extend list rows `--spacing-xs` beyond the header controls, with the same inset after their last action button. Keep header positions fixed so folder, chat, and worker action columns align in both views.
 - Folder actions reuse the standard chat action buttons with a subtle border at rest. Show them on pointer hover, keyboard focus, or while the folder menu is open; touch devices also show them for expanded folders.
+- Folder-row new-chat and overflow buttons use accessible labels without tooltips; Chats header controls retain their tooltips.
 - Sidebar menus share their pointer scope with the opening row or header. Dismiss after leaving both, allowing a short gap-crossing delay; also dismiss when focus leaves, the surrounding list scrolls, the window resizes, or the header extension unmounts. Mouse cleanup must not interrupt touch interaction or scrolling inside a menu.
 - Resolve the core row menu through its `rowActionsMenu` reference, not shared menu styling classes that community plugins may also use. Header integrations must preserve the core header and its `chats-header-controls` extension point.
 - The two list-view extension points are display-only alternatives. Disabling the plugin restores the core lists and existing chat/task controls.

@@ -33,11 +33,11 @@
                   <x-icon class="sidebar-folder-pin" name="push_pin" x-show="$store.pinToTop.isProjectPinned(group.id)"></x-icon>
                 </button>
                 <button type="button" class="btn-icon-action chat-list-action-btn sidebar-folder-action" :aria-label="'New chat in ' + group.title"
-                  :title="'New chat in ' + group.title" @click.stop="$store.sidebarFolders.newChat(group.id)">
+                  @click.stop="$store.sidebarFolders.newChat(group.id)">
                   <x-icon name="chat_add_on"></x-icon>
                 </button>
                 <button type="button" class="btn-icon-action chat-list-action-btn sidebar-folder-action" :aria-label="'Actions for ' + group.title"
-                  title="Folder actions" aria-haspopup="menu"
+                  aria-haspopup="menu"
                   :aria-expanded="$store.sidebarFolders.menu === 'project' && $store.sidebarFolders.menuProject === group.id"
                   @click.stop="$store.sidebarFolders.openMenu('project', $event.currentTarget, group.id)">
                   <x-icon name="more_vert"></x-icon>
