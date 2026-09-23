@@ -27,7 +27,7 @@
           <label class="sidebar-option-field"><span>Sort by</span>
             <select :value="$store.sidebarFolders.config.sort_by" :disabled="$store.sidebarFolders.busy"
               @change="$store.sidebarFolders.setConfig({ sort_by: $event.target.value })">
-              <option value="recent">Recent activity</option><option value="created">Created time</option>
+              <option value="recent">Last active</option><option value="created">Created time</option>
               <option value="name">Name</option><option value="manual">Manual order</option>
             </select>
           </label>
@@ -41,7 +41,8 @@
           </label>
           <label class="sidebar-option-field"><span>Status</span>
             <select x-model="$store.sidebarFolders.statusFilter">
-              <option value="all">All</option><option value="running">Working</option><option value="paused">Paused / disabled</option>
+              <option value="all">All</option><option value="running">Working</option>
+              <option value="idle">Idle</option>
             </select>
           </label>
           <label class="sidebar-option-field"><span>Last activity</span>

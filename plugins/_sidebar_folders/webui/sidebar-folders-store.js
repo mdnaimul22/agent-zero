@@ -129,9 +129,11 @@ export const store = createStore("sidebarFolders", {
   matches(row, kind) {
     if (this.projectFilter !== "*" && (row.project?.name || "") !== this.projectFilter) return false;
     if (this.statusFilter === "all" && this.activityFilter === "all") return true;
-    return this.family(row, kind).some((item) => {
-      if (this.statusFilter === "running" && !item.running) return false;
-      if (this.statusFilter === "paused" && !item.paused && item.state !== "disabled") return false;
+    const family = this.family(row, kind);
+    const working = family.some((item) => item.running && !item.paused && item.state !== "disabled");
+    if (this.statusFilter === "running" && !working) return false;
+    if (this.statusFilter === "idle" && working) return false;
+    return family.some((item) => {
       if (this.activityFilter !== "all") {
         const cutoff = Date.now() - Number(this.activityFilter) * 86400000;
         if (timestamp(item.last_message || item.created_at) < cutoff) return false;

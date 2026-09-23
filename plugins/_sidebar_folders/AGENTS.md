@@ -44,6 +44,7 @@
 - Project moves and ordering use drag and drop, without move actions in thread menus. Folder-row creation uses the same `chat_add_on` icon as the New chat menu action.
 - Header, folder, chat, worker, and task action buttons share hover/focus treatment. The two Chats header icons use `1.125rem` inside the existing button frames, preserving action-column alignment with the smaller row icons. Header borders appear only on hover; row buttons retain their resting borders. Use `--spacing-xs` between buttons and at row ends. Keep these sidebar-scoped overrides in the plugin's header extension and retain row visibility behavior and confirmation states.
 - The options menu contains only View (Folders / Flat mode), Sort by, Project, Status, and Last activity. Keep native dropdowns consistent with Settings: muted borders, the small radius token, and an opaque menu-colored surface so native option lists remain readable. Use `--spacing-xs` gaps between fields and `--spacing-sm` outer padding. Show focus outlines for keyboard navigation, without a lingering pointer-click ring. Folder expansion belongs to individual folder rows.
+- Sort copy uses **Last active**. Chats and tasks share **All**, **Working**, and **Idle**. A family is Working if any member runs without being paused or disabled; otherwise it is Idle, including completed/waiting chats, paused chats, and disabled tasks.
 
 ## Verification
 
