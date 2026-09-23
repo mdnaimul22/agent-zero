@@ -8,6 +8,7 @@ import json
 from typing import Any, AsyncIterator, Iterator, Optional
 
 from litellm import (
+    ContentPolicyViolationError,
     acompletion,
     adelete_responses,
     aresponses,
@@ -572,6 +573,14 @@ class ChatCompletionsTransport:
         chunk: Any, *, reasoning_filter: _ChatReasoningFilter | None = None
     ) -> ChatChunk:
         choice = _first_choice(chunk)
+        finish_reason = _get_value(choice, "finish_reason")
+        if finish_reason in {"content_filter", "refusal"}:
+            raise ContentPolicyViolationError(
+                message=f"Model provider refused the response (finish_reason={finish_reason}). "
+                "Review the request and provider restrictions before retrying.",
+                model=str(_get_value(chunk, "model") or ""),
+                llm_provider="",
+            )
         delta = _get_value(choice, "delta") or {}
         message = _get_value(choice, "message") or _get_value(
             _get_value(choice, "model_extra") or {}, "message"
