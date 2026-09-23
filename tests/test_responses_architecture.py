@@ -777,6 +777,45 @@ def test_collect_response_ids_from_agent_state_and_history_metadata():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("api_mode, builds_tools", [("chat", False), ("responses", True)])
+async def test_agent_builds_native_tools_only_for_responses_turns(
+    monkeypatch, api_mode, builds_tools
+):
+    import agent as agent_module
+
+    tools = [{"type": "function", "name": "lookup", "parameters": {"type": "object"}}]
+    calls = []
+    monkeypatch.setattr(
+        agent_module,
+        "build_responses_function_tools",
+        lambda agent: calls.append(agent) or (tools, {"lookup": "lookup"}),
+    )
+
+    async def no_extensions(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(extension, "call_extensions_async", no_extensions)
+    turn_kwargs = {}
+
+    class Model:
+        kwargs = {"a0_api_mode": api_mode}
+
+        async def unified_turn(self, **kwargs):
+            turn_kwargs.update(kwargs)
+            return LLMResult.from_chat(response="ok")
+
+    agent = object.__new__(Agent)
+    agent.data = {}
+    agent.loop_data = LoopData()
+    agent.get_chat_model = lambda: Model()
+
+    await Agent.call_chat_model_turn(agent, messages=[HumanMessage(content="hi")])
+
+    assert bool(calls) is builds_tools
+    assert turn_kwargs["a0_responses_function_tools"] == (tools if builds_tools else [])
+
+
+@pytest.mark.asyncio
 async def test_agent_executes_native_responses_function_call_and_records_output():
     class DummyContext:
         paused = False
