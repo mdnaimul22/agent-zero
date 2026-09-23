@@ -29,6 +29,7 @@
 - Observed side-effect areas: filesystem writes, settings/state persistence.
 - `profile`/`agent_profile` values are validated against available profile keys before use; unknown profiles raise `RepairableException` so the agent can retry with a real profile.
 - Direct and parallel calls use the same creation, continuation, message, history, and persistence functions in this module.
+- A non-empty `name` updates both the child context name and sidebar label on creation or continuation. Omission preserves an existing name; legacy same-context children must not rename the parent chat.
 - Every fresh child is `Agent(parent.number + 1, ...)` in its own persisted child-chat context, so sibling A1 agents can each create their own A2 descendants without sharing streaming state.
 - `reset=true` creates a fresh child. `reset=false` continues the caller's default child or the exact child named by `context_id`.
 - Child context IDs are accepted only when their persisted parent context, parent agent number, and child depth match the caller.

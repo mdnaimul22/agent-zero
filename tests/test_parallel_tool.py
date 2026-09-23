@@ -678,9 +678,12 @@ async def test_failed_parallel_subordinate_continues_directly_or_in_parallel(
             message="continue after the API failure",
             context_id=child_id,
             reset=False,
+            name="Direct continuation",
         )
         assert direct_result.message == "A1 continuation 2"
         assert direct_result.additional == {"context_id": child_id}
+        child = AgentContext.get(child_id)
+        assert child.name == child.get_output_data("parent_context_label") == "Direct continuation"
 
         continued = parallel_tools.ParallelJob(
             id="callsubordin-continued",
@@ -691,6 +694,7 @@ async def test_failed_parallel_subordinate_continues_directly_or_in_parallel(
                 "message": "continue once more",
                 "context_id": child_id,
                 "reset": False,
+                "name": "Parallel continuation",
             },
             kind="subordinate",
             parent_agent=parent.agent0,
@@ -702,6 +706,7 @@ async def test_failed_parallel_subordinate_continues_directly_or_in_parallel(
         assert continued.worker_context_id == child_id
         assert continued.result == "A1 continuation 3"
         assert calls == {child_id: 3}
+        assert child.name == child.get_output_data("parent_context_label") == "Parallel continuation"
     finally:
         if child_id:
             AgentContext.remove(child_id)

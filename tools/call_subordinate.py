@@ -152,6 +152,10 @@ def get_or_create_subordinate(
                 f"Subordinate context '{subordinate.context.id}' is still running. "
                 "Await or cancel its parallel job before continuing it."
             )
+        label = str(name or "").strip()
+        if label and subordinate.context is not parent.context:
+            subordinate.context.name = label
+            subordinate.context.set_output_data(CHILD_PARENT_CONTEXT_LABEL_KEY, label)
         return subordinate
 
     override_settings = {"agent_profile": requested_profile} if requested_profile else None

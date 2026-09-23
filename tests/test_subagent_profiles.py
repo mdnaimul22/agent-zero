@@ -358,6 +358,7 @@ def test_persisted_numbered_child_is_reusable_after_reload(monkeypatch) -> None:
         parent.agent0,
         reset=True,
         message="persist me",
+        name="Original worker",
     )
     context_id = child.context.id
     try:
@@ -378,6 +379,12 @@ def test_persisted_numbered_child_is_reusable_after_reload(monkeypatch) -> None:
         assert restored.get_output_data("parent_agent_number") == 0
         assert resumed is restored.agent0
         assert resumed.get_data(Agent.DATA_NAME_SUPERIOR) is parent.agent0
+        assert restored.name == restored.get_output_data("parent_context_label") == "Original worker"
+        call_subordinate.get_or_create_subordinate(parent.agent0, context_id=context_id, name="Renamed worker")
+        renamed = persist_chat._serialize_context(restored)
+        AgentContext.remove(context_id)
+        restored = persist_chat._deserialize_context(renamed)
+        assert restored.name == restored.get_output_data("parent_context_label") == "Renamed worker"
     finally:
         AgentContext.remove(context_id)
         AgentContext.remove(parent_id)
