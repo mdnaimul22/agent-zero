@@ -99,9 +99,10 @@
 
     .chat-child-list {
       list-style: none;
-      padding: 0;
+      padding: 0 0 0 calc(var(--spacing-md) + var(--spacing-sm));
       margin: 0;
       width: 100%;
+      box-sizing: border-box;
     }
 
     .chats-config-list .chat-child-list > li {
@@ -109,9 +110,12 @@
       padding: 0;
     }
 
-    .chat-child-indent {
-      width: calc(var(--spacing-md) + var(--spacing-sm));
-      flex-shrink: 0;
+    .chat-child-list .chat-child-list .chat-child-list {
+      padding-left: var(--spacing-sm);
+    }
+
+    .chat-child-list .chat-child-list .chat-child-list .chat-child-list {
+      padding-left: 0;
     }
 
     .chat-expand-btn {

@@ -2,7 +2,7 @@
 <head></head>
 <body>
   <div x-data class="sidebar-row-content">
-    <div :class="{'chat-container': true, 'chat-has-children': $store.chats.hasChildren(context.id), 'chat-selected': context.id === $store.chats.selected}"
+    <div :class="{'chat-container': true, 'chat-child-container': !!context.parent_context_id, 'chat-has-children': $store.chats.hasChildren(context.id), 'chat-selected': context.id === $store.chats.selected}"
       @click="$store.chats.selectChat(context.id)">
       <button class="chat-expand-btn"
               x-show="$store.chats.hasChildren(context.id)"
@@ -29,31 +29,17 @@
         <x-icon name="more_vert"></x-icon>
       </button>
     </div>
-    <ul class="chat-child-list" x-show="$store.chats.isExpanded(context.id) && $store.chats.hasChildren(context.id)">
+    <template x-if="$store.chats.isExpanded(context.id) && $store.chats.hasChildren(context.id)">
+    <ul class="chat-child-list">
       <template x-for="(child, childIndex) in $store.chats.childContexts(context.id)" :key="child.id">
         <li :class="{ 'sidebar-list-divider': $store.sidebar.hasRowDividerBefore('chat', child, childIndex, $store.chats.childContexts(context.id)) }">
-          <div :class="{'chat-container': true, 'chat-child-container': true, 'chat-selected': child.id === $store.chats.selected}"
-            @click="$store.chats.selectChat(child.id)">
-            <div class="chat-child-indent"></div>
-            <div class="chat-list-button">
-              <span :class="{'project-color-ball': true, 'heartbeat': child.running}"
-                :style="child.project?.color ? { backgroundColor: child.project.color } : { border: '1px solid var(--color-border)' }"></span>
-              <span class="chat-name"
-                x-text="$store.chats.displayName(child)"></span>
-            </div>
-            <button class="btn-icon-action chat-list-action-btn" title="Close chat" @click.stop="$confirmClick($event, () => $store.chats.killChat(child.id))">
-              <x-icon name="close"></x-icon>
-            </button>
-            <button type="button" class="btn-icon-action chat-list-action-btn" title="More chat actions"
-              aria-label="More chat actions" aria-haspopup="menu"
-              :aria-expanded="($store.sidebar.rowMenuOpenId === `chat:${child.id}`).toString()"
-              @click.stop="$store.sidebar.rowMenuToggle(`chat:${child.id}`, 'chat', $event.currentTarget)">
-              <x-icon name="more_vert"></x-icon>
-            </button>
+          <div x-data="{ get context() { return child; } }">
+            <x-component path="sidebar/chats/chat-tree.html"></x-component>
           </div>
         </li>
       </template>
     </ul>
+    </template>
   </div>
 </body>
 </html>

@@ -95,6 +95,8 @@ assert(
 const tree = [
   {{ id: "parent", created_at: 20 }},
   {{ id: "child", parent_context_id: "parent", created_at: 10 }},
+  {{ id: "grandchild", parent_context_id: "child", created_at: 5 }},
+  {{ id: "greatgrandchild", parent_context_id: "grandchild", created_at: 1 }},
 ];
 reset(tree, "");
 model.applyContexts(tree);
@@ -107,6 +109,21 @@ assert(
   model.expandedParents.parent === true,
   "selection synchronization must still run for unchanged contexts",
 );
+model.expandedParents = {{}};
+model.setSelected("greatgrandchild");
+assert(
+  ["parent", "child", "grandchild"].every(id => model.isExpanded(id)),
+  "selecting a deep worker opens every ancestor",
+);
+model.expandedParents = {{}};
+model.applyContexts(tree);
+assert(
+  ["parent", "child", "grandchild"].every(id => model.isExpanded(id)),
+  "restoring a deep selection opens every ancestor",
+);
+const expanded = model.expandedParents;
+model.applyContexts(tree);
+assert(model.expandedParents === expanded, "unchanged expansion does not republish state");
 
 reset(chats, "b");
 globalThis.__context = "a";

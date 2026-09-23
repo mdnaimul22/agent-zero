@@ -9,10 +9,11 @@ def test_chat_rows_have_hover_scoped_overflow_actions() -> None:
         PROJECT_ROOT / "webui/components/sidebar/chats/chat-tree.html"
     ).read_text(encoding="utf-8")
 
-    assert html.count('aria-label="More chat actions"') == 2
+    assert html.count('aria-label="More chat actions"') == 1
+    assert '<x-component path="sidebar/chats/chat-tree.html"></x-component>' in html
     assert 'class="btn-icon-action chat-list-action-btn"' in html
     assert '<x-icon name="more_vert"></x-icon>' in html
-    assert html.count("$store.sidebar.rowMenuToggle(") == 2
+    assert html.count("$store.sidebar.rowMenuToggle(") == 1
 
 
 def test_task_rows_have_overflow_actions_after_standard_buttons() -> None:

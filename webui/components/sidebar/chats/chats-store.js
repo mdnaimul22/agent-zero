@@ -91,12 +91,7 @@ const model = {
       if (updated) {
         if (this.selectedContext !== updated) this.selectedContext = updated;
         if (updated.parent_context_id) {
-          if (!this.expandedParents[updated.parent_context_id]) {
-            this.expandedParents = {
-              ...this.expandedParents,
-              [updated.parent_context_id]: true,
-            };
-          }
+          this.expandAncestors(updated);
         } else if (
           this.hasChildren(selectedId) &&
           this.expandedParents[selectedId] === undefined
@@ -125,7 +120,17 @@ const model = {
   },
 
   hasChildren(parentId) {
-    return this.childContexts(parentId).length > 0;
+    return this.contexts.some((context) => context.parent_context_id === parentId);
+  },
+
+  expandAncestors(context) {
+    const seen = new Set();
+    while (context?.parent_context_id && !seen.has(context.parent_context_id)) {
+      const parentId = context.parent_context_id;
+      seen.add(parentId);
+      if (!this.expandedParents[parentId]) this.expandedParents[parentId] = true;
+      context = this.contexts.find((row) => row.id === parentId);
+    }
   },
 
   isExpanded(parentId) {
@@ -396,6 +401,7 @@ const model = {
     this.selectedContext = this.contexts.find((ctx) => ctx.id === this.selected);
     // if not found in contexts, try to find in tasks < not nice, will need refactor later
     if(!this.selectedContext) this.selectedContext = tasksStore.tasks.find((ctx) => ctx.id === this.selected);
+    this.expandAncestors(this.selectedContext);
     if (this.selected) {
       sessionStorage.setItem("lastSelectedChat", this.selected);
     } else {
