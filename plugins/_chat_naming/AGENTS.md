@@ -22,6 +22,7 @@
 - `always` is the default and considers the latest user message plus recent user context; `once` names only unnamed user chats from their first user message. Preserve explicitly saved modes.
 - Generated names are concise and normalized before persistence.
 - Renaming a parallel child updates both its context name and sidebar label.
+- Automatic naming skips delegated child contexts; their labels belong to `call_subordinate` or an explicit rename action, in both direct and parallel execution.
 - Manual task renames update both scheduler metadata and the task context name.
 - `/rename auto` uses the same generation and persistence helpers as the rename modal; any other non-empty argument is saved as the custom chat name.
 

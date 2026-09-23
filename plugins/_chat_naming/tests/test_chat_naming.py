@@ -37,6 +37,8 @@ class _Agent:
             type=AgentContextType.USER,
         )
         self.context.agent0 = self
+        self.context.output_data = {}
+        self.context.get_output_data = self.context.output_data.get
         self.history = _History(messages)
         self.config = SimpleNamespace(profile="agent0")
         self._response = response
@@ -62,6 +64,20 @@ async def test_user_message_selection_excludes_assistant_work_and_tool_results()
 
     assert naming.get_user_messages(agent) == ["Plan a launch", "Okay, do it"]
     assert naming.latest_user_sequence(agent) == 4
+
+
+@pytest.mark.parametrize("mode", ["once", "always"])
+async def test_automatic_naming_preserves_delegated_labels(monkeypatch, mode):
+    agent = _Agent([_Message({"user_message": "Investigate the issue"})], name="A1-summoner")
+    agent.context.output_data.update(parent_context_id="parent", parent_context_label="A1-summoner")
+    monkeypatch.setattr(naming, "get_config", lambda _agent: {
+        "automatic_naming": True, "automatic_naming_mode": mode,
+    })
+    scheduled = []
+    monkeypatch.setattr(rename_chat.asyncio, "create_task", scheduled.append)
+    await rename_chat.RenameChat(agent=agent).execute()
+    assert not scheduled
+    assert agent.context.name == agent.context.output_data["parent_context_label"] == "A1-summoner"
 
 
 async def test_once_mode_uses_first_message_and_does_not_override_a_name(monkeypatch):
