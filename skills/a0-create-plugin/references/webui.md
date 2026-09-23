@@ -81,6 +81,51 @@ The modal's Save button persists `config` to `config.json` in the correct scope 
 
 ---
 
+## Compact Controls with `x-overflow`
+
+`x-overflow` keeps a flex row on one line. Trailing controls that do not fit appear in a horizontal three-dots menu and return inline when space allows. Hovering or clicking an entry opens the control's existing menu; clicking the open entry closes that submenu. The directive handles touch, keyboard navigation, viewport fitting, and later plugin insertions.
+
+For controls beside the composer's model and agent selectors, add `extensions/webui/model-context-strip-end/<name>.html` inside your plugin. That strip already has `x-overflow`; contribute your normal control and menu. Use one wrapper per control, with its trigger and panel as siblings. Extension wrappers using `display: contents` are supported.
+
+This UI-only example belongs inside the component's store gate; connect real selections to your plugin store:
+
+```html
+<div class="dropdown" x-data="{ open: false, choice: 'Balanced' }"
+     @click.outside="open = false">
+  <button type="button" class="dropdown-trigger" @click="open = !open"
+          :aria-expanded="open" data-overflow-label="Mode">
+    <x-icon name="tune" aria-hidden="true"></x-icon>
+    <span x-text="choice"></span>
+  </button>
+  <div class="dropdown-menu" x-show="open"
+       style="display: none; top: auto; bottom: 100%;">
+    <button type="button" class="dropdown-item"
+            @click="choice = 'Balanced'; open = false">Balanced</button>
+    <button type="button" class="dropdown-item"
+            @click="choice = 'Thorough'; open = false">Thorough</button>
+  </div>
+</div>
+```
+
+- Keep the panel in the DOM with `x-show` and toggle its state through the original trigger. The directive finds a sibling with `x-show`, `role="menu"`, `role="dialog"`, or `data-overflow-panel`. A trigger without a panel remains a direct action.
+- Each flex item must be, or contain, a `button` or `[role="button"]`; the first matching trigger represents that item. Non-control content stays inline. Bind unavailable actions with `:disabled` so both presentations agree.
+- `data-overflow-label` on the trigger supplies an explicit label, especially for icon-only controls. Otherwise the label comes from rendered text, then `aria-label` or `title`. Bind it with `:data-overflow-label` when needed.
+- Standard `<x-icon>`, SVG, and image visuals are detected automatically. Mark a compound visual such as an avatar with initials or a percentage ring using `data-overflow-icon` on its decorative wrapper (or the trigger when the whole control is the visual). The rendered visual stays synchronized; iconless entries reserve no empty icon column. Style custom visuals through their own classes or inline styles, since their decorative copy appears inside the overflow entry.
+- Keep menu state, choices, and event handlers in the existing component. The directive forwards actions to the original trigger and displays the same panel without moving or reinitializing its Alpine scope. Do not duplicate options or add a plugin-specific overflow menu.
+
+For another row, add the expression-free directive to a constrained flex container:
+
+```html
+<div x-data x-overflow style="display: flex; gap: 0.5rem; max-width: 100%;">
+  <!-- Normal controls, each with its own wrapper and optional sibling panel. -->
+</div>
+```
+
+Give containing flex items `min-width: 0` so the row can shrink. The framework already registers the directive and loads its styles; plugins need no separate import, resize observer, or breakpoint logic.
+
+Owners: `/a0/webui/js/overflow.js` and `/a0/webui/css/overflow.css`. Working examples: `/a0/plugins/_model_config/extensions/webui/chat-input-progress-start/model-switcher.html` (row and profile avatar) and `/a0/plugins/_context_window/extensions/webui/model-context-strip-end/context-window.html` (icon-only percentage ring).
+
+Verify narrow and wide layouts in the live target, including restoring controls after expansion, hover/click/touch/keyboard opening and closing, short-viewport scrolling, and changing labels or visuals. Check native browser zoom at 110%, 150%, and 175%: all controls must stay inline whenever they fit.
 
 ## Custom Message Handlers
 
