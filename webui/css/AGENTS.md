@@ -23,6 +23,7 @@
 - Use existing CSS variables and naming patterns before introducing new global tokens.
 - Avoid broad selectors that unexpectedly restyle plugin UI or unrelated components.
 - Keep layout rules responsive and verify text does not overflow fixed controls.
+- Settings replaces its sidebar tree with a compact native section picker at mobile widths and uses dynamic viewport height to keep its footer in view.
 - Shared modal buttons use `btn btn-ok` for positive actions and `btn btn-cancel` for dismissive or negative actions.
 - Shared compact text actions use `.text-button`; component-local styles may adjust layout or sizing but must not be the only definition of the primitive.
 - Modal footer action order is positive action first, dismissive or negative action second.
