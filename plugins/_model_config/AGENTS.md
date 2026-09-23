@@ -18,6 +18,7 @@
 - `Default` is the first global preset and cannot be deleted or renamed. It owns the complete main, utility, and embedding baseline; its Vision Model slot is optional.
 - Preset definitions are global. Global, project, agent-profile, and project/profile plugin configs persist only `model_preset`; chats may persist a preset reference as their explicit override.
 - Preserve scoped plugin resolution order and fall back invalid or missing scope/chat references to `Default`.
+- `get_presets()` caches the parsed global collection in `model_presets(plugins)`, keyed by the stat signature of the user, fallback, and legacy config files, and returns deep copies. Missing files allow caching; read or parse failures return uncached fallback results so recovery needs no file edit. `save_presets` and `reset_presets` clear it; other writers must change those files or clear the area.
 - Project Settings `llm` payloads are owned here through the generic `helpers.projects` project extension-data hooks; keep project helper code agnostic to `_model_config` paths, presets, and inheritance rules.
 - Keep provider metadata and API-key checks safe around secrets.
 - Check API-key readiness only for the effective model configuration; unused global presets must not produce Welcome-screen warnings.
