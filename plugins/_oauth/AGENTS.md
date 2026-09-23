@@ -54,6 +54,7 @@
 - The Codex Chat compatibility route maps real Responses usage to Chat token/detail fields. Honor `stream_options.include_usage` with a terminal empty-choices usage chunk; never fabricate missing totals. The Codex main-model hook requests usage in Chat mode unless the caller supplies stream options. Responses mode keeps its existing request shape.
 - Chat compatibility replies preserve incomplete finish reasons and do not turn failed responses into successful stops. Streaming forwards upstream errors, rejects premature EOF as an error, and closes the upstream stream on completion or cancellation.
 - Native OAuth streaming responses attach upstream cleanup to the Flask response lifecycle, including closure before the first chunk, cancellation, completion, and read errors.
+- `codex.request_codex` sends through the module-level keep-alive `_UPSTREAM_SESSION` with cookie persistence disabled, so each request carries only its explicit headers; tests stub `_UPSTREAM_SESSION.request`.
 - OAuth providers intentionally using Responses must set `a0_api_mode: responses`; all others inherit the Chat Completions default, since a local proxy route alone does not prove upstream support.
 
 ## Work Guidance

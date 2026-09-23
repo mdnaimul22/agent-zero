@@ -462,7 +462,7 @@ def test_request_codex_sends_current_codex_headers_from_body(
         )
         return FakeResponse()
 
-    monkeypatch.setattr(codex.requests, "request", fake_request)
+    monkeypatch.setattr(codex._UPSTREAM_SESSION, "request", fake_request)
 
     response = codex.request_codex(
         "/responses",
