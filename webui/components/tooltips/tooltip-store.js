@@ -2,6 +2,10 @@ import { createStore } from "/js/AlpineStore.js";
 
 let bootstrapTooltipObserver = null;
 
+function preventTouchTooltip(event) {
+  if (window.matchMedia("(hover: none)").matches) event.preventDefault();
+}
+
 function ensureBootstrapTooltip(element) {
   if (!element || !(element instanceof Element)) return;
   
@@ -122,6 +126,7 @@ function observeBootstrapTooltips() {
 }
 
 function cleanupTooltipObserver() {
+  document.removeEventListener("show.bs.tooltip", preventTouchTooltip);
   if (bootstrapTooltipObserver) {
     bootstrapTooltipObserver.disconnect();
     bootstrapTooltipObserver = null;
@@ -130,6 +135,7 @@ function cleanupTooltipObserver() {
 
 export const store = createStore("tooltips", {
   init() {
+    document.addEventListener("show.bs.tooltip", preventTouchTooltip);
     initBootstrapTooltips();
     observeBootstrapTooltips();
   },
