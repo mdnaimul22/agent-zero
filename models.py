@@ -336,7 +336,10 @@ async def apply_rate_limiter(
         Callable[[str, str, int, int], Awaitable[bool]] | None
     ) = None,
 ):
-    if not model_config:
+    # skip token counting of the whole prompt when no limit is set
+    if not model_config or not (
+        model_config.limit_requests or model_config.limit_input or model_config.limit_output
+    ):
         return
     limiter = get_rate_limiter(
         model_config.provider,
