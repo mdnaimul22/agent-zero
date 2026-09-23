@@ -38,6 +38,7 @@
 - The compact chat selector label combines the effective preset with only the leaf name of its main model; utility and provider text stay out of the closed selector.
 - The compact selector strip exposes `model-context-strip-end` after the agent
   profile selector so adjacent bundled controls can stay plugin-owned.
+- The selector strip uses the shared `x-overflow` directive for built-in and plugin controls. Its root must remain shrinkable; overflow entries open the original selector panels and retain their Alpine state. The profile avatar uses `data-overflow-icon` so its color, initials, or image also appear in overflow.
 - The adjacent agent-profile selector reads the always-enabled Agent Editor list
   endpoint directly so the active profile shows its effective title and avatar,
   and omits profiles disabled in the chat's current scope plus the exact

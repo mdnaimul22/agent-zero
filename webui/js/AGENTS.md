@@ -15,6 +15,7 @@
 - `modals.js` owns the stacked modal shell, `openModal`, `closeModal`, `scrollModal`, footer relocation, backdrop, and modal z-index behavior.
 - `surfaces.js` owns shared surface registration, right-canvas/modal mode routing, surface modal action rails, and reusable draggable/focus modal chrome.
 - `initFw.js` owns Alpine bootstrap and custom lifecycle directives such as `x-create`, `x-destroy`, and periodic `x-every-*` hooks.
+- `overflow.js` owns the reusable `x-overflow` directive for constrained flex rows. It observes layout and late plugin content, collapses trailing controls behind `more_horiz`, and opens their original panels without moving or reinitializing Alpine nodes.
 - `icons.js` owns `<x-icon>`, icon-name validation, the name property/attribute bridge, and helpers that read or update both the first-party custom element and legacy plugin ligature spans.
 - `messages.js` owns native message/process-step rendering, safe Markdown and HTML conversion, and KaTeX delimiter handling.
 - `messages.js` routes unhandled log types through `drawMessageTool`, preserving generic tool-step presentation. Before raw-log grouping it resolves unregistered types from cached and incoming records through `getMessageHandler`; types selecting `drawMessageTool` join the process-step set. Explicit custom standalone handlers remain standalone. Keep the legacy `drawMessageDefault` export for plugin compatibility.
@@ -29,6 +30,10 @@
 ## Local Contracts
 
 - Use ES modules and browser-compatible JavaScript.
+- `x-overflow` follows `display: contents` wrappers to find flex items. Each collapsible item is a button or contains a trigger; its sibling `[x-show]`, `[role=menu]`, `[role=dialog]`, or `[data-overflow-panel]` is reused as the submenu. `data-overflow-label` on the trigger may override its rendered label. Keep the row's containing flex item shrinkable (`min-width: 0`); non-control content stays inline. Native manual popovers preserve DOM scope while avoiding clipping and stacking conflicts. Resize/mutation observers and document listeners must be removed on unmount.
+- Overflow labels open submenus on hover and toggle them on click; a click-closed submenu stays closed until pointer exit or another click. When neither side has room, use the larger space above/below the first menu and scroll the submenu, keeping its label reachable.
+- Mark a compound visual with `data-overflow-icon` on the trigger or a child (for example, an avatar or percentage ring). Overflow entries mirror its rendered markup and updates without cloning Alpine bindings or interactive buttons; font icons, SVGs, and images are detected by default. Controls without a visual reserve no icon space.
+- Overflow measurements allow half a CSS pixel of rounding tolerance: browser zoom can make summed item rectangles and CSS gaps slightly exceed a shrink-wrapped row even when every control fits. Verify both fitting and genuinely constrained rows at native browser zoom levels.
 - Create dynamic Material Symbols with `document.createElement("x-icon")` and assign `.name`; generated HTML uses an empty `<x-icon name="..."></x-icon>`. Shared helpers that can receive third-party plugin DOM must continue accepting legacy `.material-symbols-outlined` and `.material-icons-outlined` spans.
 - Route JSON and fetch calls through `api.js` unless a caller has a specific nonstandard transport contract.
 - `callJsonApi()` is for JSON request/response flows and must preserve CSRF/auth behavior.

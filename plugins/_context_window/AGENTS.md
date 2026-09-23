@@ -57,8 +57,7 @@
 - Keep prompt accounting out of rendered-text heuristics.
 - Keep provider-reported usage separate from the six estimated context buckets.
 - Keep the API response limited to counts needed by the UI.
-- Preserve the upward, right-aligned popover geometry used beside the model and
-  profile selectors, including its reserved footprint for short selector labels.
+- Preserve the upward, right-aligned popover beside the model/profile selectors. Its minimum strip footprint is bounded by the available width; shared `x-overflow` positions the same popover when the indicator enters the overflow menu. `data-overflow-label` names the entry; `data-overflow-icon` retains its live percentage ring.
 
 ## Verification
 

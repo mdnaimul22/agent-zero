@@ -35,6 +35,7 @@
 ## Work Guidance
 
 - Keep composer and attachment changes responsive across desktop and mobile.
+- The selector strip injected into `input/progress.html` uses shared `x-overflow` behavior; controls that do not fit stay reachable through the ellipsis menu, including late plugin additions. Preserve the separate full-width goal strip and speech-stop action.
 - Coordinate payload changes with backend chat, upload, and WebSocket handlers.
 
 ## Verification
