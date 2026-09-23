@@ -59,6 +59,7 @@
             <x-icon :name="$store.pinToTop.isProjectPinned($store.sidebarFolders.menuProject) ? 'keep_off' : 'push_pin'"></x-icon>
             <span x-text="$store.pinToTop.isProjectPinned($store.sidebarFolders.menuProject) ? 'Unpin project' : 'Pin project'"></span>
           </button>
+          <button type="button" class="dropdown-item" x-show="$store.sidebarFolders.menuProject === ''" @click="$store.sidebarFolders.closeMenu(); $store.projects.openProjectsModal()"><x-icon name="snippet_folder"></x-icon>Projects</button>
           <button type="button" class="dropdown-item" x-show="$store.sidebarFolders.menuProject" @click="$store.sidebarFolders.editProject()"><x-icon name="edit"></x-icon>Edit project</button>
           <button type="button" class="dropdown-item" x-show="$store.sidebarFolders.menuProject" @click="$store.sidebarFolders.openProjectFiles()"><x-icon name="folder_open"></x-icon>Project files</button>
         </div>

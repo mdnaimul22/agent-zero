@@ -5,7 +5,7 @@ Organize chats and tasks into project folders. Folder view is on by default; use
 - Click a folder name to expand or collapse it. The selected chat's folder opens automatically.
 - Use the **New chat** icon to create a chat in that project, regardless of the currently selected chat or project-inheritance setting.
 - Folder actions include **New chat**, **Pin project**, **Edit project**, and **Project files**. Project pins use the bundled **Pin to Top** plugin.
-- **No project** starts pinned at the top of the project folders. Its folder menu lets you unpin or pin it, and remembers your choice.
+- **No project** starts pinned at the top of the project folders. Its folder menu lets you unpin or pin it, remembers your choice, and includes **Projects** to open the global projects list.
 - Pinned folders can be reordered among themselves, including **No project**. Unpinned folders stay below the pinned group; pin a folder first to move it into that group.
 - Pinned chats appear together above all folders, including **No project**, separated by a divider. Project chats keep their colored dot and project context; chats without a project use the same pinning behavior. Unpinning returns a chat to its folder. Parallel workers stay nested with their parent.
 - Drag folders or chats between rows to reorder them. Reordering folders, chats, or tasks automatically selects **Manual order**. Reorder pins within their section without changing their projects; use the row menu to pin or unpin.
