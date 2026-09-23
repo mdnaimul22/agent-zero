@@ -108,7 +108,6 @@ chat:
     kwargs:
       a0_api_mode: chat
       api_base: "http://host.docker.internal:1234/v1"
-      api_key: "lm-studio"
   llama_cpp:
     name: llama.cpp
     litellm_provider: hosted_vllm
@@ -118,7 +117,6 @@ chat:
     kwargs:
       a0_api_mode: chat
       api_base: "http://host.docker.internal:8080/v1"
-      api_key: "llama-cpp"
   mistral:
     name: Mistral AI
     litellm_provider: mistral
@@ -167,7 +165,6 @@ chat:
     kwargs:
       a0_api_mode: chat
       api_base: "http://host.docker.internal:8000/v1"
-      api_key: "omlx"
   ollama_cloud:
     name: Ollama Cloud
     litellm_provider: openai
@@ -234,7 +231,6 @@ chat:
     kwargs:
       a0_api_mode: chat
       api_base: "http://host.docker.internal:8000/v1"
-      api_key: "vllm"
   xai:
     name: xAI
     litellm_provider: xai
@@ -276,13 +272,11 @@ embedding:
     litellm_provider: lm_studio
     kwargs:
       api_base: "http://host.docker.internal:1234/v1"
-      api_key: "lm-studio"
   llama_cpp:
     name: llama.cpp
     litellm_provider: hosted_vllm
     kwargs:
       api_base: "http://host.docker.internal:8080/v1"
-      api_key: "llama-cpp"
   mistral:
     name: Mistral AI
     litellm_provider: mistral
@@ -301,7 +295,6 @@ embedding:
     litellm_provider: hosted_vllm
     kwargs:
       api_base: "http://host.docker.internal:8000/v1"
-      api_key: "omlx"
   openai:
     name: OpenAI
     litellm_provider: openai
@@ -340,7 +333,6 @@ embedding:
     litellm_provider: hosted_vllm
     kwargs:
       api_base: "http://host.docker.internal:8000/v1"
-      api_key: "vllm"
   other:
     name: Other OpenAI compatible
     litellm_provider: openai
