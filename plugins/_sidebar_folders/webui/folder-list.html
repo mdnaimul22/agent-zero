@@ -1,19 +1,20 @@
 <html>
 <head></head>
 <body>
-  <div x-data class="sidebar-folder-host">
+  <div x-data="{ sections: [] }" class="sidebar-folder-host">
     <template x-if="$store.sidebarFolders && $store.sidebarFolders.config.folder_view">
       <div class="sidebar-folder-host" x-effect="$store.sidebarFolders.revealSelection(kind, $store.chats.selected)">
         <ul class="config-list sidebar-folder-list no-scrollbar" :class="kind === 'chat' ? 'chats-config-list' : 'tasks-config-list'"
+          x-effect="sections = $store.sidebarFolders.sections(kind)"
           :aria-label="kind === 'chat' ? 'Chat folders' : 'Task folders'" @dragend="$store.sidebarFolders.endDrag()"
           @dragleave="if (!$el.contains($event.relatedTarget)) $store.sidebarFolders.dropTarget = null">
-          <template x-for="group in $store.sidebarFolders.sections(kind)" :key="group.pinned ? 'pinned' : 'project:' + group.id">
+          <template x-for="group in sections" :key="group.pinned ? 'pinned' : 'project:' + group.id">
             <li class="sidebar-folder" :class="[
                 group.pinned ? 'sidebar-pinned-group' : '',
                 $store.sidebarFolders.drag?.kind === 'project' ? $store.sidebarFolders.dropClass(kind, group.id) : '',
               ].join(' ')"
               :data-folder-id="group.id" :data-pinned-kind="group.pinned ? kind : null"
-              @dragover="$store.sidebarFolders.dragOverFolder($event, kind, group)"
+              @dragover="$store.sidebarFolders.dragOverFolder($event, kind, group, sections)"
               @drop="$store.sidebarFolders.drop($event, kind, group.id)">
               <template x-if="!group.pinned">
               <div class="sidebar-folder-row" draggable="true" x-data="{ actionsFocused: false }"
@@ -52,7 +53,7 @@
                     !group.pinned && $store.sidebar.hasRowDividerBefore(kind, item, itemIndex, group.rows) ? 'sidebar-list-divider' : '',
                   ].join(' ')" :data-folder-thread="item.id" draggable="true"
                     @dragstart.stop="$store.sidebarFolders.startDrag($event, kind, item.id, item.project?.name || '')"
-                    @dragover="$store.sidebarFolders.dragOver($event, kind, group.id, item)"
+                    @dragover="$store.sidebarFolders.dragOver($event, kind, group.id, item, $event.currentTarget, group.rows)"
                     @drop="$store.sidebarFolders.drop($event, kind, group.id, item)">
                     <template x-if="kind === 'chat'">
                       <div class="sidebar-folder-host" x-data="{ get context() { return item; } }">
@@ -74,7 +75,7 @@
             </li>
           </template>
         </ul>
-        <div class="empty-list-message" x-show="!$store.sidebarFolders.sections(kind).length">
+        <div class="empty-list-message" x-show="!sections.length">
           <p x-text="kind === 'chat' ? 'No matching chats.' : 'No matching tasks.'"></p>
         </div>
       </div>

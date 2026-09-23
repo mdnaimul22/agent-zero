@@ -109,6 +109,17 @@ const event = {
   target: { closest: () => null },
   dataTransfer: { setData() {} }, currentTarget: { getBoundingClientRect: () => ({ top: 0, height: 40 }) }, clientY: 35,
 };
+const groups = store.groups;
+const renderedGroup = groups.call(store, "chat").find((group) => group.id === "beta");
+store.groups = () => assert.fail("drag hover must reuse the rendered rows");
+store.drag = { kind: "chat", id: "b", project: "alpha" };
+store.dragOver(event, "chat", "beta", contexts[0], event.currentTarget, renderedGroup.rows);
+const stableTarget = store.dropTarget;
+for (let i = 0; i < 100; i++) store.dragOver(event, "chat", "beta", contexts[0], event.currentTarget, renderedGroup.rows);
+assert.equal(store.dropTarget, stableTarget, "repeated hover does not republish the drop target");
+store.groups = groups;
+store.endDrag();
+prevented = false;
 store.drag = { kind: "task", id: "task", project: "alpha" };
 store.dragOver(event, "task", "beta");
 assert.equal(prevented, false, "task project moves stay disallowed");

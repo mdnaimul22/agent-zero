@@ -352,45 +352,51 @@ export const store = createStore("sidebarFolders", {
       ? `folder-drop-${target.side}` : "";
   },
 
-  dragOverFolder(event, kind, group) {
+  dragOverFolder(event, kind, group, sections = null) {
     if (this.drag?.kind !== "project" && !event.target.closest(".sidebar-folder-row")) {
       const rows = [...event.currentTarget.querySelectorAll(".sidebar-folder-thread")];
       const row = rows.find((row) => event.clientY < row.getBoundingClientRect().bottom) || rows.at(-1);
       if (row) {
         const item = group.rows.find((item) => item.id === row.dataset.folderThread);
-        return this.dragOver(event, kind, group.id, item, row);
+        return this.dragOver(event, kind, group.id, item, row, group.rows);
       }
     }
     if (group.pinned) {
       this.dropTarget = null;
       return;
     }
-    this.dragOver(event, kind, group.id);
+    this.dragOver(event, kind, group.id, null, event.currentTarget, sections?.filter((section) => !section.pinned));
   },
 
-  dragOver(event, kind, project, item = null, element = event.currentTarget) {
-    this.dropTarget = null;
-    const drag = this.drag;
-    if (!drag || this.busy) return;
-    event.dataTransfer.dropEffect = "none";
-    if (drag.kind !== "project" && drag.kind !== kind) return;
-    if (drag.kind === "task" && project !== null && drag.project !== project) return;
-    if (drag.kind === "project" && item) return;
-    if (item && !!drag.pinned !== (project === null)) return;
-    if (!item && drag.kind !== "project") {
-      this.dropTarget = { kind, project, side: "inside" };
+  dragOver(event, kind, project, item = null, element = event.currentTarget, rows = null) {
+    const target = this.findDropTarget(event, kind, project, item, element, rows);
+    const previous = this.dropTarget;
+    if (target?.kind !== previous?.kind || target?.project !== previous?.project
+      || target?.id !== previous?.id || target?.side !== previous?.side) this.dropTarget = target;
+    event.dataTransfer.dropEffect = target ? "move" : "none";
+    if (target) {
       event.preventDefault();
       event.stopPropagation();
-      event.dataTransfer.dropEffect = "move";
-      return;
     }
-    const rows = item
+  },
+
+  findDropTarget(event, kind, project, item, element, rows) {
+    const drag = this.drag;
+    if (!drag || this.busy) return null;
+    if (drag.kind !== "project" && drag.kind !== kind) return null;
+    if (drag.kind === "task" && project !== null && drag.project !== project) return null;
+    if (drag.kind === "project" && item) return null;
+    if (item && !!drag.pinned !== (project === null)) return null;
+    if (!item && drag.kind !== "project") {
+      return { kind, project, side: "inside" };
+    }
+    rows ??= item
       ? project === null ? this.pinnedRows(kind) : this.groups(kind).find((group) => group.id === project)?.rows || []
       : this.groups(kind);
     const id = item ? item.id : project;
-    if (id === drag.id) return;
+    if (id === drag.id) return null;
     const to = rows.findIndex((row) => row.id === id);
-    if (to < 0) return;
+    if (to < 0) return null;
     const rect = element.getBoundingClientRect();
     let after = event.clientY > rect.top + rect.height / 2;
     if (!item || project === null || drag.project === project) {
@@ -401,18 +407,15 @@ export const store = createStore("sidebarFolders", {
     if (drag.kind === "project") {
       const pinnedCount = rows.filter((row) => pins.isProjectPinned(row.id)).length;
       const index = to + Number(after);
-      if (pins.isProjectPinned(drag.id) ? index > pinnedCount : index < pinnedCount) return;
+      if (pins.isProjectPinned(drag.id) ? index > pinnedCount : index < pinnedCount) return null;
     }
     // Both sides of a gap use the following row's top edge.
     const anchor = after && rows[to + 1] ? rows[to + 1] : rows[to];
-    if (anchor.id === drag.id) return;
-    this.dropTarget = {
+    if (anchor.id === drag.id) return null;
+    return {
       kind, project: item ? project : anchor.id, id: item ? anchor.id : undefined,
       side: after && !rows[to + 1] ? "after" : "before",
     };
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = "move";
   },
 
   async drop(event, kind, project, item = null) {

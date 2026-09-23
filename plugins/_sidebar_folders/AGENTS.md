@@ -18,6 +18,7 @@
 - Default sorting is creation time, newest first, in both views; message activity must not reorder chats unless recent-activity sorting is explicitly selected.
 - Reordering folders, chats, or tasks by drag and drop automatically selects and saves manual sorting.
 - Neighboring folder/thread/task drops select the insertion edge that swaps their order; longer moves use the hovered row's midpoint for before/after placement.
+- Drag hover reuses the rendered sections and rows; do not regroup chat families on each pointer event or republish an unchanged drop target.
 - Both sides of a gap share one insertion target at the following row's top edge, with a bottom edge only after the last row. Drop indicators and released drops use that same target; dragged rows do not target themselves.
 - Folder containers receive drops across their padding and expanded contents. Thread-list gaps resolve to the nearest thread, including the last thread's bottom edge; folder headers remain project-move targets for chats. Folder insertion markers surround the whole folder, including its workers, and clear when the drag leaves the list.
 - Pin state and row indicators belong to `_pin_to_top`. Each list groups pins above all project folders, including pinned **No project**, with a separator and no subtitle. Pins retain their project/color, appear only once, and return to their own folder when unpinned; project filters also apply to pins.
